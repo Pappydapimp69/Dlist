@@ -145,7 +145,9 @@ or insects as ambient life.
 ## 6. Tech architecture
 
 ### Stack — LOCKED
-- **Babylon.js** (latest stable at project start), **TypeScript**, **Vite**.
+- **Three.js** (latest stable at project start) for rendering only, **TypeScript**, **Vite**.
+- We own everything else ourselves: movement/physics, animation, AI, netcode.
+  That custom layer is the real engine, and its lessons go back into Brain.
 - WebGPU when available, WebGL2 fallback.
 - **Node.js** for the multiplayer server (later).
 - **Vitest** for unit tests and **Playwright** for in-browser tests.
@@ -153,9 +155,9 @@ or insects as ambient life.
 ### The key idea: the game logic never touches the renderer
 ```
 packages/
-  sim/      pure TypeScript game logic. No Babylon, no DOM.
+  sim/      pure TypeScript game logic. No Three.js, no DOM.
             Creatures, stats, AI, combat, world rules.
-  client/   Babylon.js rendering, input, audio, UI.
+  client/   Three.js rendering, input, audio, UI.
   server/   Node.js host that runs `sim` for multiplayer (later).
   shared/   network protocol, species data, constants.
 ```
@@ -177,8 +179,7 @@ packages/
   controller: it slides along the heightmap, uses circle-vs-circle collision
   between creatures and trees, and has slope limits. That's cheap, easy to
   run on a server, and predictable.
-- Havok (Babylon's physics engine) can be used later for **cosmetic**
-  effects only, like ragdolls and debris that don't affect gameplay.
+- Cosmetic effects (ragdolls, debris) are client-only and never touch gameplay.
 
 ### Randomness
 - Seeded random number generator with **one named stream per system** (spawns, AI,
@@ -310,7 +311,7 @@ Each milestone ends with something you can open in a browser and play.
 
 | # | Milestone | You can… |
 |---|---|---|
-| M0 | Project setup | Open a blank Babylon scene from a URL |
+| M0 | Project setup | Open a blank Three.js scene from a URL |
 | M1 | Greybox walk | Walk a placeholder Herrerasaurus over terrain with a third-person camera |
 | M2 | Survive | Drink at the river, eat placed carcasses, watch stats drain, die and respawn |
 | M3 | Life | Hyperodapedon herds graze, flee and get hunted. Scent and sound work. |
@@ -356,12 +357,12 @@ time on art (M5).**
 
 | # | Decision | Status |
 |---|---|---|
-| D1 | Babylon.js + TypeScript, browser-only client | LOCKED |
+| D1 | ~~Babylon.js~~ → **Three.js** + TypeScript, browser-only client. Switched because our own movement code removes the need for built-in physics. | LOCKED |
 | D2 | Multiplayer-ready architecture now, servers later | LOCKED |
 | D3 | Setting: Ischigualasto, ~231 Ma | LOCKED |
 | D4 | Launch playables: Herrerasaurus, Eodromaeus, Panphagia | LOCKED |
 | D5 | Art: code-generated low-poly creatures plus procedural animation, upgrade later | LOCKED |
-| D6 | No physics engine in game logic. Custom movement controller. | PROPOSED |
+| D6 | No physics engine in game logic. Custom movement controller. | LOCKED |
 | D7 | Solo play runs the sim in a Web Worker | PROPOSED |
 
 ---
@@ -397,5 +398,5 @@ time on art (M5).**
   physics out of the sim. §6.
 - 🟡 **T10: does greybox-first keep a 3D game on schedule?** We're betting yes.
   M1–M4 come before art.
-- 🟡 **T16: engine paths not taken.** Unity, Unreal, Godot and Three.js were
+- 🟡 **T16: engine paths not taken.** Unity, Unreal, Godot and Babylon.js were
   considered and passed over for D1.
