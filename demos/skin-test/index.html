@@ -1,0 +1,1559 @@
+<title>Herrerasaurus Skin Test</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@1,6..72,400;1,6..72,500&display=swap">
+<style>
+  /* Layout: full-bleed 3D view; field-specimen HUD pinned to the corners. Single dark look by design. */
+  :root {
+    color-scheme: dark;
+    --bg: #0c0a08;
+    --ink: #efe6d6;
+    --ink-2: #c8bba5;
+    --ink-3: #8c806e;
+    --panel: rgba(17, 13, 10, 0.66);
+    --line: rgba(239, 230, 214, 0.14);
+    --ochre: #d49b53;
+    --water: #8bbcc4;
+    --mud: #a67f58;
+    --f-display: "Newsreader", "Iowan Old Style", Georgia, serif;
+    --f-ui: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --f-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  html, body { height: 100%; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--f-ui); overflow: hidden; }
+  #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  .vignette { position: fixed; inset: 0; pointer-events: none;
+    background: radial-gradient(120% 90% at 50% 45%, transparent 55%, rgba(8, 6, 4, 0.55) 100%); }
+
+  .plate { position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); left: calc(16px + env(safe-area-inset-left, 0px));
+    max-width: min(440px, calc(100% - 32px)); pointer-events: none; display: grid; gap: 2px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  .binomial { margin: 0; font-family: var(--f-display); font-style: italic; font-weight: 500; font-size: 1.35rem; letter-spacing: 0.005em; }
+  .meta { margin: 0; color: var(--ink-2); font-size: 0.78rem; letter-spacing: 0.02em; }
+
+  .readout { position: fixed; left: calc(16px + env(safe-area-inset-left, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    width: min(360px, calc(100% - 32px)); background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+    padding: 10px 12px; display: grid; gap: 7px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  .row { display: grid; grid-template-columns: 52px 72px 1fr; align-items: center; gap: 10px; min-width: 0; }
+  .lab { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-3); }
+  .bar { height: 6px; background: rgba(239, 230, 214, 0.1); border-radius: 3px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0%; background: var(--water); transition: width 120ms linear; }
+  .bar.mud i { background: var(--mud); }
+  .val { font-family: var(--f-mono); font-size: 0.74rem; color: var(--ink); font-variant-numeric: tabular-nums; min-width: 0; }
+  .row.pace .val { grid-column: 2 / 4; }
+
+  .keys { position: fixed; right: calc(16px + env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  .keys h2 { margin: 0 0 6px; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-3); font-weight: 500; }
+  .keys dl { margin: 0; display: grid; grid-template-columns: auto auto; column-gap: 14px; row-gap: 3px; font-size: 0.78rem; }
+  .keys dt { color: var(--ink-2); }
+  .keys dd { margin: 0; color: var(--ink); font-weight: 500; }
+
+  .chips { position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); right: calc(16px + env(safe-area-inset-right, 0px));
+    display: flex; flex-direction: column; align-items: flex-end; gap: 6px; max-width: calc(100% - 32px); }
+  .chip { font-size: 0.72rem; padding: 4px 9px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); color: var(--ink-2); }
+  .chip.ok { color: var(--ink); border-color: rgba(139, 188, 196, 0.45); }
+  .chip.warn { color: var(--ochre); border-color: rgba(212, 155, 83, 0.45); }
+
+  .overlay { position: fixed; inset: 0; display: grid; place-items: center; padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px)); background: rgba(10, 8, 6, 0.42); }
+  .card { width: min(520px, 100%); background: rgba(17, 13, 10, 0.86); border: 1px solid var(--line); border-radius: 8px;
+    padding: 22px 24px; display: grid; gap: 12px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+  .eyebrow { margin: 0; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ochre); }
+  .card h1 { margin: 0; font-family: var(--f-display); font-style: italic; font-weight: 500; font-size: 2.3rem; line-height: 1.05; text-wrap: balance; }
+  .lede { margin: 0; color: var(--ink-2); line-height: 1.5; font-size: 0.92rem; }
+  .cta { margin: 4px 0 0; font-weight: 600; font-size: 1rem; color: var(--ink); animation: pulse 1.8s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.55; } }
+  @media (prefers-reduced-motion: reduce) { .cta { animation: none; } }
+  .card button { justify-self: start; font: inherit; font-size: 0.82rem; color: var(--ink-2); background: transparent;
+    border: 1px solid var(--line); border-radius: 5px; padding: 7px 11px; cursor: pointer; }
+  .card button:hover { color: var(--ink); border-color: rgba(239, 230, 214, 0.35); }
+  .card button:focus-visible, .menu li:focus-visible { outline: 2px solid var(--ochre); outline-offset: 2px; }
+  .menu h2 { margin: 0; font-family: var(--f-display); font-style: italic; font-weight: 500; font-size: 1.6rem; }
+  .menu ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+  .menu li { display: flex; justify-content: space-between; gap: 16px; padding: 9px 12px; border-radius: 5px; cursor: pointer;
+    border: 1px solid transparent; font-size: 0.95rem; }
+  .menu li .state { color: var(--ink-3); font-family: var(--f-mono); font-size: 0.82rem; }
+  .menu li.on { background: rgba(212, 155, 83, 0.14); border-color: rgba(212, 155, 83, 0.5); }
+  .menu li.on .state { color: var(--ochre); }
+  .hint { margin: 0; color: var(--ink-3); font-size: 0.78rem; }
+  @media (max-width: 760px) { .keys { display: none; } .binomial { font-size: 1.1rem; } }
+</style>
+
+<canvas id="view" aria-label="3D view: an adult Herrerasaurus beside a pond and a mud pit"></canvas>
+<div class="vignette"></div>
+
+<header class="plate">
+  <p class="binomial">Herrerasaurus ischigualastensis</p>
+  <p class="meta">Adult · about 5.2 m nose to tail · Ischigualasto, about 231 million years ago</p>
+</header>
+
+<div class="chips">
+  <span class="chip warn" id="padChip">No controller yet. Press any button on it.</span>
+  <span class="chip" id="soundChip">Sound is off. Click anywhere to turn it on.</span>
+</div>
+
+<section class="readout" aria-live="off">
+  <div class="row"><span class="lab">Water</span><span class="bar"><i id="wetBar"></i></span><span class="val" id="wetVal">Dry</span></div>
+  <div class="row"><span class="lab">Mud</span><span class="bar mud"><i id="mudBar"></i></span><span class="val" id="mudVal">None</span></div>
+  <div class="row pace"><span class="lab">Pace</span><span class="val" id="paceVal">Standing</span></div>
+</section>
+
+<aside class="keys" id="keys">
+  <h2 id="keysTitle">Controller</h2>
+  <dl id="keysList"></dl>
+</aside>
+
+<div class="overlay" id="intro">
+  <div class="card">
+    <p class="eyebrow">Dlist tech demo · skin test</p>
+    <h1>Herrerasaurus</h1>
+    <p class="lede">Wade into the pond to get wet. Wet skin dries in 8 seconds. Walk through the mud pit to get muddy. The mud dries into a crust after 8 seconds, then flakes off once you've walked for 30 seconds. The pond washes mud off.</p>
+    <p class="cta" id="introCta">Press any button on your Xbox controller to start</p>
+    <button type="button" id="kbStart">No controller? Start with keyboard and mouse</button>
+  </div>
+</div>
+
+<div class="overlay" id="menu" hidden>
+  <div class="card menu">
+    <h2>Paused</h2>
+    <ul id="menuList" role="menu"></ul>
+    <p class="hint">D-pad or left stick to choose · A to select · B or Start to resume</p>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+/* ============================== math helpers ============================== */
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
+const damp = (a, b, lambda, dt) => lerp(a, b, 1 - Math.exp(-lambda * dt));
+const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+const UP = V(0, 1, 0);
+
+function hashI(ix, iz, seed = 0) {
+  let h = (Math.imul(ix, 374761393) + Math.imul(iz, 668265263) + Math.imul(seed, 1442695041)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+function vnoise(x, z, seed = 0, period = 0) {
+  let ix = Math.floor(x), iz = Math.floor(z);
+  const fx = x - ix, fz = z - iz;
+  const ux = fx * fx * (3 - 2 * fx), uz = fz * fz * (3 - 2 * fz);
+  let ix1 = ix + 1, iz1 = iz + 1;
+  if (period) { ix = ((ix % period) + period) % period; iz = ((iz % period) + period) % period; ix1 = (ix + 1) % period; iz1 = (iz + 1) % period; }
+  const a = hashI(ix, iz, seed), b = hashI(ix1, iz, seed), c = hashI(ix, iz1, seed), d = hashI(ix1, iz1, seed);
+  return lerp(lerp(a, b, ux), lerp(c, d, ux), uz);
+}
+function fbm(x, z, seed = 0, oct = 4) {
+  let s = 0, a = 0.5, f = 1, n = 0;
+  for (let i = 0; i < oct; i++) { s += a * vnoise(x * f, z * f, seed + i * 17); n += a; a *= 0.5; f *= 2.03; }
+  return s / n;
+}
+// Seeded generator so the layout is identical on every load.
+function rng(seed) {
+  let a = seed >>> 0;
+  return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+
+/* ============================== world layout ============================== */
+const POND = { x: 15, z: -9, r: 11 };
+const WATER_Y = 0;
+const MUD = { x: -14, z: 4, r: 6.5 };
+const MUD_Y = 0.36;
+const WORLD_R = 56;
+const SPAWN = { x: 0, z: 15, yaw: Math.PI };
+const TOO_DEEP = 1.12;
+
+function heightAt(x, z) {
+  let h = 0.42 + (fbm(x * 0.03, z * 0.03, 1) - 0.5) * 1.6 + (fbm(x * 0.11, z * 0.11, 5) - 0.5) * 0.35;
+  const r = Math.hypot(x, z);
+  h += smooth(36, 72, r) * (7 + 5 * fbm(x * 0.05, z * 0.05, 9));
+  const dp = Math.hypot(x - POND.x, z - POND.z);
+  h = lerp(h, 0.36 + (h - 0.36) * 0.2, 1 - smooth(POND.r + 2, POND.r + 11, dp));
+  h = lerp(h, -1.7, 1 - smooth(POND.r * 0.2, POND.r + 1.5, dp));
+  const dm = Math.hypot(x - MUD.x, z - MUD.z);
+  h = lerp(h, 0.42 + (h - 0.42) * 0.2, 1 - smooth(MUD.r + 1, MUD.r + 8, dm));
+  h = lerp(h, MUD_Y - 0.85, 1 - smooth(MUD.r * 0.15, MUD.r + 0.6, dm));
+  return h;
+}
+const inPond = (x, z) => Math.hypot(x - POND.x, z - POND.z) < POND.r + 2;
+const inMudPit = (x, z) => Math.hypot(x - MUD.x, z - MUD.z) < MUD.r + 1.2;
+function waterDepthAt(x, z) { return inPond(x, z) ? Math.max(0, WATER_Y - heightAt(x, z)) : 0; }
+function mudDepthAt(x, z) { return inMudPit(x, z) ? Math.max(0, MUD_Y - heightAt(x, z)) : 0; }
+function surfaceAt(x, z) {
+  const g = heightAt(x, z);
+  if (inPond(x, z) && g < WATER_Y) return { y: WATER_Y, ground: g, kind: 'water' };
+  if (inMudPit(x, z) && g < MUD_Y) return { y: MUD_Y, ground: g, kind: 'mud' };
+  return { y: g, ground: g, kind: 'ground' };
+}
+
+/* ============================== renderer & scene ============================== */
+const canvas = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+renderer.setSize(window.innerWidth, window.innerHeight, false);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 600);
+const FOG_COLOR = new THREE.Color().setRGB(0.47, 0.44, 0.38);
+scene.fog = new THREE.FogExp2(FOG_COLOR, 0.0115);
+const uTime = { value: 0 };
+
+// Late-afternoon sun, low and warm, so shadows are long and wet skin catches highlights.
+const SUN_DIR = V(-0.55, 0.42, 0.62).normalize();
+const skyMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false, fog: false,
+  uniforms: { uSun: { value: SUN_DIR } },
+  vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `
+    uniform vec3 uSun; varying vec3 vDir;
+    void main(){
+      vec3 d = normalize(vDir);
+      float h = d.y;
+      vec3 zen = vec3(0.12, 0.19, 0.32);
+      vec3 hor = vec3(0.50, 0.465, 0.40);
+      vec3 gnd = vec3(0.30, 0.26, 0.21);
+      vec3 col = mix(hor, zen, pow(smoothstep(0.0, 1.0, max(h, 0.0)), 0.5));
+      col = mix(col, gnd, smoothstep(0.0, -0.3, h));
+      float s = max(dot(d, uSun), 0.0);
+      col += vec3(1.0, 0.72, 0.42) * (pow(s, 6.0) * 0.32 + pow(s, 900.0) * 9.0);
+      gl_FragColor = vec4(col, 1.0);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`,
+});
+const sky = new THREE.Mesh(new THREE.SphereGeometry(450, 32, 16), skyMat);
+scene.add(sky);
+{
+  // Environment reflections come from the same sky, so wet skin and water reflect it.
+  const envScene = new THREE.Scene();
+  envScene.add(new THREE.Mesh(new THREE.SphereGeometry(100, 32, 16), skyMat));
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(envScene, 0.02).texture;
+  pmrem.dispose();
+}
+
+const hemi = new THREE.HemisphereLight(new THREE.Color().setRGB(0.55, 0.6, 0.68), new THREE.Color().setRGB(0.28, 0.2, 0.13), 0.55);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(new THREE.Color().setRGB(1.0, 0.8, 0.58), 3.1);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -24; sun.shadow.camera.right = 24;
+sun.shadow.camera.top = 24; sun.shadow.camera.bottom = -24;
+sun.shadow.camera.near = 1; sun.shadow.camera.far = 140;
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.035;
+scene.add(sun, sun.target);
+
+/* ============================== textures ============================== */
+function noiseTexture(size, freq, seed, lo, hi) {
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const ctx = c.getContext('2d'); const img = ctx.createImageData(size, size);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    let s = 0, a = 0.5, f = freq, n = 0;
+    for (let o = 0; o < 4; o++) { s += a * vnoise(x / size * f, y / size * f, seed + o * 31, f); n += a; a *= 0.5; f *= 2; }
+    const v = Math.round(255 * lerp(lo, hi, s / n));
+    const i = (y * size + x) * 4; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 4;
+  return t;
+}
+const groundDetail = noiseTexture(256, 8, 3, 0.62, 1.0);
+groundDetail.colorSpace = THREE.SRGBColorSpace;
+groundDetail.repeat.set(55, 55);
+const groundBump = noiseTexture(256, 16, 8, 0, 1);
+groundBump.repeat.set(55, 55);
+const mudBumpTex = noiseTexture(256, 12, 12, 0, 1);
+mudBumpTex.repeat.set(5, 5);
+
+/* ============================== terrain ============================== */
+const T_SIZE = 180, T_SEG = 240;
+{
+  const g = new THREE.PlaneGeometry(T_SIZE, T_SIZE, T_SEG, T_SEG);
+  g.rotateX(-Math.PI / 2);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) p.setY(i, heightAt(p.getX(i), p.getZ(i)));
+  g.computeVertexNormals();
+  const n = g.attributes.normal;
+  const col = new Float32Array(p.count * 3);
+  const C = (h) => new THREE.Color(h);
+  const cDirt = C('#7d5642'), cPale = C('#9c7e61'), cGrey = C('#8a857b'), cMoss = C('#566131'),
+    cRock = C('#6f6258'), cBank = C('#45372b'), cUnder = C('#3a3325'), cMudBank = C('#3a2b1f');
+  const c = new THREE.Color();
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), z = p.getZ(i), h = p.getY(i);
+    const slope = 1 - n.getY(i), r = Math.hypot(x, z);
+    c.copy(cDirt).lerp(cPale, fbm(x * 0.08, z * 0.08, 21));
+    // Ischigualasto is famous for red and grey badland bands; show them on the outer hills.
+    c.lerp(cGrey, smooth(0.5, 0.7, fbm(x * 0.02 + 4, z * 0.02, 33)) * smooth(28, 50, r) * 0.8);
+    c.lerp(cMoss, smooth(0.52, 0.68, fbm(x * 0.14, z * 0.14, 44)) * (1 - smooth(0.12, 0.3, slope)) * 0.85);
+    c.lerp(cRock, smooth(0.22, 0.45, slope));
+    const dp = Math.hypot(x - POND.x, z - POND.z);
+    if (dp < POND.r + 5) c.lerp(cBank, (1 - smooth(0.0, 0.45, h - WATER_Y)) * (1 - smooth(POND.r, POND.r + 5, dp)));
+    if (h < WATER_Y && dp < POND.r + 2) c.lerp(cUnder, smooth(0, -0.4, h));
+    const dm = Math.hypot(x - MUD.x, z - MUD.z);
+    c.lerp(cMudBank, 1 - smooth(MUD.r - 0.5, MUD.r + 2.6, dm));
+    col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, map: groundDetail, bumpMap: groundBump, bumpScale: 1.4, roughness: 0.96, metalness: 0, envMapIntensity: 0.45 });
+  const terrain = new THREE.Mesh(g, m);
+  terrain.receiveShadow = true;
+  scene.add(terrain);
+}
+
+/* ============================== water & mud surfaces ============================== */
+const waterMat = new THREE.MeshStandardMaterial({ color: new THREE.Color('#14241f'), roughness: 0.06, metalness: 0, transparent: true, opacity: 0.9, envMapIntensity: 0.75 });
+waterMat.onBeforeCompile = (sh) => {
+  sh.uniforms.uTime = uTime;
+  sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP;')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP;\nuniform float uTime;')
+    .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+      vec2 q = vWP.xz; float t = uTime;
+      vec2 gr = vec2(0.0);
+      gr += vec2(cos(q.x * 1.7 + t * 1.3), cos(q.y * 1.9 - t * 1.1)) * 0.03;
+      gr += vec2(cos(dot(q, vec2(0.8, 0.6)) * 3.3 + t * 2.1)) * vec2(0.8, 0.6) * 0.018;
+      gr += vec2(cos(dot(q, vec2(-0.5, 0.9)) * 5.7 - t * 2.7)) * vec2(-0.5, 0.9) * 0.012;
+      vec3 nW = normalize(vec3(-gr.x, 1.0, -gr.y));
+      normal = normalize((viewMatrix * vec4(nW, 0.0)).xyz);`);
+};
+waterMat.customProgramCacheKey = () => 'water-v1';
+{
+  const g = new THREE.CircleGeometry(POND.r + 2, 96); g.rotateX(-Math.PI / 2);
+  const w = new THREE.Mesh(g, waterMat); w.position.set(POND.x, WATER_Y, POND.z); w.receiveShadow = true; w.renderOrder = 2;
+  scene.add(w);
+  const mg = new THREE.CircleGeometry(MUD.r + 1.2, 80); mg.rotateX(-Math.PI / 2);
+  const mp = mg.attributes.position;
+  for (let i = 0; i < mp.count; i++) mp.setY(i, (vnoise(mp.getX(i) * 1.3, mp.getZ(i) * 1.3, 61) - 0.5) * 0.03);
+  mg.computeVertexNormals();
+  const mm = new THREE.MeshStandardMaterial({ color: new THREE.Color('#3a291b'), roughness: 0.32, metalness: 0, bumpMap: mudBumpTex, bumpScale: 2.5, envMapIntensity: 0.9 });
+  const mud = new THREE.Mesh(mg, mm); mud.position.set(MUD.x, MUD_Y, MUD.z); mud.receiveShadow = true;
+  scene.add(mud);
+}
+
+/* ============================== plants & rocks ============================== */
+const R = rng(20251020);
+const obstacles = []; // {x, z, r}
+
+function mergeColored(parts) {
+  const pos = [], nor = [], col = [];
+  for (const { geo, color, matrix } of parts) {
+    const g = (geo.index ? geo.toNonIndexed() : geo.clone());
+    if (matrix) g.applyMatrix4(matrix);
+    g.computeVertexNormals();
+    const p = g.attributes.position.array, n = g.attributes.normal.array;
+    for (let i = 0; i < p.length; i += 3) {
+      pos.push(p[i], p[i + 1], p[i + 2]); nor.push(n[i], n[i + 1], n[i + 2]);
+      const c = typeof color === 'function' ? color(p[i], p[i + 1], p[i + 2]) : color;
+      col.push(c.r, c.g, c.b);
+    }
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  out.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  return out;
+}
+const M4 = () => new THREE.Matrix4();
+
+// A fern frond: an arching rachis with a leaflet triangle on each side of every segment.
+function frondTriangles(out, colOut, base, dirH, len, tilt, droop, leafScale, cA, cB) {
+  const N = 12; const pts = [];
+  const side = V(-dirH.z, 0, dirH.x);
+  let p = base.clone(); pts.push(p.clone());
+  for (let i = 1; i <= N; i++) {
+    const u = i / N; const e = tilt - u * (tilt + droop);
+    p = p.clone().addScaledVector(dirH, Math.cos(e) * len / N).addScaledVector(UP, Math.sin(e) * len / N);
+    pts.push(p);
+  }
+  for (let i = 0; i < N; i++) {
+    const a = pts[i], b = pts[i + 1]; const u = (i + 0.5) / N;
+    const tan = b.clone().sub(a).normalize();
+    const L = leafScale * len * Math.pow(Math.sin(Math.PI * Math.min(1, u * 1.1 + 0.05)), 0.6);
+    const c = cA.clone().lerp(cB, u);
+    for (const s of [1, -1]) {
+      const tip = a.clone().lerp(b, 0.5).addScaledVector(side, s * L).addScaledVector(tan, L * 0.45).addScaledVector(UP, -L * 0.18);
+      if (s > 0) out.push(a.x, a.y, a.z, b.x, b.y, b.z, tip.x, tip.y, tip.z);
+      else out.push(b.x, b.y, b.z, a.x, a.y, a.z, tip.x, tip.y, tip.z);
+      for (let k = 0; k < 3; k++) colOut.push(c.r, c.g, c.b);
+    }
+  }
+}
+function fernGeometry(rand, fronds, lenLo, lenHi, cA, cB, tiltLo = 0.6, droop = 0.9, leaf = 0.17) {
+  const pos = [], col = [];
+  for (let f = 0; f < fronds; f++) {
+    const ang = (f / fronds) * Math.PI * 2 + rand() * 0.5;
+    const dirH = V(Math.cos(ang), 0, Math.sin(ang));
+    frondTriangles(pos, col, V(0, 0.02, 0), dirH, lerp(lenLo, lenHi, rand()), tiltLo + rand() * 0.5, droop, leaf, cA, cB);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.computeVertexNormals();
+  return g;
+}
+function addWind(mat, strength, key) {
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = uTime;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        #ifdef USE_INSTANCING
+          vec2 ip = vec2(instanceMatrix[3][0], instanceMatrix[3][2]);
+        #else
+          vec2 ip = vec2(0.0);
+        #endif
+        float sw = sin(uTime * 1.25 + ip.x * 0.31 + ip.y * 0.23) + 0.4 * sin(uTime * 2.7 + ip.x * 0.9);
+        transformed.x += sw * ${strength.toFixed(3)} * max(position.y, 0.0);
+        transformed.z += sw * ${(strength * 0.6).toFixed(3)} * max(position.y, 0.0);`);
+  };
+  mat.customProgramCacheKey = () => 'wind-' + key;
+}
+function scatter(geo, mat, list, { shadow = true } = {}) {
+  const im = new THREE.InstancedMesh(geo, mat, list.length);
+  const m = M4(), q = new THREE.Quaternion(), s = V();
+  list.forEach((it, i) => {
+    q.setFromEuler(new THREE.Euler(it.tx || 0, it.ry || 0, it.tz || 0));
+    s.set(it.s, it.sy || it.s, it.s);
+    m.compose(V(it.x, it.y, it.z), q, s);
+    im.setMatrixAt(i, m);
+  });
+  im.castShadow = shadow; im.receiveShadow = true;
+  scene.add(im);
+  return im;
+}
+function clearOf(x, z, pad) {
+  if (Math.hypot(x - POND.x, z - POND.z) < POND.r + pad) return false;
+  if (Math.hypot(x - MUD.x, z - MUD.z) < MUD.r + pad) return false;
+  if (Math.hypot(x - SPAWN.x, z - SPAWN.z) < 6) return false;
+  return true;
+}
+function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp(rMin * rMin, rMax * rMax, R())); return [Math.cos(a) * r, Math.sin(a) * r]; }
+
+{
+  // Ferns: the main ground cover. There was no grass yet.
+  const fernA = fernGeometry(rng(11), 9, 0.8, 1.25, new THREE.Color('#3b5424'), new THREE.Color('#78893f'));
+  const fernB = fernGeometry(rng(12), 7, 0.6, 1.0, new THREE.Color('#465a26'), new THREE.Color('#8a8a45'), 0.8, 0.8, 0.2);
+  const fernMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, side: THREE.DoubleSide, envMapIntensity: 0.5 });
+  addWind(fernMat, 0.045, 'fern');
+  const la = [], lb = [];
+  for (let i = 0; i < 900 && la.length + lb.length < 560; i++) {
+    const [x, z] = ringPoint(3, 54);
+    const h = heightAt(x, z);
+    if (h < WATER_Y + 0.12 || Math.hypot(x - MUD.x, z - MUD.z) < MUD.r + 0.8 || Math.hypot(x - SPAWN.x, z - SPAWN.z) < 3) continue;
+    const clump = fbm(x * 0.09, z * 0.09, 71);
+    if (R() > smooth(0.35, 0.6, clump) + 0.12) continue;
+    (R() < 0.55 ? la : lb).push({ x, y: h - 0.03, z, s: lerp(0.65, 1.45, R()), ry: R() * 6.28 });
+  }
+  scatter(fernA, fernMat, la); scatter(fernB, fernMat, lb);
+
+  // Horsetails along the pond shore and the mud pit edge.
+  const stemC = new THREE.Color('#56692f'), nodeC = new THREE.Color('#2e3a1b'), coneC = new THREE.Color('#4f4a2c');
+  const hParts = []; const hr = rng(13);
+  for (let k = 0; k < 9; k++) {
+    const ox = (hr() - 0.5) * 0.7, oz = (hr() - 0.5) * 0.7, H = lerp(1.0, 2.4, hr()), rad = lerp(0.022, 0.04, hr());
+    hParts.push({ geo: new THREE.CylinderGeometry(rad * 0.8, rad, H, 6, 1, true), color: stemC, matrix: M4().makeTranslation(ox, H / 2, oz) });
+    for (let y = 0.25; y < H - 0.1; y += 0.22) hParts.push({ geo: new THREE.CylinderGeometry(rad * 1.35, rad * 1.35, 0.03, 6), color: nodeC, matrix: M4().makeTranslation(ox, y, oz) });
+    hParts.push({ geo: new THREE.ConeGeometry(rad * 1.5, 0.12, 6), color: coneC, matrix: M4().makeTranslation(ox, H + 0.06, oz) });
+  }
+  const horsetailGeo = mergeColored(hParts);
+  const hMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, envMapIntensity: 0.5 });
+  addWind(hMat, 0.03, 'horsetail');
+  const hl = [];
+  for (let i = 0; i < 400 && hl.length < 85; i++) {
+    let x, z;
+    if (R() < 0.72) { const a = R() * 6.28, d = lerp(POND.r - 2.6, POND.r + 3.2, R()); x = POND.x + Math.cos(a) * d; z = POND.z + Math.sin(a) * d; }
+    else { const a = R() * 6.28, d = lerp(MUD.r + 0.6, MUD.r + 2.8, R()); x = MUD.x + Math.cos(a) * d; z = MUD.z + Math.sin(a) * d; }
+    const h = heightAt(x, z);
+    if (h < WATER_Y - 0.3) continue;
+    if (Math.hypot(x - SPAWN.x, z - SPAWN.z) < 5) continue;
+    hl.push({ x, y: h - 0.05, z, s: lerp(0.75, 1.3, R()), ry: R() * 6.28 });
+  }
+  scatter(horsetailGeo, hMat, hl);
+
+  // Conifers on the outer ring.
+  const trunkC = new THREE.Color('#47332a');
+  const cParts = [{ geo: new THREE.CylinderGeometry(0.2, 0.42, 9, 8), color: trunkC, matrix: M4().makeTranslation(0, 4.5, 0) }];
+  const cr = rng(14);
+  for (let k = 0; k < 7; k++) {
+    const rad = (1 - k / 7) * 2.5 + 0.45; const cone = new THREE.ConeGeometry(rad, 2.6, 9, 1);
+    const pp = cone.attributes.position;
+    for (let i = 0; i < pp.count; i++) { pp.setX(i, pp.getX(i) * (0.85 + cr() * 0.3)); pp.setZ(i, pp.getZ(i) * (0.85 + cr() * 0.3)); }
+    const shade = new THREE.Color('#283722').lerp(new THREE.Color('#3d4c2c'), k / 7);
+    cParts.push({ geo: cone, color: shade, matrix: M4().makeTranslation(0, 4.6 + k * 1.45, 0) });
+  }
+  const coniferGeo = mergeColored(cParts);
+  const conMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, envMapIntensity: 0.4 });
+  const cl = [];
+  for (let i = 0; i < 400 && cl.length < 34; i++) {
+    const [x, z] = ringPoint(cl.length < 6 ? 20 : 30, 58);
+    if (!clearOf(x, z, 6)) continue;
+    if (cl.some((o) => Math.hypot(o.x - x, o.z - z) < 5)) continue;
+    const s = lerp(0.8, 1.35, R());
+    cl.push({ x, y: heightAt(x, z) - 0.2, z, s, ry: R() * 6.28 });
+    obstacles.push({ x, z, r: 0.42 * s + 0.1 });
+  }
+  scatter(coniferGeo, conMat, cl);
+
+  // Dicroidium: the signature seed fern of the Triassic southern continents.
+  const dParts = []; const dr = rng(15);
+  const dTrunkC = new THREE.Color('#4d3a2b');
+  dParts.push({ geo: new THREE.CylinderGeometry(0.1, 0.16, 2.4, 7), color: dTrunkC, matrix: M4().makeTranslation(0, 1.2, 0) });
+  dParts.push({ geo: new THREE.CylinderGeometry(0.07, 0.1, 1.9, 7), color: dTrunkC, matrix: M4().makeRotationZ(0.18).setPosition(-0.17, 3.2, 0) });
+  const crownTop = V(-0.33, 4.1, 0);
+  const crownPos = [], crownCol = [];
+  for (let f = 0; f < 11; f++) {
+    const ang = (f / 11) * Math.PI * 2 + dr() * 0.4;
+    frondTriangles(crownPos, crownCol, crownTop.clone().add(V((dr() - 0.5) * 0.3, (dr() - 0.5) * 0.3, (dr() - 0.5) * 0.3)), V(Math.cos(ang), 0, Math.sin(ang)),
+      lerp(1.5, 2.2, dr()), 0.5 + dr() * 0.4, 1.3, 0.13, new THREE.Color('#4c5d26'), new THREE.Color('#8a8f42'));
+  }
+  const crown = new THREE.BufferGeometry();
+  crown.setAttribute('position', new THREE.Float32BufferAttribute(crownPos, 3));
+  crown.setAttribute('color', new THREE.Float32BufferAttribute(crownCol, 3));
+  const trunkGeo = mergeColored(dParts);
+  crown.computeVertexNormals();
+  const dl = [];
+  for (let i = 0; i < 500 && dl.length < 20; i++) {
+    const [x, z] = ringPoint(12, 44);
+    if (!clearOf(x, z, 3.5)) continue;
+    if (dl.some((o) => Math.hypot(o.x - x, o.z - z) < 4)) continue;
+    const s = lerp(0.85, 1.3, R());
+    dl.push({ x, y: heightAt(x, z) - 0.1, z, s, ry: R() * 6.28 });
+    obstacles.push({ x, z, r: 0.2 * s + 0.1 });
+  }
+  scatter(trunkGeo, conMat, dl);
+  const crownMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, side: THREE.DoubleSide, envMapIntensity: 0.5 });
+  addWind(crownMat, 0.012, 'crown');
+  scatter(crown, crownMat, dl);
+
+  // Rocks: red sandstone and grey mudstone.
+  const rockGeo = (() => { const g = new THREE.IcosahedronGeometry(1, 1); const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i); const k = 0.75 + 0.5 * vnoise(x * 1.7 + 3, z * 1.7 + y, 91); p.setXYZ(i, x * k, y * k * 0.7, z * k); }
+    g.computeVertexNormals(); return g; })();
+  const rl = [];
+  for (let i = 0; i < 300 && rl.length < 42; i++) {
+    const [x, z] = ringPoint(8, 56);
+    if (!clearOf(x, z, 2)) continue;
+    const s = R() < 0.25 ? lerp(0.9, 1.7, R()) : lerp(0.2, 0.6, R());
+    rl.push({ x, y: heightAt(x, z) - s * 0.25, z, s, ry: R() * 6.28 });
+    if (s > 0.5) obstacles.push({ x, z, r: s * 0.85 });
+  }
+  const rockMat = new THREE.MeshStandardMaterial({ color: new THREE.Color('#6b5547'), roughness: 0.92, flatShading: true, envMapIntensity: 0.4 });
+  scatter(rockGeo, rockMat, rl);
+
+  // A few fallen logs.
+  const logGeo = mergeColored([{ geo: new THREE.CylinderGeometry(0.24, 0.3, 5.5, 9), color: new THREE.Color('#3e2c21'), matrix: M4().makeRotationZ(Math.PI / 2) }]);
+  const ll = [];
+  for (let i = 0; i < 100 && ll.length < 4; i++) {
+    const [x, z] = ringPoint(14, 40);
+    if (!clearOf(x, z, 4)) continue;
+    ll.push({ x, y: heightAt(x, z) + 0.12, z, s: 1, ry: R() * 6.28 });
+    obstacles.push({ x, z, r: 0.5 });
+  }
+  scatter(logGeo, conMat, ll);
+}
+
+/* ============================== Herrerasaurus ============================== */
+// Wet and mud state is tracked in horizontal bands up the body (bind-pose height).
+const BANDS = 24, BAND_H = 0.085;
+const skinU = {
+  uWet: { value: new Float32Array(BANDS) },
+  uMudCover: { value: new Float32Array(BANDS) },
+  uMudDry: { value: new Float32Array(BANDS) },
+  uMudFlake: { value: new Float32Array(BANDS) },
+  uBandH: { value: BAND_H },
+};
+
+class SkinBuilder {
+  constructor() { this.p = []; this.c = []; this.i = []; this.si = []; this.sw = []; }
+  get n() { return this.p.length / 3; }
+  vert(pos, skin, col) {
+    const m = new Map();
+    for (const [b, w] of skin) if (w > 1e-4) m.set(b, (m.get(b) || 0) + w);
+    const s = [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
+    const tot = s.reduce((a, q) => a + q[1], 0) || 1;
+    this.p.push(pos.x, pos.y, pos.z);
+    for (let k = 0; k < 4; k++) { this.si.push(s[k] ? s[k][0] : 0); this.sw.push(s[k] ? s[k][1] / tot : 0); }
+    const cc = col || { r: 1, g: 1, b: 1 };
+    this.c.push(cc.r, cc.g, cc.b);
+    return this.n - 1;
+  }
+  prim(geo, matrix, bone, col) {
+    const g = (geo.index ? geo.toNonIndexed() : geo.clone()).applyMatrix4(matrix);
+    const p = g.attributes.position; const start = this.n;
+    for (let k = 0; k < p.count; k++) this.vert(V(p.getX(k), p.getY(k), p.getZ(k)), [[bone, 1]], col);
+    for (let k = 0; k < p.count; k += 3) this.i.push(start + k, start + k + 1, start + k + 2);
+  }
+  build() {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(this.p, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(this.c, 3));
+    g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(this.si, 4));
+    g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(this.sw, 4));
+    g.setIndex(this.i);
+    g.computeVertexNormals();
+    return g;
+  }
+}
+
+// Interpolated profile keyed by arc length (Catmull-Rom between keys).
+function makeProfile(keys) {
+  keys.sort((a, b) => a.s - b.s);
+  const fields = ['w', 'h', 'yo', 'flatB', 'flatT', 'topN'];
+  return (s) => {
+    let j = 0; while (j < keys.length - 2 && s > keys[j + 1].s) j++;
+    const k0 = keys[Math.max(0, j - 1)], k1 = keys[j], k2 = keys[j + 1], k3 = keys[Math.min(keys.length - 1, j + 2)];
+    const t = clamp((s - k1.s) / ((k2.s - k1.s) || 1), 0, 1);
+    const out = {};
+    for (const f of fields) {
+      const p0 = k0[f] ?? 0, p1 = k1[f] ?? 0, p2 = k2[f] ?? 0, p3 = k3[f] ?? 0;
+      const t2 = t * t, t3 = t2 * t;
+      const v = 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
+      out[f] = (f === 'w' || f === 'h') ? Math.max(v, 0.004) : v;
+    }
+    return out;
+  };
+}
+function arcLengths(pts) { const L = [0]; for (let k = 1; k < pts.length; k++) L.push(L[k - 1] + pts[k].distanceTo(pts[k - 1])); return L; }
+
+// Sweep a superellipse cross-section along a joint chain, skinned to the chain's bones.
+function loft(sb, pts, segBones, prof, opt = {}) {
+  const N = opt.ring || 20, step = opt.step || 0.035, side = opt.side || V(1, 0, 0), e = opt.e || 2.3;
+  const L = arcLengths(pts); const total = L[L.length - 1];
+  const rings = Math.max(2, Math.ceil(total / step) + 1);
+  const dirs = []; for (let k = 0; k < pts.length - 1; k++) dirs.push(pts[k + 1].clone().sub(pts[k]).normalize());
+  const starts = []; const centers = []; const tans = []; const ringSkins = [];
+  for (let r = 0; r < rings; r++) {
+    const s = total * r / (rings - 1);
+    let j = 0; while (j < pts.length - 2 && s > L[j + 1]) j++;
+    const t = clamp((s - L[j]) / ((L[j + 1] - L[j]) || 1), 0, 1);
+    const c = pts[j].clone().lerp(pts[j + 1], t);
+    const tan = dirs[j].clone();
+    if (t < 0.5 && j > 0) tan.lerp(dirs[j - 1], 0.5 * (1 - smooth(0, 0.5, t))).normalize();
+    if (t > 0.5 && j < dirs.length - 1) tan.lerp(dirs[j + 1], 0.5 * smooth(0.5, 1, t)).normalize();
+    const right = side.clone().addScaledVector(tan, -side.dot(tan)).normalize();
+    const up = V().crossVectors(tan, right);
+    const P = prof(s, total);
+    const own = segBones[j];
+    const prev = j > 0 ? segBones[j - 1] : (opt.startBone ?? own);
+    const next = j < segBones.length - 1 ? segBones[j + 1] : (opt.endBone ?? own);
+    const b = 0.32;
+    const wp = t < b ? 0.5 * (1 - smooth(0, 1, t / b)) : 0;
+    const wn = t > 1 - b ? 0.5 * smooth(0, 1, (t - (1 - b)) / b) : 0;
+    const skin = [[own, 1 - wp - wn], [prev, wp], [next, wn]];
+    starts.push(sb.n); centers.push(c.clone().addScaledVector(up, P.yo)); tans.push(tan); ringSkins.push(skin);
+    for (let k = 0; k < N; k++) {
+      const a = (k / N) * Math.PI * 2; const ca = Math.cos(a), sa = Math.sin(a);
+      let x = Math.sign(ca) * Math.pow(Math.abs(ca), 2 / e) * P.w;
+      let y = Math.sign(sa) * Math.pow(Math.abs(sa), 2 / e) * P.h;
+      if (sa > 0) { x *= 1 - P.topN * sa; y *= 1 - P.flatT; } else { y *= 1 - P.flatB; }
+      sb.vert(c.clone().addScaledVector(right, x).addScaledVector(up, y + P.yo), skin);
+    }
+  }
+  for (let r = 0; r < rings - 1; r++) for (let k = 0; k < N; k++) {
+    const a = starts[r] + k, b2 = starts[r] + (k + 1) % N, c = starts[r + 1] + k, d = starts[r + 1] + (k + 1) % N;
+    sb.i.push(a, b2, c, b2, d, c);
+  }
+  const P0 = prof(0, total), P1 = prof(total, total);
+  const c0 = sb.vert(centers[0].clone().addScaledVector(tans[0], -Math.min(P0.w, P0.h) * 0.7), ringSkins[0]);
+  for (let k = 0; k < N; k++) sb.i.push(c0, starts[0] + (k + 1) % N, starts[0] + k);
+  const last = rings - 1;
+  const c1 = sb.vert(centers[last].clone().addScaledVector(tans[last], Math.min(P1.w, P1.h) * 0.7), ringSkins[last]);
+  for (let k = 0; k < N; k++) sb.i.push(c1, starts[last] + k, starts[last] + (k + 1) % N);
+}
+
+const skinGLSL = /* glsl */`
+  varying vec3 vBindPos; varying vec3 vBindN;
+  uniform float uWet[${BANDS}]; uniform float uMudCover[${BANDS}]; uniform float uMudDry[${BANDS}]; uniform float uMudFlake[${BANDS}];
+  uniform float uBandH;
+  ${['uWet', 'uMudCover', 'uMudDry', 'uMudFlake'].map((n) => `
+  float b_${n}(float y){ float f = clamp(y / uBandH, 0.0, ${BANDS - 1}.0); int i = int(floor(f)); int j = min(i + 1, ${BANDS - 1}); return mix(${n}[i], ${n}[j], f - float(i)); }`).join('')}
+  float skH(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+  float skNoise(vec3 x){ vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(mix(skH(i), skH(i + vec3(1,0,0)), f.x), mix(skH(i + vec3(0,1,0)), skH(i + vec3(1,1,0)), f.x), f.y),
+               mix(mix(skH(i + vec3(0,0,1)), skH(i + vec3(1,0,1)), f.x), mix(skH(i + vec3(0,1,1)), skH(i + vec3(1,1,1)), f.x), f.y), f.z); }
+  float skFbm(vec3 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++){ s += a * skNoise(p); p = p * 2.03 + vec3(1.7, 9.2, 3.1); a *= 0.5; } return s / 0.9375; }
+  vec3 skHash3(vec3 p){ p = vec3(dot(p, vec3(127.1, 311.7, 74.7)), dot(p, vec3(269.5, 183.3, 246.1)), dot(p, vec3(113.5, 271.9, 124.6))); return fract(sin(p) * 43758.5453123); }
+  vec3 skVor(vec3 x){ vec3 p = floor(x); vec3 f = fract(x); float d1 = 8.0, d2 = 8.0, id = 0.0;
+    for (int k = -1; k <= 1; k++) for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+      vec3 b = vec3(float(i), float(j), float(k)); vec3 h = skHash3(p + b); vec3 r = b + h - f; float d = dot(r, r);
+      if (d < d1) { d2 = d1; d1 = d; id = h.x; } else if (d < d2) { d2 = d; } }
+    return vec3(sqrt(d1), sqrt(d2), id); }
+  vec3 skPerturb(vec3 surf_pos, vec3 surf_norm, float h){
+    vec3 sx = dFdx(surf_pos); vec3 sy = dFdy(surf_pos);
+    vec3 r1 = cross(sy, surf_norm); vec3 r2 = cross(surf_norm, sx);
+    float det = dot(sx, r1);
+    vec3 grad = sign(det) * (dFdx(h) * r1 + dFdy(h) * r2);
+    float gl = length(grad), lim = abs(det) * 0.45;
+    if (gl > lim) grad *= lim / gl;
+    vec3 n2 = abs(det) * surf_norm - grad;
+    return dot(n2, n2) > 1e-20 ? normalize(n2) : surf_norm; }
+`;
+const skinColorGLSL = /* glsl */`
+  vec3 P = vBindPos; vec3 BN = normalize(vBindN);
+  float viewD = length(vViewPosition);
+  float fw = length(fwidth(P));
+  float detail = (1.0 - smoothstep(6.0, 24.0, viewD)) * (1.0 - smoothstep(0.006, 0.014, fw));
+  float plateAA = 1.0 - smoothstep(0.03, 0.07, fw);
+  float dors = smoothstep(-0.15, 0.75, BN.y);
+  float vent = smoothstep(0.05, -0.65, BN.y);
+  float limbLow = 1.0 - smoothstep(0.32, 0.68, P.y);
+  float onBody = smoothstep(0.6, 0.85, P.y);
+  vec3 cBack = vec3(0.075, 0.06, 0.042);
+  vec3 cFlank = vec3(0.25, 0.155, 0.08);
+  vec3 cBelly = vec3(0.50, 0.42, 0.31);
+  vec3 skin = mix(cFlank, cBack, dors);
+  skin = mix(skin, cBelly, vent * onBody);
+  // Dark transverse bands across back and tail (invented pattern; colors are unknown from fossils).
+  float bodyZone = onBody * (1.0 - smoothstep(1.2, 1.5, P.z));
+  float bc = P.z * 2.5 + skFbm(P * 3.0) * 0.9;
+  float stripe = smoothstep(0.34, 0.12, abs(fract(bc) - 0.5));
+  skin *= mix(1.0, 0.42, stripe * bodyZone * (1.0 - vent));
+  float headZ = smoothstep(1.62, 1.95, P.z) * smoothstep(1.25, 1.45, P.y);
+  skin = mix(skin, skin * vec3(1.3, 0.85, 0.7), headZ * (1.0 - vent * 0.6));
+  skin = mix(skin, vec3(0.105, 0.09, 0.075), limbLow * 0.8);
+  skin *= 0.8 + 0.4 * skFbm(P * 11.0);
+  // Pebbly scales everywhere, with a row of larger scales down the spine.
+  vec3 vo = skVor(P * 64.0);
+  float scaleH = smoothstep(0.0, 0.42, vo.y - vo.x);
+  skin *= mix(1.0, mix(0.6, 1.05, scaleH) * (0.9 + 0.18 * vo.z), 0.35 + 0.65 * detail);
+  float mid = (1.0 - smoothstep(0.025, 0.065, abs(P.x))) * smoothstep(0.55, 0.9, BN.y) * (1.0 - step(1.4, P.z));
+  vec3 vo2 = skVor(P * vec3(28.0, 28.0, 15.0));
+  float scuteH = smoothstep(0.0, 0.3, vo2.y - vo2.x);
+  float hSkin = mix(scaleH, 1.25 * scuteH, mid * plateAA);
+  skin = mix(skin, skin * mix(0.62, 1.0, scuteH), mid * plateAA);
+  // Wetness and mud, looked up by height up the body with a ragged edge.
+  float yj = P.y + (skNoise(P * 7.0) - 0.5) * 0.07;
+  float wet = b_uWet(yj);
+  float wetV = smoothstep(0.0, 0.22, wet - skNoise(P * 4.0 + 3.1) * 0.78);
+  float cover = b_uMudCover(yj);
+  float mDry = b_uMudDry(yj);
+  float mFl = b_uMudFlake(yj);
+  vec3 pl = skVor(P * 17.0 + 7.3);
+  float alive = step(mFl * 1.001, pl.z * 0.98 + 0.01);
+  float mudM = smoothstep(0.3, 0.7, cover) * alive;
+  float dryV = smoothstep(0.0, 0.25, mDry - skNoise(P * 3.3 + 11.0) * 0.75);
+  vec3 mudWetC = vec3(0.055, 0.036, 0.022) * (0.85 + 0.3 * skNoise(P * 18.0));
+  vec3 mudDryC = vec3(0.13, 0.094, 0.06) * (0.82 + 0.3 * pl.z) * (0.78 + 0.44 * skFbm(P * 30.0));
+  float crack = (1.0 - smoothstep(0.008, 0.035, pl.y - pl.x)) * plateAA;
+  mudDryC *= mix(1.0, 0.3, crack);
+  vec3 mudC = mix(mudWetC, mudDryC, dryV);
+  float plate = smoothstep(0.0, 0.09, pl.y - pl.x);
+  float hMud = mix(1.25 + skFbm(P * 22.0) * 0.9, 1.0 + plate * 1.3, dryV);
+  vec3 skinW = mix(skin, pow(skin, vec3(1.12)) * 0.42, wetV);
+  float gH = mix(hSkin * mix(1.0, 0.55, wetV), hMud, mudM);
+  float gRough = mix(mix(0.72, 0.3, wetV), mix(0.3, 0.97, dryV), mudM);
+  float gCoat = mix(wetV * 0.9, (1.0 - dryV) * 0.45, mudM);
+  float gCoatR = mix(0.06, 0.2, mudM);
+  diffuseColor.rgb = mix(skinW, mudC, mudM);
+`;
+
+const skinMat = new THREE.MeshPhysicalMaterial({ roughness: 0.72, metalness: 0, envMapIntensity: 0.9, clearcoat: 1, clearcoatRoughness: 0.08, specularIntensity: 0.7 });
+skinMat.onBeforeCompile = (sh) => {
+  Object.assign(sh.uniforms, skinU);
+  sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vBindPos; varying vec3 vBindN;')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBindPos = position; vBindN = normal;');
+  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + skinGLSL)
+    .replace('#include <color_fragment>', '#include <color_fragment>\n' + skinColorGLSL)
+    .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = gRough;')
+    .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nfloat ndv = abs(dot(normal, normalize(vViewPosition)));\nnormal = skPerturb(-vViewPosition, normal, gH * 0.003 * detail * smoothstep(0.12, 0.45, ndv));')
+    .replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\nmaterial.clearcoat = gCoat; material.clearcoatRoughness = max(gCoatR, 0.0525);');
+};
+skinMat.customProgramCacheKey = () => 'herrera-skin-v2';
+
+function buildHerrerasaurus() {
+  const J = {
+    pelvis: V(0, 1.18, 0), spine1: V(0, 1.2, 0.38), spine2: V(0, 1.19, 0.74), chest: V(0, 1.15, 1.05),
+    neck1: V(0, 1.2, 1.3), neck2: V(0, 1.36, 1.5), neck3: V(0, 1.52, 1.66), head: V(0, 1.62, 1.8), snout: V(0, 1.53, 2.36),
+    jaw: V(0, 1.555, 1.84), jawTip: V(0, 1.47, 2.31),
+    tail: [V(0, 1.17, -0.3), V(0, 1.14, -0.7), V(0, 1.1, -1.1), V(0, 1.05, -1.5), V(0, 1.0, -1.88), V(0, 0.95, -2.24), V(0, 0.9, -2.56)],
+    tailEnd: V(0, 0.86, -2.86),
+  };
+  const bones = []; const B = {};
+  const mk = (name, parent, abs) => {
+    const b = new THREE.Bone(); b.name = name; b.userData.abs = abs.clone();
+    if (parent) { b.position.copy(abs).sub(parent.userData.abs); parent.add(b); } else b.position.copy(abs);
+    b.userData.index = bones.length; bones.push(b); B[name] = b; return b;
+  };
+  const I = (name) => B[name].userData.index;
+  mk('pelvis', null, J.pelvis);
+  mk('spine1', B.pelvis, J.spine1); mk('spine2', B.spine1, J.spine2); mk('chest', B.spine2, J.chest);
+  mk('neck1', B.chest, J.neck1); mk('neck2', B.neck1, J.neck2); mk('neck3', B.neck2, J.neck3); mk('head', B.neck3, J.head); mk('jaw', B.head, J.jaw);
+  let tp = B.pelvis; J.tail.forEach((a, k) => { tp = mk('tail' + k, tp, a); });
+  const legs = [], arms = [];
+  for (const sx of [1, -1]) {
+    const S = sx > 0 ? 'L' : 'R';
+    const hip = V(sx * 0.17, 1.14, 0.02), knee = V(sx * 0.22, 0.66, 0.22), ankle = V(sx * 0.2, 0.2, -0.06), ball = V(sx * 0.19, 0.035, 0.1), toeTip = V(sx * 0.19, 0.02, 0.34);
+    mk('thigh' + S, B.pelvis, hip); mk('shin' + S, B['thigh' + S], knee); mk('meta' + S, B['shin' + S], ankle); mk('toe' + S, B['meta' + S], ball);
+    legs.push({ sx, S, hip, knee, ankle, ball, toeTip });
+    const shoulder = V(sx * 0.13, 1.0, 1.08), elbow = V(sx * 0.17, 0.8, 1.16), wrist = V(sx * 0.155, 0.64, 1.3);
+    mk('upper' + S, B.chest, shoulder); mk('fore' + S, B['upper' + S], elbow); mk('hand' + S, B['fore' + S], wrist);
+    arms.push({ sx, S, shoulder, elbow, wrist });
+  }
+
+  const body = new SkinBuilder(); const horn = new SkinBuilder(); const eyes = new SkinBuilder();
+  // Body and tail: one continuous sweep from tail tip to snout.
+  const bodyPts = [J.tailEnd, ...J.tail.slice().reverse(), J.pelvis, J.spine1, J.spine2, J.chest, J.neck1, J.neck2, J.neck3, J.head, J.snout];
+  const bodySeg = [...[6, 5, 4, 3, 2, 1, 0].map((k) => I('tail' + k)), I('pelvis'), I('pelvis'), I('spine1'), I('spine2'), I('chest'), I('neck1'), I('neck2'), I('neck3'), I('head')];
+  const BL = arcLengths(bodyPts);
+  const at = (ji, off = 0) => BL[ji] + off;
+  const bodyProf = makeProfile([
+    { s: at(0), w: 0.016, h: 0.02 },
+    { s: at(1), w: 0.045, h: 0.056 }, { s: at(2), w: 0.066, h: 0.082 }, { s: at(3), w: 0.086, h: 0.112 },
+    { s: at(4), w: 0.106, h: 0.142 }, { s: at(5), w: 0.13, h: 0.182 }, { s: at(6), w: 0.156, h: 0.222, yo: -0.01 },
+    { s: at(7), w: 0.186, h: 0.266, yo: -0.02 }, { s: at(8), w: 0.226, h: 0.3, yo: -0.03, topN: 0.12 },
+    { s: at(9), w: 0.256, h: 0.336, yo: -0.07, topN: 0.16 }, { s: at(10), w: 0.266, h: 0.346, yo: -0.1, topN: 0.18 },
+    { s: at(11), w: 0.236, h: 0.31, yo: -0.1, topN: 0.16 }, { s: at(12), w: 0.14, h: 0.172, yo: -0.04, topN: 0.08 },
+    { s: at(13), w: 0.104, h: 0.128 }, { s: at(14), w: 0.09, h: 0.108 },
+    { s: at(15, -0.02), w: 0.094, h: 0.12 },
+    { s: at(15, 0.08), w: 0.102, h: 0.134, yo: 0.02, flatB: 0.36, topN: 0.1 },
+    { s: at(15, 0.22), w: 0.086, h: 0.116, yo: 0.016, flatB: 0.45, topN: 0.12 },
+    { s: at(15, 0.4), w: 0.06, h: 0.086, yo: 0.004, flatB: 0.45, topN: 0.1 },
+    { s: at(16), w: 0.024, h: 0.034, flatB: 0.3 },
+  ]);
+  loft(body, bodyPts, bodySeg, bodyProf, { ring: 24, step: 0.032 });
+
+  // Lower jaw.
+  const jawPts = [V(0, 1.56, 1.82), V(0, 1.515, 2.06), J.jawTip];
+  const jL = arcLengths(jawPts);
+  const jawProf = makeProfile([
+    { s: 0, w: 0.088, h: 0.06, yo: -0.03, flatT: 0.5 }, { s: jL[1], w: 0.07, h: 0.044, yo: -0.025, flatT: 0.55 }, { s: jL[2], w: 0.026, h: 0.02, yo: -0.012, flatT: 0.5 },
+  ]);
+  loft(body, jawPts, [I('jaw'), I('jaw')], jawProf, { ring: 16, step: 0.03 });
+
+  // Teeth: recurved blades along both jaws.
+  const ivory = new THREE.Color('#d6cbb0'), claw = new THREE.Color('#211a15');
+  const headDir = J.snout.clone().sub(J.head); const headLen = headDir.length(); headDir.normalize();
+  const tooth = new THREE.ConeGeometry(0.0075, 0.03, 5);
+  for (let z = 1.98; z <= 2.31; z += 0.026) {
+    const t = (z - J.head.z) / (J.snout.z - J.head.z);
+    const P = bodyProf(BL[15] + t * headLen);
+    const c = J.head.clone().addScaledVector(headDir, t * headLen);
+    const yb = c.y + P.yo - P.h * (1 - P.flatB);
+    for (const sx of [1, -1]) {
+      horn.prim(tooth, M4().makeRotationX(Math.PI).setPosition(sx * P.w * 0.78, yb - 0.008, c.z), I('head'), ivory);
+    }
+  }
+  for (let k = 0; k < 11; k++) {
+    const t = 0.18 + k * 0.075; const p = jawPts[0].clone().lerp(J.jawTip, t);
+    const w = lerp(0.075, 0.028, t);
+    for (const sx of [1, -1]) horn.prim(tooth, M4().makeScale(0.8, 0.8, 0.8).setPosition(sx * w * 0.8, p.y + lerp(0.008, 0.0, t), p.z), I('jaw'), ivory);
+  }
+  // Eyes.
+  const eyeC = new THREE.Color('#a86d1a'), pupilC = new THREE.Color('#0b0806');
+  for (const sx of [1, -1]) {
+    eyes.prim(new THREE.SphereGeometry(0.026, 14, 10), M4().makeTranslation(sx * 0.074, 1.64, 1.925), I('head'), eyeC);
+    eyes.prim(new THREE.SphereGeometry(0.012, 10, 8), M4().makeScale(0.6, 1.2, 0.9).setPosition(sx * 0.097, 1.64, 1.93), I('head'), pupilC);
+  }
+
+  // Legs, feet and arms.
+  for (const L of legs) {
+    const S = L.S;
+    const pts = [V(L.sx * 0.14, 1.3, 0.04), L.hip, L.knee, L.ankle, L.ball];
+    const ll = arcLengths(pts);
+    const prof = makeProfile([
+      { s: 0, w: 0.13, h: 0.18 }, { s: ll[1], w: 0.165, h: 0.235 }, { s: lerp(ll[1], ll[2], 0.4), w: 0.135, h: 0.18 },
+      { s: ll[2], w: 0.074, h: 0.084 }, { s: lerp(ll[2], ll[3], 0.35), w: 0.062, h: 0.07, yo: -0.02 },
+      { s: ll[3], w: 0.04, h: 0.046 }, { s: ll[4], w: 0.034, h: 0.038 },
+    ]);
+    loft(body, pts, [I('thigh' + S), I('thigh' + S), I('shin' + S), I('meta' + S)], prof, { ring: 16, step: 0.03, startBone: I('pelvis'), endBone: I('toe' + S) });
+    const toeDir = L.toeTip.clone().sub(L.ball).normalize();
+    for (const [ang, len] of [[0.36 * L.sx, 0.19], [0, 0.24], [-0.36 * L.sx, 0.17]]) {
+      const d = toeDir.clone().applyAxisAngle(UP, ang);
+      const a = L.ball.clone().addScaledVector(d, 0.02); a.y = 0.03;
+      const b = a.clone().addScaledVector(d, len); b.y = 0.018;
+      const tl = a.distanceTo(b);
+      loft(body, [a, b], [I('toe' + S)], makeProfile([{ s: 0, w: 0.028, h: 0.022 }, { s: tl, w: 0.012, h: 0.01 }]), { ring: 10, step: 0.03, side: V(0, 1, 0) });
+      const q = new THREE.Quaternion().setFromUnitVectors(UP, d.clone().add(V(0, -0.35, 0)).normalize());
+      horn.prim(new THREE.ConeGeometry(0.011, 0.045, 6), M4().compose(b.clone().addScaledVector(d, 0.012), q, V(1, 1, 1)), I('toe' + S), claw);
+    }
+  }
+  for (const A of arms) {
+    const S = A.S;
+    const pts = [V(A.sx * 0.08, 1.04, 1.05), A.shoulder, A.elbow, A.wrist];
+    const al = arcLengths(pts);
+    loft(body, pts, [I('upper' + S), I('upper' + S), I('fore' + S)], makeProfile([
+      { s: 0, w: 0.06, h: 0.07 }, { s: al[1], w: 0.056, h: 0.064 }, { s: al[2], w: 0.04, h: 0.044 }, { s: al[3], w: 0.03, h: 0.032 },
+    ]), { ring: 12, step: 0.03, startBone: I('chest'), endBone: I('hand' + S) });
+    const fwdDown = V(-A.sx * 0.05, -0.55, 1).normalize();
+    for (const [ang, len] of [[0.3, 0.12], [0, 0.15], [-0.3, 0.11]]) {
+      const d = fwdDown.clone().applyAxisAngle(V(0, 1, 0), ang * A.sx);
+      const a = A.wrist.clone().addScaledVector(d, 0.02); const b = a.clone().addScaledVector(d, len);
+      loft(body, [a, b], [I('hand' + S)], makeProfile([{ s: 0, w: 0.02, h: 0.02 }, { s: len, w: 0.01, h: 0.01 }]), { ring: 8, step: 0.03, side: V(1, 0, 0) });
+      const cd = d.clone().add(V(0, -0.6, 0)).normalize();
+      horn.prim(new THREE.ConeGeometry(0.012, 0.06, 6), M4().compose(b.clone().addScaledVector(cd, 0.022), new THREE.Quaternion().setFromUnitVectors(UP, cd), V(1, 1, 1)), I('hand' + S), claw);
+    }
+  }
+
+  const rig = new THREE.Group();
+  rig.add(B.pelvis);
+  const bodyGeo = body.build();
+  const bodyMesh = new THREE.SkinnedMesh(bodyGeo, skinMat);
+  const hornMesh = new THREE.SkinnedMesh(horn.build(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42, envMapIntensity: 0.8 }));
+  const eyeMesh = new THREE.SkinnedMesh(eyes.build(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.08, envMapIntensity: 1.4 }));
+  for (const m of [bodyMesh, hornMesh, eyeMesh]) { m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; rig.add(m); }
+  rig.updateMatrixWorld(true);
+  const skeleton = new THREE.Skeleton(bones);
+  for (const m of [bodyMesh, hornMesh, eyeMesh]) m.bind(skeleton);
+
+  // Vertex lists per height band, used to emit drips and mud flakes from the real skin surface.
+  const bandVerts = Array.from({ length: BANDS }, () => []);
+  const bp = bodyGeo.attributes.position;
+  for (let i = 0; i < bp.count; i++) { const b = Math.round(bp.getY(i) / BAND_H); if (b >= 0 && b < BANDS) bandVerts[b].push(i); }
+
+  const legRig = legs.map((L, i) => ({
+    sx: L.sx, thigh: B['thigh' + L.S], shin: B['shin' + L.S], meta: B['meta' + L.S], toe: B['toe' + L.S],
+    thighRest: L.knee.clone().sub(L.hip).normalize(), shinRest: L.ankle.clone().sub(L.knee).normalize(),
+    metaRest: L.ball.clone().sub(L.ankle).normalize(), toeRest: L.toeTip.clone().sub(L.ball).normalize(),
+    thighLen: L.knee.distanceTo(L.hip), shinLen: L.ankle.distanceTo(L.knee), metaLen: L.ball.distanceTo(L.ankle),
+    neutral: V(L.ball.x, 0, L.ball.z), off: i * 0.5,
+    planted: V(), footPos: V(), liftPos: V(), swing: false, groundY: 0,
+  }));
+  return { rig, B, bones, skeleton, bodyMesh, legs: legRig, bandVerts, tails: J.tail.map((_, k) => B['tail' + k]) };
+}
+const dino = buildHerrerasaurus();
+scene.add(dino.rig);
+
+/* ============================== particles ============================== */
+class Particles {
+  constructor(geo, mat, max, opts = {}) {
+    this.mesh = new THREE.InstancedMesh(geo, mat, max);
+    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.mesh.count = 0; this.mesh.frustumCulled = false; this.mesh.castShadow = !!opts.shadow;
+    this.max = max; this.items = []; this.o = opts; this.d = new THREE.Object3D();
+    scene.add(this.mesh);
+  }
+  spawn(p, v, o = {}) {
+    if (this.items.length >= this.max) this.items.shift();
+    this.items.push({ p: p.clone(), v: v.clone(), age: 0, life: o.life ?? 3, size: o.size ?? 1, landed: false, landAge: 0,
+      rot: new THREE.Euler(Math.random() * 6, Math.random() * 6, Math.random() * 6), spin: V((Math.random() - 0.5) * 14, (Math.random() - 0.5) * 14, (Math.random() - 0.5) * 14) });
+  }
+  update(dt) {
+    let n = 0; const d = this.d;
+    this.items = this.items.filter((it) => {
+      it.age += dt;
+      if (it.age > it.life) return false;
+      if (!it.landed) {
+        it.v.y -= 9.8 * (this.o.grav ?? 1) * dt;
+        it.v.multiplyScalar(1 - (this.o.drag ?? 0.4) * dt);
+        it.p.addScaledVector(it.v, dt);
+        it.rot.x += it.spin.x * dt; it.rot.y += it.spin.y * dt; it.rot.z += it.spin.z * dt;
+        const s = surfaceAt(it.p.x, it.p.z);
+        if (it.p.y <= s.y) {
+          it.p.y = s.y + 0.004;
+          if (this.o.onLand && !this.o.onLand(it, s)) return false;
+          it.landed = true; it.landAge = it.age;
+          if (this.o.flatOnLand) it.rot.set(-Math.PI / 2 + (Math.random() - 0.5) * 0.3, Math.random() * 6, 0);
+        }
+      }
+      let s = it.size;
+      if (it.landed && this.o.stay) s *= 1 - smooth(it.life - 1.5, it.life, it.age);
+      d.position.copy(it.p); d.rotation.copy(it.rot);
+      if (this.o.stretch && !it.landed) { d.rotation.set(0, 0, 0); d.scale.set(s, s * clamp(1 + it.v.length() * 0.6, 1, 3), s); }
+      else if (it.landed && this.o.squash) d.scale.set(s * 1.4, s * 0.25, s * 1.4);
+      else d.scale.setScalar(s);
+      d.updateMatrix(); this.mesh.setMatrixAt(n++, d.matrix);
+      return true;
+    });
+    this.mesh.count = n; this.mesh.instanceMatrix.needsUpdate = true;
+  }
+}
+const flakeShape = (() => { const s = new THREE.Shape(); const N = 6; for (let k = 0; k < N; k++) { const a = (k / N) * Math.PI * 2, r = 0.5 + 0.5 * hashI(k, 3, 9); const x = Math.cos(a) * r, y = Math.sin(a) * r; k ? s.lineTo(x, y) : s.moveTo(x, y); } return s; })();
+const flakeGeo = new THREE.ShapeGeometry(flakeShape); flakeGeo.scale(0.045, 0.045, 1);
+const flakes = new Particles(flakeGeo, new THREE.MeshStandardMaterial({ color: new THREE.Color('#7d6a55'), roughness: 1, side: THREE.DoubleSide }), 700,
+  { drag: 2.2, grav: 0.9, flatOnLand: true, stay: true, shadow: true,
+    onLand: (it, s) => { if (s.kind === 'water') { spawnRipple(it.p.x, it.p.z, 0.4); return false; } if (s.kind === 'mud') return false; it.life = it.age + 7 + Math.random() * 4; return true; } });
+const dropGeo = new THREE.SphereGeometry(0.011, 6, 4);
+const dropMat = new THREE.MeshStandardMaterial({ color: new THREE.Color('#a8bfc0'), roughness: 0.04, metalness: 0, transparent: true, opacity: 0.85, envMapIntensity: 1.6 });
+const drips = new Particles(dropGeo, dropMat, 400, { drag: 0.2, stretch: true,
+  onLand: (it, s) => { if (s.kind === 'water' && Math.random() < 0.5) spawnRipple(it.p.x, it.p.z, 0.25); return false; } });
+const splash = new Particles(dropGeo, dropMat, 500, { drag: 0.6, stretch: true, onLand: () => false });
+const splat = new Particles(new THREE.SphereGeometry(0.02, 6, 4), new THREE.MeshStandardMaterial({ color: new THREE.Color('#2e2015'), roughness: 0.35 }), 300,
+  { drag: 0.6, squash: true, stay: true, onLand: (it, s) => { if (s.kind !== 'ground') return false; it.life = it.age + 5; return true; } });
+
+const ripples = [];
+const ringGeo = new THREE.RingGeometry(0.88, 1, 48); ringGeo.rotateX(-Math.PI / 2);
+for (let k = 0; k < 40; k++) {
+  const m = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color('#dce6e2'), transparent: true, opacity: 0, depthWrite: false }));
+  m.visible = false; m.renderOrder = 3; scene.add(m); ripples.push({ m, age: 0, life: 1, max: 1, live: false });
+}
+let rippleIdx = 0;
+function spawnRipple(x, z, size = 1) {
+  const r = ripples[rippleIdx++ % ripples.length];
+  r.live = true; r.age = 0; r.life = 1.1 + size * 0.5; r.max = 0.6 + size * 1.6; r.m.visible = true; r.m.position.set(x, WATER_Y + 0.012, z);
+}
+function updateRipples(dt) {
+  for (const r of ripples) {
+    if (!r.live) continue;
+    r.age += dt; const t = r.age / r.life;
+    if (t >= 1) { r.live = false; r.m.visible = false; continue; }
+    const s = lerp(0.08, r.max, 1 - Math.pow(1 - t, 2.2)); r.m.scale.set(s, 1, s);
+    r.m.material.opacity = 0.32 * (1 - t);
+  }
+}
+
+/* ============================== audio (synthesized, no files) ============================== */
+const audio = { ctx: null, on: false };
+function initAudio() {
+  if (audio.ctx) { audio.ctx.resume(); return; }
+  const C = window.AudioContext || window.webkitAudioContext; if (!C) return;
+  try {
+    const ctx = new C(); audio.ctx = ctx;
+    audio.master = ctx.createGain(); audio.master.gain.value = 0.85; audio.master.connect(ctx.destination);
+    const len = ctx.sampleRate * 2;
+    const wb = ctx.createBuffer(1, len, ctx.sampleRate); const w = wb.getChannelData(0); for (let i = 0; i < len; i++) w[i] = Math.random() * 2 - 1; audio.noise = wb;
+    const bb = ctx.createBuffer(1, len, ctx.sampleRate); const b = bb.getChannelData(0); let l = 0; for (let i = 0; i < len; i++) { l = (l + 0.02 * (Math.random() * 2 - 1)) / 1.02; b[i] = l * 3.5; }
+    const wind = ctx.createBufferSource(); wind.buffer = bb; wind.loop = true;
+    const wf = ctx.createBiquadFilter(); wf.type = 'lowpass'; wf.frequency.value = 420;
+    const wg = ctx.createGain(); wg.gain.value = 0.16; wind.connect(wf).connect(wg).connect(audio.master); wind.start();
+    audio.windGain = wg; audio.on = true;
+    const chip = document.getElementById('soundChip'); chip.textContent = 'Sound is on'; chip.className = 'chip ok';
+  } catch (e) { audio.ctx = null; }
+}
+function sNoise({ dur = 0.1, type = 'lowpass', freq = 300, to = null, q = 0.7, gain = 0.5, attack = 0.004, delay = 0 }) {
+  if (!audio.on) return; const ctx = audio.ctx; const t = ctx.currentTime + delay;
+  const src = ctx.createBufferSource(); src.buffer = audio.noise; src.playbackRate.value = 0.8 + Math.random() * 0.4;
+  const f = ctx.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(freq, t); if (to) f.frequency.exponentialRampToValueAtTime(to, t + dur); f.Q.value = q;
+  const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + attack); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  src.connect(f).connect(g).connect(audio.master); src.start(t, Math.random() * 1.5); src.stop(t + dur + 0.05);
+}
+function sTone({ f0 = 60, f1 = 40, dur = 0.15, gain = 0.4, type = 'sine', delay = 0 }) {
+  if (!audio.on) return; const ctx = audio.ctx; const t = ctx.currentTime + delay;
+  const o = ctx.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(audio.master); o.start(t); o.stop(t + dur + 0.05);
+}
+const sfx = {
+  step(intensity, kind) {
+    if (kind === 'water') { sNoise({ type: 'bandpass', freq: 1100, to: 450, q: 1.1, dur: 0.3, gain: 0.28 * intensity }); sNoise({ type: 'highpass', freq: 2600, dur: 0.12, gain: 0.07 * intensity }); }
+    else if (kind === 'mud') { sNoise({ type: 'lowpass', freq: 700, to: 180, dur: 0.24, gain: 0.32 * intensity }); sTone({ f0: 280, f1: 90, dur: 0.12, gain: 0.08 * intensity, type: 'triangle' }); }
+    else sNoise({ type: 'lowpass', freq: 260, dur: 0.1, gain: 0.22 * intensity });
+    sTone({ f0: 72, f1: 36, dur: 0.17, gain: 0.32 * intensity });
+  },
+  snap() { sNoise({ type: 'highpass', freq: 1700, dur: 0.05, gain: 0.45 }); sTone({ f0: 190, f1: 60, dur: 0.09, gain: 0.3 }); },
+  lap() { sNoise({ type: 'bandpass', freq: 1300, q: 2, dur: 0.07, gain: 0.1 }); },
+  roar() {
+    if (!audio.on) return; const ctx = audio.ctx; const t = ctx.currentTime; const dur = 1.7;
+    const out = ctx.createGain(); out.gain.setValueAtTime(0.0001, t); out.gain.exponentialRampToValueAtTime(0.55, t + 0.18); out.gain.setValueAtTime(0.55, t + 1.15); out.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    const shaper = ctx.createWaveShaper(); const curve = new Float32Array(256); for (let i = 0; i < 256; i++) { const x = i / 128 - 1; curve[i] = Math.tanh(x * 2.6); } shaper.curve = curve;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 0.9; bp.frequency.setValueAtTime(380, t); bp.frequency.linearRampToValueAtTime(900, t + 0.5); bp.frequency.linearRampToValueAtTime(320, t + dur);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2200;
+    for (const [f, det] of [[64, 0], [96, 7], [129, -6]]) {
+      const o = ctx.createOscillator(); o.type = 'sawtooth'; o.detune.value = det;
+      o.frequency.setValueAtTime(f * 0.9, t); o.frequency.linearRampToValueAtTime(f * 1.15, t + 0.45); o.frequency.linearRampToValueAtTime(f * 0.78, t + dur);
+      o.connect(shaper); o.start(t); o.stop(t + dur + 0.05);
+    }
+    const n = ctx.createBufferSource(); n.buffer = audio.noise; const ng = ctx.createGain(); ng.gain.value = 0.35;
+    const am = ctx.createOscillator(); am.frequency.value = 27; const amg = ctx.createGain(); amg.gain.value = 0.25; am.connect(amg).connect(ng.gain);
+    n.connect(ng).connect(shaper); n.start(t); n.stop(t + dur + 0.05); am.start(t); am.stop(t + dur + 0.05);
+    shaper.connect(bp).connect(lp).connect(out).connect(audio.master);
+  },
+};
+
+/* ============================== input ============================== */
+const settings = { rumble: true, invertY: false, readout: true };
+const input = { moveF: 0, moveR: 0, lookX: 0, lookY: 0, sprint: 0, drink: false, bite: false, roar: false, recenter: false, device: 'pad' };
+let padPrev = []; let padId = null; let started = false; let paused = false; let menuIdx = 0; let swallow = false;
+const keys = new Set();
+const mouse = { dx: 0, dy: 0, down: false };
+
+function activePad() {
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  for (const p of pads) if (p && p.connected) return p;
+  return null;
+}
+function radial(x, y, inner = 0.16, outer = 0.96) {
+  const m = Math.hypot(x, y); if (m < inner) return [0, 0];
+  const k = Math.min(1, (m - inner) / (outer - inner)) / m; return [x * k, y * k];
+}
+function rumble(dur, weak, strong) {
+  if (!settings.rumble) return; const p = activePad(); const a = p && p.vibrationActuator;
+  if (a && a.playEffect) a.playEffect('dual-rumble', { startDelay: 0, duration: dur, weakMagnitude: weak, strongMagnitude: strong }).catch(() => {});
+}
+const edges = { a: false, b: false, x: false, y: false, start: false, rs: false, up: false, down: false };
+let stickMenuHold = 0;
+
+function pollInput(dt) {
+  input.bite = input.roar = input.recenter = false;
+  for (const k in edges) edges[k] = false;
+  const p = activePad();
+  const chip = document.getElementById('padChip');
+  if (p) {
+    if (padId !== p.id) { padId = p.id; chip.textContent = 'Controller connected: ' + p.id.replace(/\s*\(.*$/, '').slice(0, 40); chip.className = 'chip ok'; }
+    const btn = (i) => !!(p.buttons[i] && p.buttons[i].pressed);
+    const now = p.buttons.map((b) => b.pressed);
+    const edge = (i) => now[i] && !padPrev[i];
+    if (!started && now.some(Boolean)) { startDemo('pad'); swallow = true; }
+    if (swallow) { if (!now.some(Boolean)) swallow = false; padPrev = now; return; }
+    edges.a = edge(0); edges.b = edge(1); edges.x = edge(2); edges.y = edge(3); edges.start = edge(9); edges.rs = edge(11);
+    edges.up = edge(12); edges.down = edge(13);
+    const [lx, ly] = radial(p.axes[0] || 0, p.axes[1] || 0);
+    const [rx, ry] = radial(p.axes[2] || 0, p.axes[3] || 0, 0.14);
+    const padActive = Math.abs(lx) + Math.abs(ly) + Math.abs(rx) + Math.abs(ry) > 0.05 || now.some(Boolean);
+    if (padActive) setDevice('pad');
+    if (input.device === 'pad') {
+      input.moveF = -ly; input.moveR = lx; input.lookX = rx; input.lookY = ry;
+      input.sprint = p.buttons[7] ? p.buttons[7].value : 0;
+      input.drink = btn(0);
+    }
+    if (paused) {
+      if (Math.abs(ly) > 0.6) { stickMenuHold -= dt; if (stickMenuHold <= 0) { if (ly < 0) edges.up = true; else edges.down = true; stickMenuHold = 0.25; } } else stickMenuHold = 0;
+    }
+    padPrev = now;
+  } else if (padId) { padId = null; chip.textContent = 'Controller disconnected. Press any button to reconnect.'; chip.className = 'chip warn'; }
+
+  if (input.device === 'keys') {
+    const k = (c) => keys.has(c);
+    input.moveF = (k('KeyW') || k('ArrowUp') ? 1 : 0) - (k('KeyS') || k('ArrowDown') ? 1 : 0);
+    input.moveR = (k('KeyD') || k('ArrowRight') ? 1 : 0) - (k('KeyA') || k('ArrowLeft') ? 1 : 0);
+    const m = Math.hypot(input.moveF, input.moveR); if (m > 1) { input.moveF /= m; input.moveR /= m; }
+    input.lookX = (k('KeyE') ? 1 : 0) - (k('KeyQ') ? 1 : 0) + mouse.dx * 0.35;
+    input.lookY = mouse.dy * 0.3;
+    mouse.dx = mouse.dy = 0;
+    input.sprint = k('ShiftLeft') || k('ShiftRight') ? 1 : 0;
+    input.drink = k('Space');
+  }
+  if (paused) {
+    if (edges.up) moveMenu(-1);
+    if (edges.down) moveMenu(1);
+    if (edges.a) activateMenu();
+    if (edges.b || edges.start) closeMenu();
+    return;
+  }
+  if (!started) return;
+  if (edges.x) input.bite = true;
+  if (edges.y) input.roar = true;
+  if (edges.rs) input.recenter = true;
+  if (edges.start) openMenu();
+  if (window.__demo && window.__demo.override) Object.assign(input, window.__demo.override);
+}
+
+window.addEventListener('keydown', (e) => {
+  initAudio();
+  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+  if (!started) { if (e.code === 'Enter' || e.code === 'Space') startDemo('keys'); return; }
+  setDevice('keys');
+  if (e.repeat) return;
+  keys.add(e.code);
+  if (paused) {
+    if (e.code === 'ArrowUp' || e.code === 'KeyW') moveMenu(-1);
+    else if (e.code === 'ArrowDown' || e.code === 'KeyS') moveMenu(1);
+    else if (e.code === 'Enter' || e.code === 'Space') activateMenu();
+    else if (e.code === 'Escape') closeMenu();
+    return;
+  }
+  if (e.code === 'KeyF') input.biteKey = true;
+  if (e.code === 'KeyR') input.roarKey = true;
+  if (e.code === 'KeyC') input.recenterKey = true;
+  if (e.code === 'Escape') openMenu();
+});
+window.addEventListener('keyup', (e) => keys.delete(e.code));
+canvas.addEventListener('pointerdown', (e) => { initAudio(); mouse.down = true; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointerup', () => { mouse.down = false; });
+canvas.addEventListener('pointermove', (e) => { if (mouse.down) { mouse.dx += e.movementX * 0.08; mouse.dy += e.movementY * 0.08; setDevice('keys'); } });
+window.addEventListener('pointerdown', () => initAudio());
+
+const KEYS = {
+  pad: [['Move', 'Left stick'], ['Camera', 'Right stick'], ['Sprint', 'Right trigger (hold)'], ['Bite', 'X'], ['Roar', 'Y'], ['Drink / sniff', 'A (hold)'], ['Camera behind', 'Click right stick'], ['Menu', 'Start']],
+  keys: [['Move', 'W A S D'], ['Camera', 'Drag mouse or Q / E'], ['Sprint', 'Shift (hold)'], ['Bite', 'F'], ['Roar', 'R'], ['Drink / sniff', 'Space (hold)'], ['Camera behind', 'C'], ['Menu', 'Esc']],
+};
+function setDevice(d) {
+  if (input.device === d && document.getElementById('keysList').childElementCount) return;
+  input.device = d;
+  document.getElementById('keysTitle').textContent = d === 'pad' ? 'Controller' : 'Keyboard and mouse';
+  document.getElementById('keysList').innerHTML = KEYS[d].map(([a, b]) => `<div style="display:contents"><dt>${a}</dt><dd>${b}</dd></div>`).join('');
+}
+setDevice('pad');
+
+function startDemo(dev) {
+  if (started) return;
+  started = true; setDevice(dev);
+  document.getElementById('intro').hidden = true;
+}
+document.getElementById('kbStart').addEventListener('click', () => { initAudio(); startDemo('keys'); });
+
+/* ============================== pause menu ============================== */
+const MENU = [
+  { label: 'Resume', state: () => '', act: () => closeMenu() },
+  { label: 'Rumble', state: () => (settings.rumble ? 'On' : 'Off'), act: () => { settings.rumble = !settings.rumble; if (settings.rumble) rumble(120, 0.3, 0.2); } },
+  { label: 'Invert camera up and down', state: () => (settings.invertY ? 'On' : 'Off'), act: () => { settings.invertY = !settings.invertY; } },
+  { label: 'Skin readout', state: () => (settings.readout ? 'Shown' : 'Hidden'), act: () => { settings.readout = !settings.readout; document.querySelector('.readout').hidden = !settings.readout; } },
+  { label: 'Reset Herrerasaurus', state: () => '', act: () => { resetDino(); closeMenu(); } },
+];
+function renderMenu() {
+  document.getElementById('menuList').innerHTML = MENU.map((m, i) => `<li role="menuitem" tabindex="-1" data-i="${i}" class="${i === menuIdx ? 'on' : ''}"><span>${m.label}</span><span class="state">${m.state()}</span></li>`).join('');
+}
+document.getElementById('menuList').addEventListener('click', (e) => { const li = e.target.closest('li'); if (!li) return; menuIdx = +li.dataset.i; activateMenu(); });
+function openMenu() { if (!started) return; paused = true; menuIdx = 0; renderMenu(); document.getElementById('menu').hidden = false; }
+function closeMenu() { paused = false; document.getElementById('menu').hidden = true; swallow = true; }
+function moveMenu(d) { menuIdx = (menuIdx + d + MENU.length) % MENU.length; renderMenu(); }
+function activateMenu() { MENU[menuIdx].act(); if (paused) renderMenu(); }
+// The Xbox guide button can steal focus; pause instead of looking frozen.
+window.addEventListener('blur', () => { if (started && !paused) openMenu(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && started && !paused) openMenu(); });
+
+/* ============================== dinosaur simulation ============================== */
+const D = {
+  pos: V(SPAWN.x, 0, SPAWN.z), yaw: SPAWN.yaw, speed: 0, yawRate: 0, phase: 0, cycleT: 1,
+  drink: 0, biteT: -1, roarT: -1, sprintT: 0, tailYaw: 0, tailYawV: 0, time: 0, lapT: 0, rippleT: 0,
+  wet: skinU.uWet.value, mudCover: skinU.uMudCover.value, mudDry: skinU.uMudDry.value, mudFlake: skinU.uMudFlake.value,
+  mudWalk: new Float32Array(BANDS), flakeAcc: new Float32Array(BANDS),
+  waterDepth: 0, mudDepth: 0,
+};
+const tmp = { q: new THREE.Quaternion(), q2: new THREE.Quaternion(), v: V(), v2: V(), v3: V() };
+
+function plantFeetAtNeutral() {
+  const fwd = V(Math.sin(D.yaw), 0, Math.cos(D.yaw));
+  for (const L of dino.legs) {
+    const w = L.neutral.clone().applyAxisAngle(UP, D.yaw).add(D.pos);
+    w.y = heightAt(w.x, w.z) + 0.035;
+    L.planted.copy(w); L.footPos.copy(w); L.swing = false; L.groundY = w.y - 0.035;
+  }
+  void fwd;
+}
+function resetDino() {
+  D.pos.set(SPAWN.x, 0, SPAWN.z); D.yaw = SPAWN.yaw; D.speed = 0;
+  for (const a of [D.wet, D.mudCover, D.mudDry, D.mudFlake, D.mudWalk, D.flakeAcc]) a.fill(0);
+  plantFeetAtNeutral(); cam.yaw = D.yaw + Math.PI;
+}
+
+function aimBone(bone, parentQ, rest, target) {
+  const cur = tmp.v3.copy(rest).applyQuaternion(parentQ);
+  const q = new THREE.Quaternion().setFromUnitVectors(cur, target.clone().normalize());
+  const worldQ = q.multiply(parentQ);
+  bone.quaternion.copy(parentQ.clone().invert().multiply(worldQ));
+  return worldQ;
+}
+function solveKnee(H, A, a, b, pole) {
+  const d0 = A.clone().sub(H); let d = d0.length(); const dir = d0.divideScalar(d || 1);
+  d = clamp(d, Math.abs(a - b) + 0.02, a + b - 0.001);
+  const x = (a * a - b * b + d * d) / (2 * d); const h = Math.sqrt(Math.max(a * a - x * x, 0));
+  const p = pole.clone().addScaledVector(dir, -pole.dot(dir)).normalize();
+  return H.clone().addScaledVector(dir, x).addScaledVector(p, h);
+}
+
+function onFootfall(L, intensity) {
+  const s = surfaceAt(L.footPos.x, L.footPos.z);
+  sfx.step(intensity, s.kind);
+  rumble(55, 0.12 + 0.18 * intensity, 0.05 + 0.2 * intensity * (D.speed > 4.5 ? 1 : 0.3));
+  if (s.kind === 'water') {
+    spawnRipple(L.footPos.x, L.footPos.z, 0.7 + D.speed * 0.15);
+    const n = 6 + Math.round(D.speed * 3);
+    for (let k = 0; k < n; k++) splash.spawn(V(L.footPos.x, WATER_Y + 0.02, L.footPos.z), V((Math.random() - 0.5) * 1.6, 1.2 + Math.random() * (1.2 + D.speed * 0.4), (Math.random() - 0.5) * 1.6), { life: 2, size: 0.8 + Math.random() * 0.8 });
+  } else if (s.kind === 'mud') {
+    for (let k = 0; k < 4 + Math.round(D.speed); k++) splat.spawn(V(L.footPos.x, MUD_Y + 0.02, L.footPos.z), V((Math.random() - 0.5) * 1.4, 0.8 + Math.random() * 1.4, (Math.random() - 0.5) * 1.4), { life: 3, size: 0.6 + Math.random() * 0.9 });
+  }
+}
+
+function skinWorld(i, out) { dino.bodyMesh.getVertexPosition(i, out); return out.applyMatrix4(dino.bodyMesh.matrixWorld); }
+function pickBandVertex(b) { const list = dino.bandVerts[b]; return list.length ? list[(Math.random() * list.length) | 0] : -1; }
+
+function updateSkinState(dt, walking) {
+  const wd = D.waterDepth, md = D.mudDepth;
+  let dripBudget = 0;
+  for (let b = 0; b < BANDS; b++) {
+    const y = b * BAND_H;
+    const inWater = y < wd, inMud = y < md;
+    if (inWater) {
+      D.wet[b] = 1;
+      if (D.mudCover[b] > 0) { D.mudCover[b] = Math.max(0, D.mudCover[b] - dt / 1.2); if (D.mudCover[b] === 0) { D.mudDry[b] = 0; D.mudFlake[b] = 0; D.mudWalk[b] = 0; } }
+    } else {
+      D.wet[b] = Math.max(0, D.wet[b] - dt / 8);
+      dripBudget += D.wet[b] * D.wet[b];
+    }
+    if (inMud) { D.mudCover[b] = 1; D.mudDry[b] = 0; D.mudWalk[b] = 0; D.mudFlake[b] = 0; D.wet[b] = 0; continue; }
+    if (D.mudCover[b] > 0 && !inWater) {
+      if (D.mudDry[b] < 1) D.mudDry[b] = Math.min(1, D.mudDry[b] + dt / 8);
+      else {
+        if (walking) D.mudWalk[b] += dt;
+        if (D.mudWalk[b] >= 30) {
+          const before = D.mudFlake[b];
+          D.mudFlake[b] = Math.min(1, D.mudFlake[b] + dt / 7);
+          D.flakeAcc[b] += (D.mudFlake[b] - before) * 34 * Math.min(1, dino.bandVerts[b].length / 260);
+          while (D.flakeAcc[b] >= 1) {
+            D.flakeAcc[b] -= 1; const vi = pickBandVertex(b);
+            if (vi >= 0) { skinWorld(vi, tmp.v); flakes.spawn(tmp.v, V((Math.random() - 0.5) * 0.6, 0.2 + Math.random() * 0.5, (Math.random() - 0.5) * 0.6).addScaledVector(V(Math.sin(D.yaw), 0, Math.cos(D.yaw)), D.speed * 0.6), { life: 12, size: 0.6 + Math.random() * 0.8 }); }
+          }
+          if (D.mudFlake[b] >= 1) { D.mudCover[b] = 0; D.mudDry[b] = 0; D.mudFlake[b] = 0; D.mudWalk[b] = 0; }
+        }
+      }
+    }
+  }
+  // Drips fall from wet skin for the first few seconds after leaving the water.
+  const rate = dripBudget * 3.2;
+  let n = rate * dt; while (n > 0) {
+    if (Math.random() < Math.min(1, n)) {
+      const cand = []; for (let b = 0; b < BANDS; b++) if (D.wet[b] > 0.35 && b * BAND_H >= wd) cand.push(b);
+      if (cand.length) { const vi = pickBandVertex(cand[(Math.random() * cand.length) | 0]); if (vi >= 0) { skinWorld(vi, tmp.v); drips.spawn(tmp.v, V(0, -0.2, 0), { life: 3, size: 0.8 + Math.random() * 0.5 }); } }
+    }
+    n -= 1;
+  }
+}
+
+function simStep(dt) {
+  D.time += dt; uTime.value = D.time;
+  const camFwd = V(-Math.sin(cam.yaw), 0, -Math.cos(cam.yaw));
+  const camRight = V(Math.cos(cam.yaw), 0, -Math.sin(cam.yaw));
+  const active = started && !paused;
+  const mF = active ? input.moveF : 0, mR = active ? input.moveR : 0;
+  const mag = Math.min(1, Math.hypot(mF, mR));
+  if (active && (input.bite || input.biteKey) && D.biteT < 0 && D.roarT < 0) { D.biteT = 0; rumble(90, 0.4, 0.5); }
+  if (active && (input.roar || input.roarKey) && D.roarT < 0 && D.biteT < 0) { D.roarT = 0; sfx.roar(); rumble(1300, 0.35, 0.25); }
+  if (input.recenter || input.recenterKey) cam.recenter = true;
+  input.biteKey = input.roarKey = input.recenterKey = false;
+  input.bite = input.roar = input.recenter = false;
+  const drinking = active && input.drink;
+  D.drink = damp(D.drink, drinking ? 1 : 0, 3.2, dt);
+
+  let target = 0; let desiredYaw = D.yaw;
+  if (mag > 0.02) {
+    const dir = camFwd.clone().multiplyScalar(mF).addScaledVector(camRight, mR);
+    desiredYaw = Math.atan2(dir.x, dir.z);
+    target = input.sprint > 0.25 ? lerp(3.6, 7.4, input.sprint) * Math.max(mag, 0.65) : 3.4 * mag;
+  }
+  if (drinking) target = 0;
+  if (D.roarT >= 0) target = Math.min(target, 0.5);
+  D.waterDepth = waterDepthAt(D.pos.x, D.pos.z);
+  D.mudDepth = mudDepthAt(D.pos.x, D.pos.z);
+  target *= (1 - clamp(D.waterDepth / 1.2, 0, 1) * 0.55) * (1 - clamp(D.mudDepth / 0.85, 0, 1) * 0.5);
+
+  const dy = wrapAngle(desiredYaw - D.yaw);
+  const maxTurn = lerp(2.7, 1.35, clamp(D.speed / 7.4, 0, 1));
+  const turn = mag > 0.02 ? clamp(dy, -maxTurn * dt, maxTurn * dt) : 0;
+  D.yaw = wrapAngle(D.yaw + turn);
+  D.yawRate = damp(D.yawRate, turn / dt, 8, dt);
+  if (Math.abs(dy) > 1.7) target *= 0.35;
+  D.speed = D.speed < target ? Math.min(target, D.speed + 3.0 * dt) : Math.max(target, D.speed - 6.5 * dt);
+  D.sprintT = D.speed > 5 ? D.sprintT + dt : Math.max(0, D.sprintT - dt * 0.6);
+
+  const fwd = V(Math.sin(D.yaw), 0, Math.cos(D.yaw));
+  const next = D.pos.clone().addScaledVector(fwd, D.speed * dt);
+  if (waterDepthAt(next.x, next.z) > TOO_DEEP || waterDepthAt(next.x + fwd.x * 1.6, next.z + fwd.z * 1.6) > TOO_DEEP + 0.1) D.speed = Math.max(0, D.speed - 12 * dt);
+  else D.pos.copy(next);
+  for (const o of obstacles) {
+    for (const [off, rad] of [[0, 0.45], [1.0, 0.42], [1.9, 0.24], [-1.0, 0.3]]) {
+      const px = D.pos.x + fwd.x * off, pz = D.pos.z + fwd.z * off;
+      const dx = px - o.x, dz = pz - o.z; const d = Math.hypot(dx, dz); const min = o.r + rad;
+      if (d < min && d > 1e-4) { D.pos.x += (dx / d) * (min - d); D.pos.z += (dz / d) * (min - d); }
+    }
+  }
+  const rr = Math.hypot(D.pos.x, D.pos.z); if (rr > WORLD_R) D.pos.multiplyScalar(WORLD_R / rr);
+
+  const walking = D.speed > 0.4;
+  updateSkinState(dt, walking);
+
+  // ---- gait ----
+  const sf = clamp(D.speed / 7.4, 0, 1);
+  const stride = 0.9 + 0.33 * D.speed;
+  const duty = lerp(0.64, 0.38, sf);
+  const rootG = heightAt(D.pos.x, D.pos.z);
+  const anySwing = dino.legs.some((L) => L.swing);
+  const neutralW = (L) => L.neutral.clone().applyAxisAngle(UP, D.yaw).add(D.pos);
+  const anyErr = dino.legs.some((L) => !L.swing && Math.hypot(L.planted.x - neutralW(L).x, L.planted.z - neutralW(L).z) > 0.3);
+  if (D.speed > 0.12 || anySwing || anyErr) { const f = Math.max(D.speed / stride, 1.1); D.phase = (D.phase + f * dt) % 1; D.cycleT = 1 / f; }
+  for (const L of dino.legs) {
+    const q = (D.phase + L.off) % 1;
+    if (q < duty) {
+      if (L.swing) { L.swing = false; L.planted.copy(L.footPos); L.planted.y = heightAt(L.planted.x, L.planted.z) + 0.035; onFootfall(L, clamp(0.35 + D.speed / 6, 0.35, 1.2)); }
+      L.footPos.copy(L.planted); L.liftS = 0;
+    } else {
+      if (!L.swing) { L.swing = true; L.liftPos.copy(L.planted); }
+      const s = (q - duty) / (1 - duty);
+      const remaining = (1 - s) * (1 - duty) * D.cycleT;
+      const land = L.neutral.clone().add(V(0, 0, 0.5 * D.speed * duty * D.cycleT)).applyAxisAngle(UP, D.yaw).add(D.pos).addScaledVector(fwd, D.speed * remaining);
+      const e = s * s * (3 - 2 * s);
+      L.footPos.lerpVectors(L.liftPos, land, e);
+      const gy = heightAt(L.footPos.x, L.footPos.z) + 0.035;
+      L.footPos.y = Math.max(gy, lerp(L.liftPos.y, heightAt(land.x, land.z) + 0.035, e)) + Math.sin(Math.PI * s) * Math.min(0.42, 0.12 + 0.045 * D.speed);
+      L.liftS = s;
+    }
+    L.groundY = heightAt(L.footPos.x, L.footPos.z);
+  }
+
+  // ---- actions ----
+  let jawOpen = 0, lunge = 0, roarE = 0, shake = 0;
+  if (D.biteT >= 0) {
+    const o = (D.biteT += dt);
+    const open = o < 0.16 ? smooth(0, 0.16, o) : o < 0.24 ? 1 - smooth(0.16, 0.24, o) : 0;
+    jawOpen = Math.max(jawOpen, open * 0.62);
+    lunge = o < 0.14 ? -0.35 * smooth(0, 0.14, o) : o < 0.26 ? lerp(-0.35, 1, smooth(0.14, 0.26, o)) : 1 - smooth(0.26, 0.55, o);
+    if (o >= 0.2 && !D.snapped) { D.snapped = true; sfx.snap(); rumble(70, 0.5, 0.8); }
+    if (o > 0.56) { D.biteT = -1; D.snapped = false; }
+  }
+  if (D.roarT >= 0) {
+    const o = (D.roarT += dt);
+    roarE = smooth(0, 0.35, o) * (1 - smooth(1.45, 1.95, o));
+    jawOpen = Math.max(jawOpen, roarE * 0.86 + 0.04 * Math.sin(o * 38) * roarE);
+    shake = Math.sin(o * 21) * 0.06 * roarE;
+    if (o > 2.0) D.roarT = -1;
+  }
+  const pant = smooth(2, 5, D.sprintT);
+  jawOpen = Math.max(jawOpen, pant * (0.12 + 0.06 * Math.sin(D.time * 9)));
+  if (D.drink > 0.6) {
+    D.lapT -= dt;
+    const snout = dino.B.head.localToWorld(tmp.v.set(0, -0.06, 0.5));
+    const sAt = surfaceAt(snout.x, snout.z);
+    if (D.lapT <= 0 && sAt.kind === 'water' && snout.y < WATER_Y + 0.2) { D.lapT = 0.42; sfx.lap(); spawnRipple(snout.x, snout.z, 0.35); }
+    jawOpen = Math.max(jawOpen, 0.12 + 0.1 * Math.max(0, Math.sin(D.time * 15)));
+  }
+
+  // ---- body pose ----
+  const B = dino.B;
+  const mf = smooth(0.05, 0.6, D.speed);
+  const ph = D.phase * Math.PI * 2;
+  const bob = -(0.012 + 0.016 * D.speed) * mf * (0.5 + 0.5 * Math.cos(2 * ph));
+  const gF = heightAt(D.pos.x + fwd.x * 1.2, D.pos.z + fwd.z * 1.2), gB = heightAt(D.pos.x - fwd.x * 1.2, D.pos.z - fwd.z * 1.2);
+  const slope = Math.atan2(gF - gB, 2.4);
+  const footAvg = (dino.legs[0].groundY + dino.legs[1].groundY) / 2;
+  D.bodyY = damp(D.bodyY ?? 0, clamp(footAvg - rootG, -0.35, 0.12) * 0.7, 10, dt);
+  dino.rig.position.set(D.pos.x, rootG, D.pos.z);
+  dino.rig.rotation.set(0, D.yaw, 0);
+  const pelvisPitch = -slope * 0.75 + D.drink * 0.4 + 0.07 * sf + lunge * 0.05;
+  B.pelvis.position.set(0, 1.18 - 0.04 * sf + bob - D.drink * 0.2 + D.bodyY, 0);
+  B.pelvis.rotation.set(pelvisPitch, 0.045 * Math.sin(ph) * mf, 0.035 * Math.sin(ph) * mf);
+  B.spine1.rotation.set(0, -0.025 * Math.sin(ph) * mf, 0);
+  B.spine2.rotation.set(0, -0.02 * Math.sin(ph) * mf, 0);
+  B.chest.rotation.set(0.008 * Math.sin(D.time * 1.6), 0, 0);
+  const look = (1 - mf) * 0.14 * Math.sin(D.time * 0.37) * Math.sin(D.time * 0.23 + 1);
+  B.neck1.rotation.set(D.drink * 0.7 + lunge * 0.1 - roarE * 0.14, D.yawRate * 0.05, 0);
+  B.neck2.rotation.set(D.drink * 0.5 + lunge * 0.08 - roarE * 0.22, D.yawRate * 0.09 + look, 0);
+  B.neck3.rotation.set(D.drink * 0.3 + lunge * 0.04 - roarE * 0.12, D.yawRate * 0.05 + look * 0.6, 0);
+  B.head.rotation.set(-pelvisPitch * 0.45 + D.drink * 0.12 - roarE * 0.2 + lunge * 0.05 - bob * 1.5, D.yawRate * 0.05 + shake, shake * 0.4);
+  B.jaw.rotation.set(jawOpen, 0, 0);
+  const tailTarget = -D.yawRate * 0.22 + 0.07 * Math.sin(ph + 1.3) * mf + 0.04 * Math.sin(D.time * 0.8) * (1 - mf);
+  D.tailYawV += ((tailTarget - D.tailYaw) * 38 - D.tailYawV * 8.5) * dt; D.tailYaw += D.tailYawV * dt;
+  const tailPitch = lerp(0.028, -0.004, sf) - roarE * 0.015 + bob * 0.6;
+  dino.tails.forEach((t, k) => t.rotation.set(tailPitch * (1 + k * 0.12) - (k === 0 ? pelvisPitch * 0.45 : 0), D.tailYaw * (0.45 + 0.12 * k), 0));
+  for (const s of ['L', 'R']) {
+    const sgn = s === 'L' ? 1 : -1;
+    B['upper' + s].rotation.set(0.12 * Math.sin(ph + (sgn > 0 ? 0 : Math.PI)) * mf - roarE * 0.2 + lunge * 0.15, 0, 0);
+    B['fore' + s].rotation.set(-0.15 - roarE * 0.25, 0, 0);
+    B['hand' + s].rotation.set(0.1 * Math.sin(D.time * 1.1 + sgn), 0, 0);
+  }
+  dino.rig.updateMatrixWorld(true);
+
+  // ---- leg IK ----
+  const pelvisQ = B.pelvis.getWorldQuaternion(new THREE.Quaternion());
+  for (const L of dino.legs) {
+    const H = L.thigh.getWorldPosition(V());
+    const F = L.footPos.clone();
+    const tilt = (L.liftS || 0) > 0 ? Math.sin(Math.PI * L.liftS) * 0.45 : 0;
+    const side = V(1, 0, 0).applyAxisAngle(UP, D.yaw);
+    const metaDir = L.metaRest.clone().applyAxisAngle(V(1, 0, 0), -tilt).applyAxisAngle(UP, D.yaw);
+    let A = F.clone().addScaledVector(metaDir, -L.metaLen);
+    const pole = fwd.clone().addScaledVector(side, L.sx * 0.12);
+    const K = solveKnee(H, A, L.thighLen, L.shinLen, pole);
+    let q = aimBone(L.thigh, pelvisQ, L.thighRest, K.clone().sub(H));
+    const shinDir = A.clone().sub(K).normalize();
+    q = aimBone(L.shin, q, L.shinRest, shinDir);
+    A = K.clone().addScaledVector(shinDir, L.shinLen);
+    q = aimBone(L.meta, q, L.metaRest, F.clone().sub(A));
+    const curl = (L.liftS || 0) > 0 ? Math.sin(Math.PI * L.liftS) * 0.6 : 0;
+    const toeDir = fwd.clone().multiplyScalar(Math.cos(curl)).add(V(0, -Math.sin(curl) - 0.06, 0));
+    aimBone(L.toe, q, L.toeRest, toeDir);
+  }
+  dino.rig.updateMatrixWorld(true);
+
+  // ---- ripples while wading ----
+  D.rippleT -= dt;
+  if (D.waterDepth > 0.25 && D.rippleT <= 0) {
+    D.rippleT = D.speed > 0.5 ? 0.28 : 1.4;
+    const p = dino.B.spine1.getWorldPosition(tmp.v);
+    spawnRipple(p.x + (Math.random() - 0.5) * 0.6, p.z + (Math.random() - 0.5) * 0.6, 0.6 + D.speed * 0.2);
+  }
+}
+
+/* ============================== camera ============================== */
+const cam = { yaw: SPAWN.yaw + Math.PI, pitch: 0.26, dist: 6.6, target: V(SPAWN.x, 1.4, SPAWN.z), idle: 0, recenter: false, fov: 55 };
+function updateCamera(dt) {
+  const active = started && !paused;
+  const lx = active ? input.lookX : 0, ly = active ? input.lookY : 0;
+  const inv = settings.invertY ? -1 : 1;
+  cam.yaw -= lx * 2.5 * dt;
+  cam.pitch = clamp(cam.pitch + ly * inv * 1.6 * dt, -0.12, 1.05);
+  if (Math.abs(lx) + Math.abs(ly) > 0.05) { cam.idle = 0; cam.recenter = false; } else cam.idle += dt;
+  const behind = D.yaw + Math.PI;
+  if (cam.recenter) { cam.yaw += wrapAngle(behind - cam.yaw) * (1 - Math.exp(-7 * dt)); if (Math.abs(wrapAngle(behind - cam.yaw)) < 0.01) cam.recenter = false; }
+  else if (cam.idle > 1.5 && D.speed > 1.2) cam.yaw += wrapAngle(behind - cam.yaw) * (1 - Math.exp(-0.7 * dt));
+  const c = dino.B.spine2.getWorldPosition(tmp.v2);
+  cam.target.x = damp(cam.target.x, c.x, 12, dt); cam.target.z = damp(cam.target.z, c.z, 12, dt); cam.target.y = damp(cam.target.y, c.y + 0.25, 6, dt);
+  const off = V(Math.sin(cam.yaw) * Math.cos(cam.pitch), Math.sin(cam.pitch), Math.cos(cam.yaw) * Math.cos(cam.pitch)).multiplyScalar(cam.dist);
+  const p = cam.target.clone().add(off);
+  const s = surfaceAt(p.x, p.z); p.y = Math.max(p.y, s.y + 0.45);
+  camera.position.copy(p);
+  const rs = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 1;
+  const shakeAmt = D.roarT >= 0 ? 0.025 * smooth(0.1, 0.4, D.roarT) * (1 - smooth(1.3, 1.9, D.roarT)) * rs : 0;
+  camera.position.x += (Math.random() - 0.5) * shakeAmt; camera.position.y += (Math.random() - 0.5) * shakeAmt;
+  camera.lookAt(cam.target.x, cam.target.y + 0.2, cam.target.z);
+  cam.fov = damp(cam.fov, 55 + 7 * smooth(4.5, 7.4, D.speed), 3, dt);
+  if (Math.abs(camera.fov - cam.fov) > 0.01) { camera.fov = cam.fov; camera.updateProjectionMatrix(); }
+  sun.position.copy(cam.target).addScaledVector(SUN_DIR, 60); sun.target.position.copy(cam.target);
+  sky.position.copy(camera.position);
+}
+
+/* ============================== HUD ============================== */
+const hud = { wetBar: document.getElementById('wetBar'), wetVal: document.getElementById('wetVal'), mudBar: document.getElementById('mudBar'), mudVal: document.getElementById('mudVal'), pace: document.getElementById('paceVal'), t: 0 };
+function updateHud(dt) {
+  hud.t -= dt; if (hud.t > 0) return; hud.t = 0.1;
+  let maxWet = 0; for (let b = 0; b < BANDS; b++) maxWet = Math.max(maxWet, D.wet[b]);
+  hud.wetBar.style.width = (maxWet * 100).toFixed(0) + '%';
+  hud.wetVal.textContent = D.waterDepth > 0.02 ? 'Soaked, standing in water' : maxWet > 0 ? `Wet, dry in ${(maxWet * 8).toFixed(1)} s` : 'Dry';
+  let cover = 0, minDry = 1, maxFlake = 0, minWalk = 99; let any = false;
+  for (let b = 0; b < BANDS; b++) if (D.mudCover[b] > 0.05) { any = true; cover++; minDry = Math.min(minDry, D.mudDry[b]); maxFlake = Math.max(maxFlake, D.mudFlake[b]); minWalk = Math.min(minWalk, D.mudWalk[b]); }
+  let txt = 'None', pct = 0;
+  if (any) {
+    pct = Math.min(1, cover / 10) * (1 - maxFlake);
+    if (D.mudDepth > 0.02) txt = 'Wet mud, standing in the pit';
+    else if (minDry < 1) txt = `Wet mud, crusts in ${((1 - minDry) * 8).toFixed(1)} s`;
+    else if (maxFlake > 0) txt = `Flaking off, ${Math.round(maxFlake * 100)}%`;
+    else txt = `Dry crust, walked ${Math.min(30, minWalk).toFixed(1)} of 30 s`;
+  }
+  hud.mudBar.style.width = (pct * 100).toFixed(0) + '%';
+  hud.mudVal.textContent = txt;
+  hud.pace.textContent = D.speed < 0.15 ? (D.drink > 0.5 ? 'Head down' : 'Standing') : D.speed < 2.2 ? `Walk, ${D.speed.toFixed(1)} m/s` : D.speed < 4.6 ? `Trot, ${D.speed.toFixed(1)} m/s` : `Sprint, ${D.speed.toFixed(1)} m/s`;
+}
+
+/* ============================== main loop ============================== */
+function resize() { renderer.setSize(window.innerWidth, window.innerHeight, false); camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); }
+window.addEventListener('resize', resize);
+plantFeetAtNeutral();
+const STEP = 1 / 60; let acc = 0; let last = performance.now(); let frames = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.1, (now - last) / 1000); last = now; frames++;
+  pollInput(dt);
+  if (!paused) {
+    acc += dt; let n = 0;
+    while (acc >= STEP && n < 6) { simStep(STEP); acc -= STEP; n++; }
+    if (n === 6) acc = 0;
+    flakes.update(dt); drips.update(dt); splash.update(dt); splat.update(dt); updateRipples(dt);
+  }
+  updateCamera(dt);
+  updateHud(dt);
+  renderer.render(scene, camera);
+}
+// Test and debugging hook: lets an automated check drive the demo without a real controller.
+window.__demo = {
+  D, cam, input, heightAt, surfaceAt, POND, MUD, renderer, get frames() { return frames; }, override: null,
+  start: () => startDemo('pad'),
+  step(n = 60) { for (let i = 0; i < n; i++) { pollInput(STEP); simStep(STEP); flakes.update(STEP); drips.update(STEP); splash.update(STEP); splat.update(STEP); updateRipples(STEP); updateCamera(STEP); } },
+  teleport(x, z, yaw = D.yaw) { D.pos.set(x, 0, z); D.yaw = yaw; plantFeetAtNeutral(); cam.yaw = yaw + Math.PI; },
+  counts: () => ({ flakes: flakes.items.length, drips: drips.items.length }),
+};
+requestAnimationFrame(frame);
+</script>
