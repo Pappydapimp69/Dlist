@@ -1735,7 +1735,10 @@ function createAudioLayer(engine) {
     S,
     play(ev) {
       switch (ev.kind) {
-        case 'step': { const f = ev.who === 'saurosuchus' ? S.predFeet : S.feet; at(f, ev); f.step({ mass: ev.mass, speed: ev.speed, surface: ev.surface, claws: ev.claws, gain: ev.gain * vary(1.5) }); break; }
+        // Your own feet are close-miked in the tutorial: a 0.5 kg hatchling's steps are physically ~39 dB under an adult's (silent),
+        // so they get +18 dB, easing to +10 dB as a juvenile. Only the mix: what prey and predators hear (ev.level) stays physical.
+        case 'step': { const f = ev.who === 'saurosuchus' ? S.predFeet : S.feet, mic = TUT && ev.who === 'player' ? lerp(8, 3.2, tut.size) : 1;
+          at(f, ev); f.step({ mass: ev.mass, speed: ev.speed, surface: ev.surface, claws: ev.claws, gain: ev.gain * mic * vary(1.5) }); break; }
         case 'call': {
           const juv = ev.who === 'player' && S.voiceJ && tut.size > 0.5;
           const src = ev.who === 'player' ? (juv ? S.voiceJ : S.voice) : ev.who === 'prey' ? S.prey : S.ai[ev.who]; if (!src) break; at(src, ev);
@@ -2180,6 +2183,7 @@ function onFootfall(L, intensity) {
   const s = surfaceAt(L.footPos.x, L.footPos.z);
   footstep(L.footPos, intensity);
   if (!TUT) rumble(55, 0.12 + 0.18 * intensity, 0.05 + 0.2 * intensity * (D.speed > 4.5 ? 1 : 0.3));
+  else { const g = lerp(0.45, 0.75, tut.size); rumble(45, (0.12 + 0.18 * intensity) * g, 0.2 * intensity * g * (D.speed > 4.5 ? 1 : 0.3)); } // light taps, firmer as it grows
   if (s.kind === 'water') {
     spawnRipple(L.footPos.x, L.footPos.z, 0.7 + D.speed * 0.15);
     const n = 6 + Math.round(D.speed * 3);
