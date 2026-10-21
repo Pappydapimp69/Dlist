@@ -59,7 +59,7 @@ basics in order: **walk, roar (call), drink, hunt (and eat), rest**.
 
 New stats shown only in the tutorial: **Thirst** and **Hunger** bars.
 Tutorial stamina: sprint drains about 9%/s (empty in ~11 s), standing
-recovers 4%/s, resting 30%/s.
+recovers 1%/s, resting 30%/s. (Off your feet recovery was cut to a quarter on every map: tutorial 4 to 1%/s, valley and course 11 to 2.75%/s.)
 
 ## 5. Milestones
 
@@ -104,6 +104,7 @@ sniff (Brain: assert every bound verb is explained).
 | TD14 | **The sleeping prey lies upwind** of the trail start (the wind blows from the southwest). | So "smell the air" points the right way. (ZaneGPT.) |
 | TD15 | **Thicket around the prey, with a 6 m clearing at its bed.** | Ferns hide it until you've tracked it close; Stage 1 showed fern-hidden prey is otherwise invisible. |
 | TD12b | **A moving prey lays its own scent**: one mark per 1.3 m travelled, fading over 2 min; the glow shows through foliage within 25 m. | The authored trail only reached the bed. Once the prey moved, sniffing led nowhere (owner playtest). Travel-gated deposit (Brain: pheromone lessons); a sleeper lays none, hence the authored trail to its bed. |
+| TD12c | **Two scent kinds, by colour and shape:** a living animal's trail is small gold ovals; a carcass gives off larger round rust blotches in a plume drifting downwind (up to ~18 m, weaker further out), gone when the meat is. | Owner call. Shape as well as colour because red and gold are close for red-green colour blindness. A carcass doesn't move, so it can't lay a travel-gated trail (Brain: stationary-emitter lesson); it gets a plume. |
 | TD16 | **The prey wakes on noise events:** a sprint, jump or roar within 12 m, or 3 s standing within 2.5 m. Awake, it flees like the first one. | Discrete noise events, not a continuous field (Brain: split events from fields). Roar waking it ties back to the Roar lesson. |
 
 ### Layout
