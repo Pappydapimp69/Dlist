@@ -2550,7 +2550,8 @@ function simStep(dt) {
   } else D.accel = damp(D.accel, 0, 6, dt);
   const sprinting = D.speed > 5 && input.sprint > 0.25;
   // Tutorial: a sprint empties stamina in about 11 s, standing gives back 4%/s, lying down 30%/s (docs/TUTORIAL.md).
-  D.stamina = clamp(D.stamina + (sprinting ? (TUT ? -0.09 : -0.02) : D.jump ? 0 : D.rest > 0.8 ? 0.3 : TUT ? 0.04 : 0.11) * dt, 0, 1);
+  // Recovery off your feet is a quarter of what it was (owner call): lying down (30%/s) is how you really get it back.
+  D.stamina = clamp(D.stamina + (sprinting ? (TUT ? -0.09 : -0.02) : D.jump ? 0 : D.rest > 0.8 ? 0.3 : TUT ? 0.01 : 0.0275) * dt, 0, 1);
   D.sprintT = D.speed > 5 ? D.sprintT + dt : Math.max(0, D.sprintT - dt * 0.6);
 
   const fwd = V(Math.sin(D.yaw), 0, Math.cos(D.yaw));
@@ -3064,6 +3065,7 @@ function preySpot(minFromPlayer) {
   return [HUNT.x, HUNT.z];
 }
 function spawnPrey(id = 1) {
+  clearCarcassScent(); // a new animal: the old kill's plume goes
   const [x, z] = preySpot(16);
   Object.assign(prey, { alive: true, spawned: true, x, z, yaw: Math.atan2(D.pos.x - x, D.pos.z - z) + Math.PI, speed: 0, state: 'graze', fatigue: 0, calmT: 0, stuckT: 0, lastX: x, lastZ: z, hp: 1, kx: 0, kz: 0, hurtT: 9, counter: null, bleedT: 0 });
   prey.id = id; prey.g.visible = true; prey.g.rotation.set(0, prey.yaw, 0); prey.g.scale.set(1, 1, 1);
@@ -3146,11 +3148,12 @@ function updatePrey(dt) {
     prey.g.position.set(prey.x, groundAt(prey.x, prey.z) + 0.35 * k, prey.z);
     prey.legs.forEach((l) => { l.rotation.x = 0.3; });
     prey.top = groundAt(prey.x, prey.z) + 0.7 * k;
-    if (prey.meat <= 0 && prey.g.visible) { prey.g.visible = false; if (prey.obstacle) { obstacles.splice(obstacles.indexOf(prey.obstacle), 1); prey.obstacle = null; } }
+    if (prey.meat <= 0 && prey.g.visible) { prey.g.visible = false; clearCarcassScent(); if (prey.obstacle) { obstacles.splice(obstacles.indexOf(prey.obstacle), 1); prey.obstacle = null; } }
   }
   if (prey.obstacle) { prey.obstacle.x = prey.x; prey.obstacle.z = prey.z; }
 }
 function spawnSleeper() {
+  clearCarcassScent();
   Object.assign(prey, { hp: 1, kx: 0, kz: 0, hurtT: 9, counter: null, bleedT: 0 });
   Object.assign(prey, { id: 2, alive: true, spawned: true, x: BED[0], z: BED[1], yaw: 0.6, speed: 0, state: 'sleep', fatigue: 0, calmT: 0, stuckT: 0, lastX: BED[0], lastZ: BED[1], woke: false, closeT: 0, roarsHeard: D.roars || 0, meat: 1 });
   prey.g.visible = true; prey.g.scale.set(1, 1, 1);
@@ -3171,7 +3174,7 @@ function onBiteSnap(snout) {
   prey.kx = fx * (2 + 4 * share); prey.kz = fz * (2 + 4 * share); prey.hurtT = 0; // knocked back along the strike
   sfx.hit(snout, share); cam.jolt = Math.max(cam.jolt, 0.03 + 0.06 * share); rumble(140, 0.6, 0.9);
   for (let k = 0; k < 6 + Math.round(30 * share); k++) blood.spawn(V(snout.x, snout.y, snout.z), V(fx * 1.2 + (simRng() - 0.5) * 2.4, 0.6 + simRng() * 1.6, fz * 1.2 + (simRng() - 0.5) * 2.4), { life: 30, size: 0.8 + simRng() });
-  if (prey.hp <= 0) { prey.alive = false; prey.meat = 1; prey.counter = null; sfx.squeak(1.2); rumble(220, 0.6, 0.8); D.lastHit = { t: D.time, text: 'Killed it' }; return; }
+  if (prey.hp <= 0) { prey.alive = false; prey.meat = 1; layCarcassScent(prey.x, prey.z); prey.counter = null; sfx.squeak(1.2); rumble(220, 0.6, 0.8); D.lastHit = { t: D.time, text: 'Killed it' }; return; }
   prey.state = 'flee'; prey.woke = true; sfx.squeak(1.05);
   D.lastHit = { t: D.time, text: prey.hp > 0.6 ? 'Bit it, a light wound' : prey.hp > 0.3 ? 'Bit it, badly wounded' : 'Bit it, nearly finished' };
   if (prey.hp < 0.6 && !prey.counter && simRng() < 0.45) prey.counter = { t: -0.3, done: false }; // a wounded animal may turn and bite back
@@ -3366,13 +3369,16 @@ const scent = (() => {
     for (let k = 0; k < n; k++) { const t = k / n, x = lerp(ax, bx, t) + (hashI(i, k, 5) - 0.5) * 0.5, z = lerp(az, bz, t) + (hashI(k, i, 6) - 0.5) * 0.5; marks.push({ x, z, y: groundAt(x, z) + 0.03, s: 1, t: 0, life: 1e12, yaw: Math.atan2(bx - ax, bz - az) }); }
   }
   // A sense, not paint: the glow shows through foliage (no depth test), but only near you (posed out past 25 m).
-  const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#f0c27a'), transparent: true, opacity: 0, depthWrite: false, depthTest: false, fog: false });
+  const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffffff'), transparent: true, opacity: 0, depthWrite: false, depthTest: false, fog: false }); // tinted per mark
   const geo = new THREE.CircleGeometry(0.22, 10); geo.rotateX(-Math.PI / 2);
   // Room for the authored trail plus marks the prey lays as it moves, so the trail leads to where it is now.
-  const LIVE_MAX = 160, authored = marks.length;
-  const mesh = new THREE.InstancedMesh(geo, mat, authored + LIVE_MAX); mesh.renderOrder = 4; mesh.visible = false;
+  const LIVE_MAX = 160, CARCASS_MAX = 40, authored = marks.length;
+  const mesh = new THREE.InstancedMesh(geo, mat, authored + LIVE_MAX + CARCASS_MAX); mesh.renderOrder = 4; mesh.visible = false;
   if (TUT) scene.add(mesh);
-  return { marks, authored, LIVE_MAX, mesh, mat, on: false, glowT: 0, dirty: true, o: new THREE.Object3D() };
+  return { marks, authored, LIVE_MAX, mesh, mat, on: false, glowT: 0, dirty: true, o: new THREE.Object3D(),
+    // Two kinds you can tell apart by colour AND shape (red and gold are close for red-green colour blindness):
+    // a living animal's trail is small gold ovals along its path; a carcass is larger round rust blotches drifting downwind.
+    cLive: new THREE.Color('#f0c27a'), cCarcass: new THREE.Color('#c0453a') };
 })();
 // The prey lays scent as it travels: one mark per 1.3 m (a travel-gated deposit, Brain: pheromone trail lessons;
 // a sleeping prey lays none, which is why its bed has the authored trail). Prey marks fade over 2 minutes.
@@ -3381,10 +3387,23 @@ function layScent(dist) {
   prey.scentAcc = (prey.scentAcc || 0) + dist;
   if (prey.scentAcc < 1.3) return;
   prey.scentAcc = 0;
-  const live = scent.marks.length - scent.authored;
-  if (live >= scent.LIVE_MAX) scent.marks.splice(scent.authored, 1); // oldest prey mark goes first
+  const live = scent.marks.filter((p, i) => i >= scent.authored && p.kind !== 'carcass').length;
+  if (live >= scent.LIVE_MAX) scent.marks.splice(scent.marks.findIndex((p, i) => i >= scent.authored && p.kind !== 'carcass'), 1); // oldest prey mark goes first
   const j = scent.marks.length, x = prey.x + (hashI(j, 3, 8) - 0.5) * 0.4, z = prey.z + (hashI(3, j, 9) - 0.5) * 0.4;
   scent.marks.push({ x, z, y: groundAt(x, z) + 0.03, s: 1, t: D.time, life: 120, yaw: prey.yaw, prey: true });
+  scent.dirty = true;
+}
+// A carcass doesn't travel, so a travel-gated trail would lay nothing (Brain: stationary-emitter lesson): it gets its own
+// plume instead, marks drifting downwind and widening, weaker the further out. Cleared when the meat is gone or a new animal spawns.
+function clearCarcassScent() { for (let i = scent.marks.length - 1; i >= scent.authored; i--) if (scent.marks[i].kind === 'carcass') scent.marks.splice(i, 1); scent.dirty = true; }
+function layCarcassScent(x0, z0) {
+  if (!TUT) return;
+  clearCarcassScent();
+  const dx = WIND_DIR.x, dz = WIND_DIR.z, sx = -dz, sz = dx;
+  for (let d = 0, j = 0; d < 18 && j < 40; d += 1.2) for (let w = 0; w < (d > 6 ? 2 : 1) && j < 40; w++, j++) {
+    const lat = (hashI(j, 11, 4) - 0.5) * (0.6 + 0.35 * d), x = x0 + dx * d + sx * lat, z = z0 + dz * d + sz * lat;
+    scent.marks.push({ x, z, y: groundAt(x, z) + 0.03, s: 1 - d / 20, t: 0, life: 1e12, yaw: hashI(j, 2, 9) * 6.28, kind: 'carcass' });
+  }
   scent.dirty = true;
 }
 function updateScent(dt) {
@@ -3394,8 +3413,8 @@ function updateScent(dt) {
     scent.lastPose = D.time * 4 | 0; scent.dirty = false;
     for (let i = scent.marks.length - 1; i >= scent.authored; i--) if (scentOf(scent.marks[i]) <= 0.02) scent.marks.splice(i, 1);
     const o = scent.o;
-    scent.marks.forEach((p, i) => { const k = (p.prey ? 0.35 + 0.65 * scentOf(p) : 1) * (Math.hypot(p.x - D.pos.x, p.z - D.pos.z) < 25 ? 1 : 0); o.position.set(p.x, p.y, p.z); o.scale.set((1 + hashI(i, 2, 7) * 0.6) * k, 1, 1.4 * k); o.rotation.set(0, p.yaw, 0); o.updateMatrix(); scent.mesh.setMatrixAt(i, o.matrix); });
-    scent.mesh.count = scent.marks.length; scent.mesh.instanceMatrix.needsUpdate = true; scent.mesh.computeBoundingSphere();
+    scent.marks.forEach((p, i) => { const car = p.kind === 'carcass', k = (p.prey ? 0.35 + 0.65 * scentOf(p) : car ? 0.6 + 0.4 * p.s : 1) * (Math.hypot(p.x - D.pos.x, p.z - D.pos.z) < 25 ? 1 : 0); scent.mesh.setColorAt(i, car ? scent.cCarcass : scent.cLive); o.position.set(p.x, p.y, p.z); o.scale.set((car ? 2.1 : 1 + hashI(i, 2, 7) * 0.6) * k, 1, (car ? 2.1 : 1.4) * k); o.rotation.set(0, p.yaw, 0); o.updateMatrix(); scent.mesh.setMatrixAt(i, o.matrix); });
+    scent.mesh.count = scent.marks.length; scent.mesh.instanceMatrix.needsUpdate = true; if (scent.mesh.instanceColor) scent.mesh.instanceColor.needsUpdate = true; scent.mesh.computeBoundingSphere();
   }
   if (D.act === 'ground' || D.act === 'air') scent.glowT = 6; else scent.glowT = Math.max(0, scent.glowT - dt);
   const g = smooth(0, 1.5, scent.glowT);
@@ -3416,7 +3435,7 @@ const TSTEPS = [
     pass: () => Math.abs(D.pos.x - LOG2.x) < LOG2.len / 2 + 1 && Math.sign(D.pos.z - LOG2.z) === -tut.logSide && Math.abs(D.pos.z - LOG2.z) > 1.2 },
   { name: 'Smell', say: 'Hold {drink} away from water to smell the air. It turns its nose into the wind. Something’s out there.', sub: () => `${Math.min(2, tut.airT).toFixed(1)} of 2 s`,
     enter: () => { tut.airT = 0; spawnSleeper(); }, pass: () => tut.airT >= 2 },
-  { name: 'Track', say: 'Find where the scent marks start and hold {drink} with your nose down to follow them. They glow while you sniff and for a few seconds after.', sub: () => `${Math.round(Math.hypot(D.pos.x - BED[0], D.pos.z - BED[1]))} m to go`,
+  { name: 'Track', say: 'Find where the scent marks start and hold {drink} with your nose down to follow them. They glow while you sniff and for a few seconds after. Small gold marks are a living animal; big red blotches drifting downwind come from a kill.', sub: () => `${Math.round(Math.hypot(D.pos.x - BED[0], D.pos.z - BED[1]))} m to go`,
     // The trail only exists from here on: laid earlier, a B press by the log would sniff the ground and never the air (Brain: an outranked verb starves its step).
     enter: () => { scent.on = true; },
     at: () => (Math.hypot(D.pos.x - SCENT_PATH[0][0], D.pos.z - SCENT_PATH[0][1]) > 6 && pathD(SCENT_PATH, D.pos.x, D.pos.z) > 4 ? SCENT_PATH[0] : null), pass: () => Math.hypot(D.pos.x - BED[0], D.pos.z - BED[1]) < 10 },
@@ -3545,7 +3564,7 @@ function frame(now) {
 // Test and debugging hook: lets an automated check drive the demo without a real controller.
 window.__demo = {
   SIM, AI, audio, resetSimForReplay, loadEngine, createAudioLayer, updateAudio, audioWorld, camera,
-  D, cam, input, egg, tut, prey, TSTEPS, enterStep, SHRINKERS, scent, scentNear, pred, inCover, predHead, scentInfo: () => ({ on: scent.on, glow: scent.mat.opacity, marks: scent.marks.length }), heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, WATERS, MUDS, MAP, COURSE, COURSE_LEN, pathInfo, course, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
+  D, cam, input, egg, tut, prey, TSTEPS, enterStep, SHRINKERS, scent, scentNear, layCarcassScent, pred, inCover, predHead, scentInfo: () => ({ on: scent.on, glow: scent.mat.opacity, marks: scent.marks.length }), heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, WATERS, MUDS, MAP, COURSE, COURSE_LEN, pathInfo, course, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
   start: () => startDemo('pad'),
   step(n = 60) { for (let i = 0; i < n; i++) { pollInput(STEP); simStep(STEP); flakes.update(STEP); drips.update(STEP); splash.update(STEP); splat.update(STEP); blood.update(STEP); dust.update(STEP); shells.update(STEP); updateRipples(STEP); updateCamera(STEP); } updatePrints(); },
   teleport(x, z, yaw = D.yaw) { D.pos.set(x, 0, z); D.yaw = yaw; clearMotion(); plantFeetAtNeutral(); cam.yaw = yaw + Math.PI; },
