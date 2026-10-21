@@ -146,6 +146,7 @@
 <div class="chips">
   <span class="chip warn" id="padChip">No controller yet. Press any button on it.</span>
   <span class="chip" id="soundChip">Sound is off. Click or tap anywhere to turn it on.</span>
+  <span class="chip" id="heardChip" hidden></span>
 </div>
 
 <section class="readout" aria-live="off">
@@ -1400,73 +1401,165 @@ function updatePrints() {
   printMesh.count = prints.length; printMesh.instanceMatrix.needsUpdate = true; if (printMesh.instanceColor) printMesh.instanceColor.needsUpdate = true;
 }
 
-/* ============================== audio (synthesized, no files) ============================== */
-const audio = { ctx: null, on: false };
+/* ============================== sound: sim events, AI hearing, procedural engine ============================== */
+// The sim says what made a sound, where, and how loud it is at 1 m. The audio layer plays those events through the
+// vendored procedural engine (no recordings). AI hearing reads the same events, never what the engine played, and the
+// audio layer draws its variation from its own seeded RNG, so a replay is identical with sound on, off or short of
+// voices (Brain: sound-engine/E7). Engine plane is top-down: world x -> x, world z -> y, height -> z.
+const SIM = { tick: [], queue: [], hash: 0x811c9dc5, count: 0, heard: null };
+function emit(ev) {
+  ev.t = D.time; SIM.tick.push(ev); SIM.count++;
+  if (SIM.queue.length < 256) SIM.queue.push(ev);
+  for (const v of [ev.kind.length, ev.who.length, ev.x, ev.y, ev.z, ev.level, ev.t]) SIM.hash = Math.imul(SIM.hash ^ Math.round(v * 1000), 16777619) >>> 0; // replay fingerprint
+}
+const STEP_DB = (mass, speed, gain) => 62 + 10 * Math.log10(mass / 350) + 8 * clamp(speed / 7.4, 0, 1) + 20 * Math.log10(Math.max(gain, 0.05));
+function surfaceName(x, z) {
+  const k = surfaceAt(x, z).kind; if (k !== 'ground') return k;
+  const r = groundInfo(x, z).rock; return r < 0 ? 'packedDirt' : ROCKS[r].log ? 'wood' : 'sandstone';
+}
+function mouthAt() { const f = 2.0, x = D.pos.x + Math.sin(D.yaw) * f, z = D.pos.z + Math.cos(D.yaw) * f; return { x, y: groundAt(x, z) + 0.9 + D.bodyY * 0.8, z }; }
+function footstep(p, gain) {
+  const surface = surfaceName(p.x, p.z);
+  emit({ kind: 'step', who: 'player', x: p.x, y: groundAt(p.x, p.z), z: p.z, mass: CREATURE.mass, speed: D.speed, surface, claws: true, gain, level: STEP_DB(CREATURE.mass, D.speed, gain) });
+}
+function bodySound(kind, level, extra) { const s = surfaceName(D.pos.x, D.pos.z); emit({ kind, who: 'player', x: D.pos.x, y: groundAt(D.pos.x, D.pos.z), z: D.pos.z, mass: CREATURE.mass, surface: s, level, ...extra }); }
+function mouthSound(kind, level, extra) { const m = mouthAt(); emit({ kind, who: 'player', x: m.x, y: m.y, z: m.z, level, ...extra }); }
+const sfx = {
+  snap: () => mouthSound('bite', 88),
+  lap: () => mouthSound('lap', 52),
+  gulp: () => mouthSound('gulp', 55),
+  sniff: (k = 1) => mouthSound('sniff', 48 + 6 * k, { k }),
+  scuff: () => bodySound('scuff', 70),
+  thud: () => bodySound('thud', 84 + 6 * Math.log10(BODY.mk * 10)),
+  scramble: () => bodySound('scramble', 68),
+  roar: () => mouthSound('call', 108, { mode: 'open', duration: 1.6, roughness: 0.55, amp: 3.2 }), // amp: mixed about 10 dB over a footstep at the same distance
+};
+
+// Creatures you can hear but not see yet: they wander beyond the trees on the sim's own seeded RNG.
+// The rival answers your roar; the Saurosuchus goes quiet when it hears you.
+const SIM_SEED = 0x51a1;
+let simRng = rng(SIM_SEED);
+const HEAR_DB = 38;
+const heardLevel = (ev, x, z) => { const d = Math.hypot(ev.x - x, ev.z - z); return ev.level - 20 * Math.log10(Math.max(1, d)) - 0.005 * d; };
+const AI = [
+  { id: 'rival', name: 'a rival Herrerasaurus', creature: 'herrerasaurus', mode: 'open', level: 106, r: 50, ang: 2.4, w: 0.012, gap: [22, 40], dur: [1.3, 1.8], next: 8, quiet: 0, answer: -1 },
+  { id: 'saurosuchus', name: 'a Saurosuchus', creature: 'large', mode: 'closed', level: 100, r: 56, ang: -0.9, w: -0.008, gap: [30, 55], dur: [1.8, 2.4], next: 19, quiet: 0, answer: -1 },
+];
+function aiPlace(a) { a.x = a.r * Math.sin(a.ang); a.z = a.r * Math.cos(a.ang); a.y = heightAt(a.x, a.z) + 1.2; }
+const AI_START = AI.map((a) => ({ ang: a.ang, next: a.next }));
+AI.forEach(aiPlace);
+// Replay start: same seed, same creatures, same clock.
+function resetSimForReplay() {
+  simRng = rng(SIM_SEED); D.time = 0;
+  AI.forEach((a, i) => { Object.assign(a, AI_START[i], { quiet: 0, answer: -1 }); aiPlace(a); });
+  Object.assign(SIM, { tick: [], queue: [], hash: 0x811c9dc5, count: 0, heard: null });
+}
+function aiCall(a) {
+  emit({ kind: 'call', who: a.id, mode: a.mode, duration: lerp(a.dur[0], a.dur[1], simRng()), roughness: a.mode === 'open' ? 0.5 : 0.05, amp: 0.9, x: a.x, y: a.y, z: a.z, level: a.level });
+  a.next = D.time + lerp(a.gap[0], a.gap[1], simRng());
+}
+// Runs at the start of each sim step: hear the last step's events, then act.
+function aiStep(dt) {
+  for (const ev of SIM.tick) {
+    for (const a of AI) {
+      if (ev.who === a.id || heardLevel(ev, a.x, a.z) < HEAR_DB) continue;
+      if (a.id === 'rival' && ev.kind === 'call' && ev.who === 'player' && a.answer < 0) a.answer = D.time + 0.9 + 0.7 * simRng(); // answers a challenge
+      if (a.id === 'saurosuchus' && ev.who === 'player') a.quiet = Math.max(a.quiet, D.time + (ev.kind === 'call' ? 25 : 8)); // a predator that hears you stops calling
+    }
+    if (ev.who !== 'player' && ev.kind === 'call') { const L = heardLevel(ev, D.pos.x, D.pos.z); if (L >= HEAR_DB) SIM.heard = { who: AI.find((a) => a.id === ev.who), mode: ev.mode, level: L, x: ev.x, z: ev.z, t: D.time }; }
+  }
+  SIM.tick.length = 0;
+  for (const a of AI) {
+    if (a.quiet <= D.time) { a.ang += a.w * dt; aiPlace(a); }
+    if (a.answer >= 0 && D.time >= a.answer) { a.answer = -1; aiCall(a); }
+    else if (D.time >= a.next && a.quiet <= D.time) aiCall(a);
+  }
+}
+
+// Audio layer: plays sim events, never feeds anything back into the sim.
+const audio = { ctx: null, engine: null, layer: null, loading: null, failed: null, device: matchMedia('(pointer: coarse)').matches ? 'unknown' : 'headphones' };
+const audioRng = rng(0xa0d10);
+function createAudioLayer(engine) {
+  const vary = (db) => 10 ** (((audioRng() * 2 - 1) * db) / 20);
+  const S = {
+    voice: engine.createSource('voice', { creature: 'herrerasaurus', priority: 20, level: 108, seed: 11 }),
+    feet: engine.createSource('footsteps', { priority: 6, seed: 12 }),
+    jaw: engine.createSource('modal', { modes: [{ freq: 900, gain: 1 }, { freq: 2480, gain: 0.5 }, { freq: 4860, gain: 0.33 }], lossFactor: 0.03, level: 88, priority: 8, seed: 13 }),
+    mouth: engine.createSource('water', { preset: 'splash', level: 52, seed: 14 }),
+    nose: engine.createSource('voice', { tract: 0.15, sac: 0.1, level: 54, seed: 15 }), // nasal passage: short tube, high resonances
+    ai: Object.fromEntries(AI.map((a, i) => [a.id, engine.createSource('voice', { creature: a.creature, level: a.level, priority: 10, seed: 21 + i })])),
+  };
+  if (MAP === 'course') engine.createSource('water', { preset: 'stream', level: 62, seed: 31, position: { x: WATERS[0].x, y: WATERS[0].z, z: WATER_Y } });
+  const at = (src, ev) => src.setPosition(ev.x, ev.z, ev.y);
+  return {
+    S,
+    play(ev) {
+      switch (ev.kind) {
+        case 'step': at(S.feet, ev); S.feet.step({ mass: ev.mass, speed: ev.speed, surface: ev.surface, claws: ev.claws, gain: ev.gain * vary(1.5) }); break;
+        case 'call': { const src = ev.who === 'player' ? S.voice : S.ai[ev.who]; at(src, ev); src.call({ mode: ev.mode, duration: ev.duration * (0.96 + 0.08 * audioRng()), roughness: ev.roughness, amp: ev.amp }); break; }
+        case 'bite': at(S.jaw, ev); S.jaw.strike(4 * vary(1), 0.75); break;
+        case 'lap': at(S.mouth, ev); S.mouth.splash(8 + Math.round(6 * audioRng()), 0.45); break;
+        case 'gulp': at(S.voice, ev); S.voice.call({ mode: 'closed', duration: 0.16, amp: 0.3, roughness: 0, jitter: 0, breath: 0 }); break;
+        // A sniff is breath noise through the nasal passage, no voicing: a 4 Hz "pitch" leaves only the aspiration.
+        case 'sniff': at(S.nose, ev); S.nose.call({ mode: 'open', duration: 0.07, f0: 4, f0End: 4, amp: 0.35 * ev.k, breath: 1, roughness: 0, jitter: 0 }); break;
+        case 'scuff': at(S.feet, ev); S.feet.step({ mass: ev.mass, speed: 1.2, surface: ev.surface, claws: true, gain: 0.6 }); S.feet.step({ mass: ev.mass, speed: 0.8, surface: ev.surface, claws: true, gain: 0.4, delay: 0.09 }); break;
+        case 'thud': at(S.feet, ev); S.feet.step({ mass: ev.mass * 3, speed: 4, surface: ev.surface, claws: false, gain: 1.4 }); break;
+        case 'scramble': at(S.feet, ev); for (let k = 0; k < 3; k++) S.feet.step({ mass: ev.mass * 0.6, speed: 2, surface: ev.surface === 'packedDirt' ? 'sandstone' : ev.surface, claws: true, gain: 0.6, delay: 0.07 * k }); break;
+      }
+    },
+    // Listener at the camera; facing (sin yaw, cos yaw) in the engine plane. `w` is where things are this frame
+    // (from the live sim, or from a recorded log for offline renders).
+    update(camPos, camFwd, w = audioWorld()) {
+      engine.setListener({ x: camPos.x, y: camPos.z, z: camPos.y, yaw: Math.atan2(camFwd.x, camFwd.z) });
+      for (const a of w.ai) S.ai[a.id].setPosition(a.x, a.z, a.y);
+      const m = w.mouth; for (const s of [S.voice, S.jaw, S.mouth, S.nose]) s.setPosition(m.x, m.z, m.y);
+      S.feet.setPosition(w.feet.x, w.feet.z, w.feet.y);
+      engine.update();
+    },
+  };
+}
+function audioWorld() {
+  return { ai: AI.map((a) => ({ id: a.id, x: a.x, y: a.y, z: a.z })), mouth: mouthAt(), feet: { x: D.pos.x, y: groundAt(D.pos.x, D.pos.z), z: D.pos.z } };
+}
+// Started from a user gesture: the AudioContext is made and resumed right here (Safari and iOS insist),
+// then the engine loads its worklet into it.
 function initAudio() {
-  if (audio.ctx) { audio.ctx.resume(); return; }
+  if (audio.ctx) { if (audio.ctx.state !== 'running') audio.ctx.resume().catch(() => {}); return; }
   const C = window.AudioContext || window.webkitAudioContext; if (!C) return;
-  try {
-    const ctx = new C(); audio.ctx = ctx;
-    audio.master = ctx.createGain(); audio.master.gain.value = 0.85; audio.master.connect(ctx.destination);
-    const len = ctx.sampleRate * 2;
-    const wb = ctx.createBuffer(1, len, ctx.sampleRate); const w = wb.getChannelData(0); for (let i = 0; i < len; i++) w[i] = Math.random() * 2 - 1; audio.noise = wb;
-    const bb = ctx.createBuffer(1, len, ctx.sampleRate); const b = bb.getChannelData(0); let l = 0; for (let i = 0; i < len; i++) { l = (l + 0.02 * (Math.random() * 2 - 1)) / 1.02; b[i] = l * 3.5; }
-    const wind = ctx.createBufferSource(); wind.buffer = bb; wind.loop = true;
-    const wf = ctx.createBiquadFilter(); wf.type = 'lowpass'; wf.frequency.value = 420;
-    const wg = ctx.createGain(); wg.gain.value = 0.16; wind.connect(wf).connect(wg).connect(audio.master); wind.start();
-    audio.windGain = wg; audio.on = true;
-    ctx.onstatechange = soundChip; soundChip();
-    if (ctx.state !== 'running') ctx.resume().catch(() => {}); // never awaited: some browsers leave resume() pending
-  } catch (e) { audio.ctx = null; }
+  try { audio.ctx = new C({ latencyHint: 'interactive' }); } catch (e) { return; }
+  audio.ctx.onstatechange = soundChip; audio.ctx.resume().catch(() => {});
+  audio.loading = loadEngine(audio.ctx).then((r) => { audio.engine = r.engine; audio.layer = r.layer; }).catch((e) => { audio.failed = e; console.warn('sound engine', e); }).finally(soundChip);
+  soundChip();
+}
+async function loadEngine(ctx, opts = {}) {
+  const { SoundEngine } = await import('./vendor/sound-engine/index.js');
+  const engine = await SoundEngine.create({ context: ctx, zone: 'openPlain', device: audio.device, ...opts });
+  // Three.js seen from above is mirrored against the engine plane (facing +z, +x is on the LEFT; facing +y in the engine,
+  // +x is on the right), so with x -> x, z -> y every pan comes out reversed. Swap the channels once at the output:
+  // level and interaural timing swap together, so the cues stay consistent.
+  const split = new ChannelSplitterNode(ctx, { numberOfOutputs: 2 }), merge = new ChannelMergerNode(ctx, { numberOfInputs: 2 });
+  engine.limiter.disconnect(); engine.limiter.connect(split); split.connect(merge, 0, 1); split.connect(merge, 1, 0); merge.connect(ctx.destination);
+  // Wind bed: low-passed brown noise straight to the output (a bed, not an event).
+  const len = ctx.sampleRate * 2, bb = ctx.createBuffer(1, len, ctx.sampleRate), b = bb.getChannelData(0);
+  let l = 0; for (let i = 0; i < len; i++) { l = (l + 0.02 * (audioRng() * 2 - 1)) / 1.02; b[i] = l * 3.5; }
+  const wind = new AudioBufferSourceNode(ctx, { buffer: bb, loop: true }), wf = new BiquadFilterNode(ctx, { type: 'lowpass', frequency: 420 }), wg = new GainNode(ctx, { gain: 0.12 });
+  wind.connect(wf).connect(wg).connect(ctx.destination); wind.start();
+  return { engine, layer: createAudioLayer(engine) };
+}
+// Once per rendered frame: play what the sim said since the last frame.
+function updateAudio() {
+  const live = audio.layer && audio.ctx.state === 'running';
+  if (live) { for (const ev of SIM.queue) audio.layer.play(ev); audio.layer.update(camera.position, tmp.camFwd.set(-Math.sin(cam.yaw), 0, -Math.cos(cam.yaw))); }
+  SIM.queue.length = 0;
 }
 function soundChip() {
-  const chip = document.getElementById('soundChip'), run = audio.ctx && audio.ctx.state === 'running';
-  chip.textContent = run ? 'Sound is on' : (matchMedia('(pointer: coarse)').matches ? 'Sound is waiting on the browser. Tap once.' : 'Sound is waiting on the browser. Press any key or click once.'); chip.className = run ? 'chip ok' : 'chip warn';
+  const chip = document.getElementById('soundChip'), run = audio.ctx && audio.ctx.state === 'running' && audio.engine;
+  chip.textContent = audio.failed ? 'The sound engine could not start in this browser.' : run ? 'Sound is on'
+    : audio.ctx && audio.loading && !audio.engine ? 'Starting the sound engine…'
+    : matchMedia('(pointer: coarse)').matches ? 'Sound is waiting on the browser. Tap once.' : 'Sound is waiting on the browser. Press any key or click once.';
+  chip.className = run ? 'chip ok' : 'chip warn';
 }
-const audioLive = () => audio.on && audio.ctx.state === 'running';
-function sNoise({ dur = 0.1, type = 'lowpass', freq = 300, to = null, q = 0.7, gain = 0.5, attack = 0.004, delay = 0 }) {
-  if (!audioLive()) return; const ctx = audio.ctx; const t = ctx.currentTime + delay;
-  const src = ctx.createBufferSource(); src.buffer = audio.noise; src.playbackRate.value = 0.8 + Math.random() * 0.4;
-  const f = ctx.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(freq, t); if (to) f.frequency.exponentialRampToValueAtTime(to, t + dur); f.Q.value = q;
-  const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + attack); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  src.connect(f).connect(g).connect(audio.master); src.start(t, Math.random() * 1.5); src.stop(t + dur + 0.05);
-}
-function sTone({ f0 = 60, f1 = 40, dur = 0.15, gain = 0.4, type = 'sine', delay = 0 }) {
-  if (!audioLive()) return; const ctx = audio.ctx; const t = ctx.currentTime + delay;
-  const o = ctx.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
-  const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  o.connect(g).connect(audio.master); o.start(t); o.stop(t + dur + 0.05);
-}
-const sfx = {
-  step(intensity, kind) {
-    if (kind === 'water') { sNoise({ type: 'bandpass', freq: 1100, to: 450, q: 1.1, dur: 0.3, gain: 0.28 * intensity }); sNoise({ type: 'highpass', freq: 2600, dur: 0.12, gain: 0.07 * intensity }); }
-    else if (kind === 'mud') { sNoise({ type: 'lowpass', freq: 700, to: 180, dur: 0.24, gain: 0.32 * intensity }); sTone({ f0: 280, f1: 90, dur: 0.12, gain: 0.08 * intensity, type: 'triangle' }); }
-    else sNoise({ type: 'lowpass', freq: 260, dur: 0.1, gain: 0.22 * intensity });
-    sTone({ f0: 72, f1: 36, dur: 0.17, gain: 0.32 * intensity });
-  },
-  snap() { sNoise({ type: 'highpass', freq: 1700, dur: 0.05, gain: 0.45 }); sTone({ f0: 190, f1: 60, dur: 0.09, gain: 0.3 }); },
-  lap() { sNoise({ type: 'bandpass', freq: 1300, q: 2, dur: 0.07, gain: 0.1 }); },
-  gulp() { sTone({ f0: 150, f1: 70, dur: 0.14, gain: 0.16, type: 'triangle' }); },
-  sniff(k = 1) { sNoise({ type: 'bandpass', freq: 2600, to: 1800, q: 1.4, dur: 0.07, gain: 0.11 * k, attack: 0.01 }); },
-  scuff() { sNoise({ type: 'lowpass', freq: 900, to: 200, dur: 0.22, gain: 0.3 }); },
-  thud() { sTone({ f0: 60, f1: 28, dur: 0.35, gain: 0.5 }); sNoise({ type: 'lowpass', freq: 400, dur: 0.25, gain: 0.35 }); },
-  roar() {
-    if (!audioLive()) return; const ctx = audio.ctx; const t = ctx.currentTime; const dur = 1.7;
-    const out = ctx.createGain(); out.gain.setValueAtTime(0.0001, t); out.gain.exponentialRampToValueAtTime(0.55, t + 0.18); out.gain.setValueAtTime(0.55, t + 1.15); out.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    const shaper = ctx.createWaveShaper(); const curve = new Float32Array(256); for (let i = 0; i < 256; i++) { const x = i / 128 - 1; curve[i] = Math.tanh(x * 2.6); } shaper.curve = curve;
-    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 0.9; bp.frequency.setValueAtTime(380, t); bp.frequency.linearRampToValueAtTime(900, t + 0.5); bp.frequency.linearRampToValueAtTime(320, t + dur);
-    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2200;
-    for (const [f, det] of [[64, 0], [96, 7], [129, -6]]) {
-      const o = ctx.createOscillator(); o.type = 'sawtooth'; o.detune.value = det;
-      o.frequency.setValueAtTime(f * 0.9, t); o.frequency.linearRampToValueAtTime(f * 1.15, t + 0.45); o.frequency.linearRampToValueAtTime(f * 0.78, t + dur);
-      o.connect(shaper); o.start(t); o.stop(t + dur + 0.05);
-    }
-    const n = ctx.createBufferSource(); n.buffer = audio.noise; const ng = ctx.createGain(); ng.gain.value = 0.35;
-    const am = ctx.createOscillator(); am.frequency.value = 27; const amg = ctx.createGain(); amg.gain.value = 0.25; am.connect(amg).connect(ng.gain);
-    n.connect(ng).connect(shaper); n.start(t); n.stop(t + dur + 0.05); am.start(t); am.stop(t + dur + 0.05);
-    shaper.connect(bp).connect(lp).connect(out).connect(audio.master);
-  },
-};
+const audioLive = () => !!(audio.layer && audio.ctx.state === 'running');
 
 /* ============================== input ============================== */
 const settings = { rumble: true, invertY: false, readout: true };
@@ -1694,6 +1787,7 @@ const MENU = [
   { label: 'Rumble', state: () => (settings.rumble ? 'On' : 'Off'), act: () => { settings.rumble = !settings.rumble; if (settings.rumble) rumble(120, 0.3, 0.2); } },
   { label: 'Invert camera up and down', state: () => (settings.invertY ? 'On' : 'Off'), act: () => { settings.invertY = !settings.invertY; } },
   { label: 'Skin readout', state: () => (settings.readout ? 'Shown' : 'Hidden'), act: () => { settings.readout = !settings.readout; document.querySelector('.readout').hidden = !settings.readout; } },
+  { label: 'Sound output', state: () => ({ headphones: 'Headphones', stereo: 'Speakers', unknown: 'Phone or unsure', mono: 'One speaker' }[audio.device]), act: () => { const o = ['headphones', 'stereo', 'unknown', 'mono']; audio.device = o[(o.indexOf(audio.device) + 1) % o.length]; if (audio.engine) audio.engine.setDevice(audio.device); } },
   { label: 'Reset Herrerasaurus', state: () => '', act: () => { resetDino(); closeMenu(); } },
   ...(MAP === 'course' ? [{ label: 'Restart course', state: () => '', act: () => { resetDino(); course.state = 'ready'; closeMenu(); } }] : []),
   { label: 'Map', state: () => (MAP === 'course' ? 'Obstacle course' : 'Valley'), act: () => { const m = MAP === 'course' ? 'valley' : 'course'; try { sessionStorage.setItem('dlist.enter', m); } catch (e) { /* picker shows again */ } location.hash = m; location.reload(); } },
@@ -1724,7 +1818,7 @@ const D = {
   mudWalk: new Float32Array(BANDS), flakeAcc: new Float32Array(BANDS),
   waterDepth: 0, mudDepth: 0,
 };
-const tmp = { q: new THREE.Quaternion(), q2: new THREE.Quaternion(), v: V(), v2: V(), v3: V() };
+const tmp = { q: new THREE.Quaternion(), q2: new THREE.Quaternion(), v: V(), v2: V(), v3: V(), camFwd: V() };
 const TAIL_W = [0.33, 0.32, 0.15, 0.1, 0.034, 0.033, 0.033]; // bend concentrated at the base: the rear tail was stiffened
 const GULP_A = V(0, 1.42, 1.7), GULP_B = V(0, 1.06, 1.3);
 const AX = V(1, 0, 0);
@@ -1768,7 +1862,7 @@ function solveKnee(H, A, a, b, pole) {
 
 function onFootfall(L, intensity) {
   const s = surfaceAt(L.footPos.x, L.footPos.z);
-  sfx.step(intensity, s.kind);
+  footstep(L.footPos, intensity);
   rumble(55, 0.12 + 0.18 * intensity, 0.05 + 0.2 * intensity * (D.speed > 4.5 ? 1 : 0.3));
   if (s.kind === 'water') {
     spawnRipple(L.footPos.x, L.footPos.z, 0.7 + D.speed * 0.15);
@@ -1886,7 +1980,7 @@ function updateJump(dt) {
     if (j.t < j.dur) return;
     j.ph = 'air'; j.t = 0; j.vy = Math.sqrt(2 * 9.81 * j.clear) + 9.81 * dt * 0.5; // half-step so the fixed-step arc peaks at the target
     j.y = j.y0 = (dino.legs[0].planted.y + dino.legs[1].planted.y) / 2 - 0.035;
-    D.speed = Math.max(D.speed * 0.92, j.push || 0); sfx.step(0.9, 'ground'); rumble(90, 0.3, 0.5);
+    D.speed = Math.max(D.speed * 0.92, j.push || 0); footstep(D.pos, 0.9); rumble(90, 0.3, 0.5);
     for (const L of dino.legs) { L.swing = false; L.liftPos.copy(L.planted); L.liftRock = -1; L.pathRock = -1; L.rise = 0; }
     return;
   }
@@ -1899,7 +1993,7 @@ function jumpLand(j) {
   const imp = clamp(-j.vy / 5, 0, 1.3), short = j.gU - j.y; // came down below the ledge top: the feet caught the edge
   D.lastJump = { peak: j.peak, dist: Math.hypot(D.pos.x - j.x0, D.pos.z - j.z0), clear: j.clear, impact: imp, scramble: short > 0.06, top: j.gU, drop: !!j.drop };
   if (j.gU - j.y0 > TIER.step) D.speed *= 0.7; // landing up on a ledge checks the run
-  if (short > 0.06) { D.speed *= 0.6; D.stamina = Math.max(0, D.stamina - 0.05 * short / SCRAMBLE); sNoise({ type: 'bandpass', freq: 2400, to: 900, q: 1.5, dur: 0.22, gain: 0.12 }); } // claws scraping up the edge
+  if (short > 0.06) { D.speed *= 0.6; D.stamina = Math.max(0, D.stamina - 0.05 * short / SCRAMBLE); sfx.scramble(); } // claws scraping up the edge
   D.landT = 0; D.landK = clamp(-j.vy / 5, 0.3, 1); D.jump = null; D.phase = 0; D.speed *= 0.9;
   const gs = dino.legs.map((L) => {
     const w = L.neutral.clone().applyAxisAngle(UP, D.yaw).add(D.pos), gi = groundInfo(w.x, w.z), g = { rock: gi.rock, edge: gi.edge, ny: gi.ny, y: gi.y };
@@ -2018,6 +2112,7 @@ function updateSkinState(dt, walking) {
 
 function simStep(dt) {
   D.time += dt; uTime.value = D.time;
+  aiStep(dt);
   const camFwd = V(-Math.sin(cam.yaw), 0, -Math.cos(cam.yaw));
   const camRight = V(Math.cos(cam.yaw), 0, -Math.sin(cam.yaw));
   const active = started && !paused;
@@ -2464,6 +2559,15 @@ const Froude = (v) => v * v / (9.81 * CREATURE.hip);
 const hud = { stamBar: document.getElementById('stamBar'), stamVal: document.getElementById('stamVal'), wetBar: document.getElementById('wetBar'), wetVal: document.getElementById('wetVal'), mudBar: document.getElementById('mudBar'), mudVal: document.getElementById('mudVal'), pace: document.getElementById('paceVal'), t: 0 };
 function updateHud(dt) {
   hud.t -= dt; if (hud.t > 0) return; hud.t = 0.1;
+  { // what it just heard (from the sim's sound events, so it also works with the sound off)
+    const H = SIM.heard, chip = document.getElementById('heardChip'), show = !!(H && D.time - H.t < 6);
+    if (show) {
+      const rel = wrapAngle(Math.atan2(H.x - D.pos.x, H.z - D.pos.z) - D.yaw), a = Math.abs(rel);
+      const dir = a < 0.5 ? 'ahead' : a > 2.6 ? 'behind' : rel < 0 ? (a < 1.2 ? 'ahead to the right' : a > 1.95 ? 'behind to the right' : 'to the right') : (a < 1.2 ? 'ahead to the left' : a > 1.95 ? 'behind to the left' : 'to the left');
+      chip.textContent = `Heard ${H.who.name} ${H.mode === 'open' ? 'call' : 'boom'}, ${dir}, about ${Math.round(Math.hypot(H.x - D.pos.x, H.z - D.pos.z) / 5) * 5} m`;
+    }
+    chip.hidden = !show;
+  }
   let maxWet = 0; for (let b = 0; b < BANDS; b++) maxWet = Math.max(maxWet, D.wet[b]);
   hud.wetBar.style.width = (maxWet * 100).toFixed(0) + '%';
   hud.wetVal.textContent = D.waterDepth > 0.02 ? 'Soaked, standing in water' : maxWet > 0 ? `Wet, dry in ${(maxWet * 8).toFixed(1)} s` : 'Dry';
@@ -2535,10 +2639,12 @@ function frame(now) {
   updateCamera(dt);
   updateHud(dt);
   updateCourse();
+  updateAudio();
   renderer.render(scene, camera);
 }
 // Test and debugging hook: lets an automated check drive the demo without a real controller.
 window.__demo = {
+  SIM, AI, audio, resetSimForReplay, loadEngine, createAudioLayer, updateAudio, audioWorld, camera,
   D, cam, input, heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, WATERS, MUDS, MAP, COURSE, COURSE_LEN, pathInfo, course, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
   start: () => startDemo('pad'),
   step(n = 60) { for (let i = 0; i < n; i++) { pollInput(STEP); simStep(STEP); flakes.update(STEP); drips.update(STEP); splash.update(STEP); splat.update(STEP); dust.update(STEP); updateRipples(STEP); updateCamera(STEP); } updatePrints(); },
