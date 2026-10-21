@@ -1533,10 +1533,10 @@ function stability(L, li, g, impact = 0) {
 }
 function startFall(kind, score, li, down) {
   const k = clamp((score - 0.5) * 2, 0, 1);
-  D.fall = { kind, down, t: 0, dur: down ? lerp(1, 2, clamp(score - 1, 0, 1)) : lerp(0.45, 0.9, k), side: dino.legs[li].sx, sev: clamp(score, 0.5, 1.5), thud: false };
+  D.fall = { kind, down, t: 0, dur: down ? lerp(1, 2, clamp(score - 1, 0, 1)) : lerp(0.65, 1.15, k), side: dino.legs[li].sx, sev: clamp(score, 0.5, 1.5), thud: false };
   D.speed *= down ? 0.45 : lerp(0.94, 0.8, k);
   D.jump = null; if (D.act !== 'none') endAct();
-  sfx.scuff(); rumble(down ? 260 : 130, 0.45, down ? 0.6 : 0.35);
+  sfx.scuff(); if (!down) sfx.scuff(); rumble(down ? 260 : 180, 0.5, down ? 0.6 : 0.5); cam.jolt = Math.max(cam.jolt, down ? 0.06 : 0.04 + 0.05 * k);
 }
 function footDown(L, li) {
   L.swing = false; L.liftS = 0;
@@ -1801,7 +1801,7 @@ function simStep(dt) {
     const anySwing = dino.legs.some((L) => L.swing);
     const neutralW = (L) => L.neutral.clone().applyAxisAngle(UP, D.yaw).add(D.pos);
     const anyErr = dino.legs.some((L) => !L.swing && Math.hypot(L.planted.x - neutralW(L).x, L.planted.z - neutralW(L).z) > 0.3);
-    if (v > 0.12 || anySwing || anyErr) { const f = Math.max(v / stride, 0.95); D.phase = (D.phase + f * dt) % 1; D.cycleT = 1 / f; }
+    if (v > 0.12 || anySwing || anyErr) { const f = Math.max(v / stride, 0.95) * (1 + 0.9 * (D.stagE || 0)); D.phase = (D.phase + f * dt) % 1; D.cycleT = 1 / f; }
     // Lean comes from the feet: plant the support window back when accelerating, forward when braking (E4).
     const lean = -0.11 * clamp(D.accel, -4, 2.1);
     dino.legs.forEach((L, li) => {
@@ -1867,7 +1867,7 @@ function simStep(dt) {
   }
 
   // ---- falls and staggers ----
-  let fe = 0, fallDrop = 0, fallPitch = 0, fallRoll = 0, flail = 0;
+  let fe = 0, fallDrop = 0, fallPitch = 0, fallRoll = 0, flail = 0, fallShift = 0; D.stagE = 0;
   if (D.fall) {
     const F = D.fall; F.t += dt;
     if (F.down) {
@@ -1877,8 +1877,15 @@ function simStep(dt) {
       flail = 0.6 * smooth(0, 0.2, F.t) * (1 - smooth(0.2, 0.5, F.t));
       if (F.t > 1.1 + F.dur) D.fall = null;
     } else {
-      flail = Math.sin(Math.PI * clamp(F.t / F.dur, 0, 1)) * F.sev;
-      fallRoll = 0.1 * F.side * flail; fallPitch = (F.kind === 'trip' ? 0.1 : 0.03) * flail;
+      // A big lurch: knees buckle, the body pitches and rolls toward the bad foot and slides sideways,
+      // the head jerks up, arms and tail flail to catch the balance, and the legs scramble with quick steps.
+      const e = smooth(0, 0.1, F.t) * (1 - smooth(F.dur * 0.35, F.dur, F.t)), sv = F.sev;
+      D.stagE = e;
+      flail = e * sv * 1.25;
+      fallDrop = 0.16 * e * Math.min(sv, 1.2);
+      fallPitch = (F.kind === 'trip' ? 0.3 : 0.14) * e * sv * (1 - 0.6 * smooth(F.dur * 0.25, F.dur * 0.55, F.t));
+      fallRoll = (F.kind === 'trip' ? 0.12 : 0.24) * F.side * e * sv;
+      fallShift = (F.kind === 'trip' ? 0.05 : 0.14) * F.side * e * sv;
       if (F.t > F.dur) D.fall = null;
     }
   }
@@ -1966,7 +1973,7 @@ function simStep(dt) {
   const hd = D.hd, dip = D.dip * D.hd; // head down: the neck reaches forward and down, the reach feedback works the neck base
   // Walk: trunk a little nose-up. Sprint: trunk level and leaned forward, legs more bent.
   const pelvisPitch = -slope * 0.75 + D.pitchF + lerp(-0.03, 0.09, run) + hd * 0.22 + dip * 0.1 + lunge * 0.05 + fallPitch + jc * 0.6 - tuck * 0.04;
-  B.pelvis.position.set(0, 1.18 - 0.085 * run + bob - hd * 0.16 - dip * 0.08 + D.bodyY - jc - absorb - fallDrop, 0);
+  B.pelvis.position.set(0, 1.18 - 0.085 * run + bob - hd * 0.16 - dip * 0.08 + D.bodyY - jc - absorb - fallDrop, 0); B.pelvis.position.x = fallShift;
   B.pelvis.rotation.set(pelvisPitch, 0.045 * Math.sin(ph) * mf, D.roll + fallRoll + 0.035 * Math.sin(ph) * mf);
   B.spine1.rotation.set(0, -0.025 * Math.sin(ph) * mf, 0);
   B.spine2.rotation.set(0, -0.02 * Math.sin(ph) * mf, 0);
@@ -1979,7 +1986,7 @@ function simStep(dt) {
   B.neck1.rotation.set(lerp(-0.14, 0.32, run) * (1 - hd) + hd * 0.62 + dip * 0.35 - D.hu * 0.22 - D.tilt * 0.04 + lunge * 0.1 - roarE * 0.14 + fallPitch * 0.8 + fl2 * 0.12 + tuck * 0.06 + absorb * 1.1 + jc * 0.6, nYaw * 0.25, 0);
   B.neck2.rotation.set(lerp(0.04, 0.17, run) * (1 - hd) + hd * 0.3 + dip * 0.2 - D.hu * 0.14 - D.tilt * 0.12 + lunge * 0.08 - roarE * 0.22 + fl * 0.1, nYaw * 0.35 + look, 0);
   B.neck3.rotation.set(lerp(0.24, 0.05, run) * (1 - hd) + hd * 0.02 - D.hu * 0.06 - D.tilt * 0.22 + lunge * 0.04 - roarE * 0.12, nYaw * 0.25 + look * 0.6, 0);
-  B.head.rotation.set(lerp(-0.08, -0.56, run) * (1 - hd) + slope * 0.35 + hd * 0.1 - D.hu * 0.22 - D.tilt * 0.45 - roarE * 0.2 + lunge * 0.05 - bob * 1.5 - nose * 0.05 - D.pitchF * 0.6 - fallPitch * 0.4 - fl2 * 0.1, nYaw * 0.15 + shake, shake * 0.4 + fl * 0.12);
+  B.head.rotation.set(lerp(-0.08, -0.56, run) * (1 - hd) + slope * 0.35 + hd * 0.1 - D.hu * 0.22 - D.tilt * 0.45 - roarE * 0.2 + lunge * 0.05 - bob * 1.5 - nose * 0.05 - D.pitchF * 0.6 - fallPitch * (D.fall && !D.fall.down ? 1.1 : 0.4) - fl2 * 0.14, nYaw * 0.15 + shake, shake * 0.4 + fl * 0.12);
   B.jaw.rotation.set(jawOpen, 0, 0);
   B.jaw2.rotation.set(flex + scoop * 0.05, 0, 0);
   B.lipU.position.copy(B.lipU.userData.rest); B.lipU.position.y += 0.026 * smooth(0.04, 0.45, jawOpen);
@@ -1991,7 +1998,7 @@ function simStep(dt) {
   if (sgn && sgn !== D.tailTurnSign) D.tailTurnYaw = D.yaw;
   D.tailTurnSign = sgn;
   const th = sgn ? Math.min(hold, Math.abs(wrapAngle(D.yaw - D.tailTurnYaw))) : hold;
-  const cmd = -Math.sign(D.yawRate) * th - D.roll * 0.8 + flail * 0.45 * Math.sin(D.time * 11);
+  const cmd = -Math.sign(D.yawRate) * th - D.roll * 0.8 + flail * 0.8 * Math.sin(D.time * 11) - fallRoll * 1.5;
   const w = 2 * Math.PI * 3;
   D.tailYawV += (w * w * (cmd - D.tailYaw) - 2 * w * D.tailYawV) * dt;
   D.tailYaw += D.tailYawV * dt;
@@ -2001,7 +2008,7 @@ function simStep(dt) {
   dino.tails.forEach((t, k) => t.rotation.set(tailPitch * (1 + k * 0.1) + (k === 0 ? slope * 0.5 - D.pitchF * 0.5 - hd * 0.12 : 0), TAIL_W[k] * (D.tailYaw + wag), 0));
   for (const s of ['L', 'R']) {
     const sgnA = s === 'L' ? 1 : -1;
-    B['upper' + s].rotation.set(0.12 * Math.sin(ph + (sgnA > 0 ? 0 : Math.PI)) * mf - roarE * 0.2 + lunge * 0.15 - tuck * 0.35 - fe * 0.4 + flail * 0.4 * Math.sin(D.time * 15 + sgnA), 0, flail * 0.25 * sgnA);
+    B['upper' + s].rotation.set(0.12 * Math.sin(ph + (sgnA > 0 ? 0 : Math.PI)) * mf - roarE * 0.2 + lunge * 0.15 - tuck * 0.35 - fe * 0.4 + flail * 0.75 * Math.sin(D.time * 15 + sgnA), 0, flail * 0.45 * sgnA);
     B['fore' + s].rotation.set(-0.15 - roarE * 0.25 - tuck * 0.3, 0, 0);
     B['hand' + s].rotation.set(0.1 * Math.sin(D.time * 1.1 + sgnA), 0, 0);
   }
