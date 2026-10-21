@@ -112,6 +112,28 @@ Search the demo by the section banners (`/* ===== name ===== */`) and function n
   back below 60% hit points.
 - Player hit: flinch away, a yelp, a speed loss and a limp below 30% health.
 
+## Haptics (`function rumble`, `HAPTIC`, `groundFeel()`, `updateHaptics()`)
+
+- **One mixer:** the dino's own pulses plus a ground-vibration bed.
+- **Other animals' footfalls add energy, never a max:** `a = 0.35 × sqrt(m v² / (350 × 3.4²)) × sqrt(2 / r) ×
+  exp(-0.02 (r - 2))`; the bed is `g² += a²`, decaying with τ = 0.15 s. That way a herd adds up into one rumble
+  (owner's rule).
+  - The bed goes mostly to the heavy motor (weak = 0.3 g).
+  - Measured: a grazing herd at 40 m 0.01, a stampede passing at 13 m about 0.2 (peak 0.28), running past you
+    full (mean 0.65), a Saurosuchus at 10 m 0.23 a step.
+- **Own footsteps:** at least 0.16 on the light motor, since motors don't register below about 0.15. Weight and
+  sprint add the heavy motor.
+- **Phones:** `navigator.vibrate` pulses of 6 to 40 ms, plus a short buzz for big footfalls nearby.
+
+## Hyperodapedon herd (`/* ===== Hyperodapedon herd (valley) ===== */`)
+
+- Ten animals of about 120 kg. States: graze, alert (0.6 s), flee (5.5 m/s, a tighter pack), then calm.
+- Sight: 13 m, or 22 m if the player is moving fast. Hearing reads sim events at 45 dB: a roar, or sprinting close.
+- Every footfall is a sim event (four per stride), used for hearing, ground rumble and audio. Audio plays up to
+  30 a second through 3 sources, the rest folded into the gain.
+- The replay reset must reset the herd too. Under the test hook, the live frame loop must not move the camera
+  (movement is camera-relative).
+
 ## Controls (`/* ===== input ===== */`, touch block, `/* ===== call wheel ===== */`)
 
 - **Xbox pad:**
