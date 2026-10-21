@@ -256,3 +256,9 @@ Nothing from this list is left open.
   stagger threshold went from 0.5 to 0.6, and going down needs a score of 1.6–3.2 below half stamina (never
   at or above half). Measured on 129 sprint approaches straight at every step-up rock: no falls at full
   stamina, 1 at 40%, 9 at 20%, 12 at 5%. A run (3.4 m/s) over the same rocks: 2 staggers and no falls.
+- **Risk follows actual speed:** the stability check now uses the body's measured ground speed (how far it
+  really moved each step, after slowdowns and pushes), not the commanded speed, scored as kinetic energy
+  ((v/4.5)² × mass factor). So risk rises smoothly with speed instead of flipping when sprint engages, and
+  the analog trigger matters. Approaching every step-up rock from 3 angles (129 runs, full stamina): 1.5 m/s
+  0% staggers, 3.2 m/s 1%, 4.2 m/s 16%, 4.7 m/s 32%, 5.6 m/s 46%, no falls. At 20% stamina, falls were 1 at
+  4.7 m/s and 4 at 5.7 m/s.

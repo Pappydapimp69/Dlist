@@ -1460,7 +1460,7 @@ function plantFeetAtNeutral() {
   }
 }
 function clearMotion() {
-  D.speed = D.accel = D.yawRate = D.tailYaw = D.tailYawV = D.roll = D.pitchF = D.bodyY = 0; D.tailTurnYaw = D.yaw; D.tailTurnSign = 0;
+  D.speed = D.accel = D.yawRate = D.tailYaw = D.tailYawV = D.roll = D.pitchF = D.bodyY = D.vMeas = 0; D.tailTurnYaw = D.yaw; D.tailTurnSign = 0;
   D.jump = null; D.lastJump = null; D.fall = null; D.check = null; D.landT = -1; D.stamina = 1; D.phase = 0; D.cycleT = 1; D.run = 0; D.sprintT = 0; D.biteT = D.roarT = -1; D.snapped = false; D.scentTo = null; D.windTurn = false;
   if (D.act !== 'none') endAct();
   D.hd = D.hu = D.tilt = D.hyaw = D.dip = 0; D.rough = 0;
@@ -1511,19 +1511,21 @@ function onFootfall(L, intensity) {
 function stability(L, li, g, impact = 0) {
   const rid = g.rock >= 0 ? g.rock : L.pathRock >= 0 ? L.pathRock : L.liftRock;
   if (rid < 0) return;
-  const rk = ROCKS[rid], v = D.speed, mom = Math.pow(CREATURE.mass / 350, 0.25);
+  // Risk follows the body's actual ground speed (measured from how far it really moved), as kinetic energy
+  // per unit leg: about 1 at 4.5 m/s, so a walk is near-safe, a run is mild and a sprint risky, with nothing in between switched.
+  const rk = ROCKS[rid], v = D.vMeas || 0, mom = Math.pow(CREATURE.mass / 350, 0.25), energy = (v / 4.5) ** 2 * mom;
   const tx = L.footPos.x - L.liftPos.x, tz = L.footPos.z - L.liftPos.z, tl = Math.hypot(tx, tz);
   const rx = L.footPos.x - rk.x, rz = L.footPos.z - rk.z, rl = Math.hypot(rx, rz);
   const glance = tl > 0.05 && rl > 0.02 ? 1 - Math.abs(tx * rx + tz * rz) / (tl * rl) : 0;
   // A toe only catches what the swing lift didn't clear: rises under about 60% of the step height are free.
-  const clearH = 0.6 * Math.min(0.42, 0.12 + 0.045 * v), trip = (Math.max(0, L.rise - clearH) / TIER.step) * Math.pow(v / 4, 1.4) * mom * (0.75 + 0.5 * glance) * 1.6;
+  const clearH = 0.6 * Math.min(0.42, 0.12 + 0.045 * v), trip = (Math.max(0, L.rise - clearH) / TIER.step) * energy * (0.75 + 0.5 * glance) * 1.2;
   const onRock = g.rock >= 0;
   const slope = onRock ? 0.5 * rk.slope + 0.5 * Math.acos(clamp(g.ny, -1, 1)) : 0;
   const hx = heightAt(L.footPos.x + 0.3, L.footPos.z) - heightAt(L.footPos.x - 0.3, L.footPos.z), hz = heightAt(L.footPos.x, L.footPos.z + 0.3) - heightAt(L.footPos.x, L.footPos.z - 0.3);
   const gSlope = Math.atan(Math.hypot(hx, hz) / 0.6);
   const edge = onRock ? smooth(0.55, 1, g.edge) : 0.35;
   const grip = clamp(0.6 * Math.max(D.wet[0], D.wet[1]) + D.mudCover[0] * (1 - D.mudFlake[0]) * (1 - 0.7 * D.mudDry[0]), 0, 1);
-  const stumble = (0.8 * slope + 0.35 * gSlope + 0.6 * edge + 0.9 * grip) * (0.2 + v / 8) * mom + 0.35 * impact * (0.5 + slope + edge);
+  const stumble = (0.8 * slope + 0.35 * gSlope + 0.6 * edge + 0.9 * grip) * (0.08 + 0.42 * energy) + 0.35 * impact * (0.5 + slope + edge);
   const vary = (rng((Math.imul(rid + 1, 2654435761) ^ Math.imul(li + 1, 40503) ^ 0x5bd1e995) >>> 0)() - 0.5) * 0.16;
   const kind = trip >= stumble ? 'trip' : 'stumble', score = Math.max(trip, stumble) + vary;
   // Fresh legs only ever stagger. Below half stamina a bad step can put it down, easing in as it tires.
@@ -1767,6 +1769,7 @@ function simStep(dt) {
   D.sprintT = D.speed > 5 ? D.sprintT + dt : Math.max(0, D.sprintT - dt * 0.6);
 
   const fwd = V(Math.sin(D.yaw), 0, Math.cos(D.yaw));
+  const px0 = D.pos.x, pz0 = D.pos.z;
   const next = D.pos.clone().addScaledVector(fwd, D.speed * dt);
   if (waterDepthAt(next.x, next.z) > TOO_DEEP || waterDepthAt(next.x + fwd.x * 1.6, next.z + fwd.z * 1.6) > TOO_DEEP + 0.1) D.speed = Math.max(0, D.speed - 12 * dt);
   else D.pos.copy(next);
@@ -1781,6 +1784,7 @@ function simStep(dt) {
     }
   }
   const rr = Math.hypot(D.pos.x, D.pos.z); if (rr > WORLD_R) D.pos.multiplyScalar(WORLD_R / rr);
+  D.vMeas = damp(D.vMeas || 0, Math.hypot(D.pos.x - px0, D.pos.z - pz0) / dt, 15, dt);
 
   const walking = D.speed > 0.4;
   updateSkinState(dt, walking);
