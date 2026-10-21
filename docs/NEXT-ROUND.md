@@ -449,3 +449,26 @@ Nothing from this list is left open.
     about 6 to 8 ms for a step, up to 40 ms for a blow. This works on Android; iOS browsers have no vibration.
   - Checked with an emulated controller and phone: one tap per step at a walk and at a sprint, in the valley and
     the tutorial.
+- **Ground rumble from heavy animals, and herds that add up:** controller haptics now go through one mixer: the
+  dino's own pulses plus a ground-vibration bed.
+  - Every footfall of another animal adds energy to the bed: mass × speed², spread as 1/sqrt(distance) (ground
+    surface waves), damped about 2% per metre in soil, fading in about 0.15 s.
+  - Many animals add up into one continuous rumble, mostly on the heavy motor. The scale is 0.35 = an adult
+    Herrerasaurus walking step 2 m away.
+  - Measured:
+    - one running Hyperodapedon step: 0.18 at 6 m, 0.07 at 20 m
+    - a Saurosuchus running at 10 m: 0.23 a step
+    - the herd: 0.01 grazing 40 m off, about 0.2 (peaks 0.28) as it stampedes past 13 m away, and full strength
+      (mean 0.65) running right past you
+  - Phones get a short pulse for each big footfall nearby.
+- **A Hyperodapedon herd in the valley:** ten stocky, beaked rhynchosaurs (the commonest animal at Ischigualasto,
+  about 120 kg each, a game estimate).
+  - They graze and wander, heads down. They startle when you come close (13 m, or 22 m if you're moving fast) or
+    when they hear you through sound events (a roar, or sprinting close: heard at 45 dB).
+  - After a 0.6 s startle they stampede away at 5.5 m/s in a tighter pack, steering round trees, water and the
+    edge, and calm down once they're 40 m clear.
+  - Every footfall is a sound event: heard, felt in the ground, and played through three footstep sources at up to
+    30 a second, the rest folded into the gain.
+- **Replay fix:** the replay reset now resets the herd as well, and under the test hook the live frame loop no
+  longer moves the camera, which steers movement. The replay check matches across no audio, live, 4 voices and
+  muted.

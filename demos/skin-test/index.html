@@ -1700,6 +1700,7 @@ function resetSimForReplay() {
   simRng = rng(SIM_SEED); D.time = 0;
   AI.forEach((a, i) => { Object.assign(a, AI_START[i], { quiet: 0, answer: -1 }); aiPlace(a); });
   Object.assign(SIM, { tick: [], queue: [], hash: 0x811c9dc5, count: 0, heard: null });
+  resetHerd();
 }
 function aiCall(a) {
   if (TUT && a.id === 'saurosuchus') onPredatorHeard(a);
@@ -1714,6 +1715,7 @@ function aiStep(dt) {
     if (ev.ui) continue;
     // Sniffs don't count: the Track lesson tells you to sniff your way up to a sleeping prey.
     if (prey && prey.spawned && ev.who === 'player' && ev.kind !== 'sniff') prey.heardDb = Math.max(prey.heardDb, heardLevel(ev, prey.x, prey.z));
+    if (herd && ev.who === 'player' && heardLevel(ev, herd.cx, herd.cz) >= 45) herd.heard = true; // a roar, or sprinting close
     if (pred && pred.on && ev.who === 'player') pred.heardDb = Math.max(pred.heardDb ?? -99, heardLevel(ev, pred.x, pred.z));
     for (const a of AI) {
       if (ev.who === a.id || heardLevel(ev, a.x, a.z) < HEAR_DB) continue;
@@ -1751,6 +1753,7 @@ function createAudioLayer(engine) {
     ai: Object.fromEntries(AI.map((a, i) => [a.id, engine.createSource('voice', { creature: a.creature, level: a.level, priority: 10, seed: 21 + i })])),
   };
   if (TUT) S.predFeet = engine.createSource('footsteps', { priority: 9, seed: 19 }); // Saurosuchus feet
+  if (herd) S.herdFeet = [0, 1, 2].map((i) => engine.createSource('footsteps', { priority: 4, seed: 40 + i })); // a herd: three sources take turns
   if (TUT) S.voiceJ = engine.createSource('voice', { tract: 0.14, sac: 0.07, priority: 20, level: 80, seed: 18 }); // the juvenile's longer tract (TD19)
   if (TUT) S.prey = engine.createSource('voice', { tract: 0.05, sac: 0.03, level: 70, priority: 8, seed: 17 }); // a small cynodont
   if (MAP === 'course') engine.createSource('water', { preset: 'stream', level: 62, seed: 31, position: { x: WATERS[0].x, y: WATERS[0].z, z: WATER_Y } });
@@ -1764,7 +1767,13 @@ function createAudioLayer(engine) {
       switch (ev.kind) {
         // Your own feet are close-miked in the tutorial: a 0.5 kg hatchling's steps are physically ~39 dB under an adult's (silent),
         // so they get +18 dB, easing to +10 dB as a juvenile. Only the mix: what prey and predators hear (ev.level) stays physical.
-        case 'step': { const f = ev.who === 'saurosuchus' ? S.predFeet : S.feet, mic = TUT && ev.who === 'player' ? lerp(8, 3.2, tut.size) : 1;
+        case 'step': {
+          if (ev.who === 'herd') { // plays at most about 30 a second; the rest are folded into the gain of the ones that play
+            const now = engine.ctx.currentTime; S.herdN = (S.herdN || 0) + 1; if (now - (S.herdT || 0) < 1 / 30) break;
+            const n = S.herdN; S.herdN = 0; S.herdT = now; const f = S.herdFeet[(S.herdI = ((S.herdI || 0) + 1) % 3)]; at(f, ev);
+            f.step({ mass: ev.mass, speed: ev.speed, surface: ev.surface, claws: false, gain: ev.gain * Math.sqrt(n) * vary(2) }); break;
+          }
+          const f = ev.who === 'saurosuchus' ? S.predFeet : S.feet, mic = TUT && ev.who === 'player' ? lerp(8, 3.2, tut.size) : 1;
           at(f, ev); f.step({ mass: ev.mass, speed: ev.speed, surface: ev.surface, claws: ev.claws, gain: ev.gain * mic * vary(1.5) }); break; }
         case 'call': {
           const juv = ev.who === 'player' && S.voiceJ && tut.size > 0.5;
@@ -1885,8 +1894,35 @@ function radial(x, y, inner = 0.16, outer = 0.96) {
 function rumble(dur, weak, strong) {
   if (!settings.rumble) return;
   if (input.device === 'touch') { const k = Math.max(weak, strong); if (navigator.vibrate && k > 0.08) navigator.vibrate(Math.round(clamp(dur * 0.35 * k, 6, 40))); return; }
-  const p = activePad(); const a = p && p.vibrationActuator;
-  if (a && a.playEffect) a.playEffect('dual-rumble', { startDelay: 0, duration: dur, weakMagnitude: weak, strongMagnitude: strong }).catch(() => {});
+  HAPTIC.pulses.push({ end: performance.now() + dur, weak, strong }); HAPTIC.fresh = true;
+}
+// One haptic mix for the controller: the dino's own pulses plus a ground-vibration bed. Every heavy footfall nearby
+// adds energy to the bed, so many animals add up into one rumble (a herd stampeding past), and it dies away in about
+// 0.15 s. Ground (Rayleigh) waves spread as 1/sqrt(r) and soil damps them about 2% per metre; low frequency, so the
+// bed goes mostly to the heavy motor. Felt amplitude 0.35 = an adult Herrerasaurus walking step 2 m away.
+const HAPTIC = { pulses: [], g2: 0, sentT: 0, fresh: false, on: false, vibT: 0 };
+function groundFeel(ev) {
+  const r = Math.max(2, Math.hypot(ev.x - D.pos.x, ev.z - D.pos.z) / WS), e = ev.mass * ev.speed * ev.speed / (350 * 3.4 * 3.4);
+  return 0.35 * Math.sqrt(e) * Math.sqrt(2 / r) * Math.exp(-0.02 * (r - 2));
+}
+function updateHaptics(dt) {
+  const now = performance.now();
+  HAPTIC.g2 *= Math.exp(-dt / 0.15);
+  for (const ev of SIM.queue) if ((ev.kind === 'step' || ev.kind === 'thud') && ev.who !== 'player' && ev.mass && ev.speed) {
+    const a = groundFeel(ev); HAPTIC.g2 += a * a;
+    if (input.device === 'touch' && settings.rumble && a > 0.12 && navigator.vibrate && now - HAPTIC.vibT > 70) { navigator.vibrate(Math.round(clamp(a * 40, 6, 30))); HAPTIC.vibT = now; } // a phone feels the big ones
+  }
+  if (input.device === 'touch' || !settings.rumble) return;
+  HAPTIC.pulses = HAPTIC.pulses.filter((p) => p.end > now);
+  const g = Math.min(1, Math.sqrt(HAPTIC.g2));
+  let w2 = (0.3 * g) ** 2, s2 = g * g, rest = 0;
+  for (const p of HAPTIC.pulses) { w2 += p.weak * p.weak; s2 += p.strong * p.strong; rest = Math.max(rest, p.end - now); }
+  const w = Math.min(1, Math.sqrt(w2)), s = Math.min(1, Math.sqrt(s2)), live = w + s > 0.03;
+  if ((HAPTIC.fresh || now - HAPTIC.sentT > 50) && (live || HAPTIC.on)) {
+    const pad = activePad(), a = pad && pad.vibrationActuator;
+    if (a && a.playEffect) a.playEffect('dual-rumble', { startDelay: 0, duration: g > 0.03 ? 80 : clamp(rest, 30, 80), weakMagnitude: w, strongMagnitude: s }).catch(() => {});
+    HAPTIC.sentT = now; HAPTIC.fresh = false; HAPTIC.on = live;
+  }
 }
 const edges = { a: false, b: false, x: false, y: false, start: false, rs: false, ls: false, up: false, down: false };
 let stickMenuHold = 0;
@@ -2911,6 +2947,7 @@ function simStep(dt) {
 
   courseStep();
   tutStep(dt);
+  herdStep(dt);
 
   // ---- ripples while wading ----
   D.rippleT -= dt;
@@ -3024,6 +3061,95 @@ function updateCourse() {
   clk.textContent = fmtT(course.state === 'ready' ? 0 : course.time);
   best.textContent = course.state === 'done' ? (course.best === course.time ? `New best: ${fmtT(course.time)}` : `Best ${fmtT(course.best)}`) + ' · walk back to the start gate to run again'
     : course.best ? `Best ${fmtT(course.best)}` : course.state === 'ready' ? 'Run through the first gate to start the clock' : 'No best time yet';
+}
+
+/* ============================== Hyperodapedon herd (valley) ============================== */
+// Rhynchosaurs, the commonest animal at Ischigualasto: stocky, beaked plant-eaters about 1.5 m long. A herd grazes
+// the floodplain and stampedes when it sees a predator close, or hears one (a call, or sprinting footfalls),
+// through the sim's sound events. All of it runs on the sim RNG; the meshes only show it.
+const HERD_MASS = 120; // kg, game estimate for an adult
+const herd = MAP === 'valley' ? (() => {
+  const body = new THREE.MeshStandardMaterial({ color: new THREE.Color('#7b6b57'), roughness: 0.95, flatShading: true });
+  const back = new THREE.MeshStandardMaterial({ color: new THREE.Color('#574a3c'), roughness: 0.95, flatShading: true });
+  const beak = new THREE.MeshStandardMaterial({ color: new THREE.Color('#3a312a'), roughness: 0.7, flatShading: true });
+  const ball = new THREE.IcosahedronGeometry(1, 2), leg = new THREE.CylinderGeometry(0.07, 0.055, 0.46, 6), tailG = new THREE.ConeGeometry(0.15, 0.95, 7), beakG = new THREE.ConeGeometry(0.07, 0.24, 6);
+  const mk = (geo, mat, parent, x, y, z, sx = 1, sy = 1, sz = 1) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.castShadow = true; parent.add(m); return m; };
+  const r = rng(4242), members = [];
+  for (let i = 0; i < 10; i++) {
+    const g = new THREE.Group();
+    mk(ball, body, g, 0, 0.44, 0, 0.44, 0.31, 0.78);               // barrel body, low and wide
+    mk(ball, back, g, 0, 0.62, -0.05, 0.3, 0.12, 0.62);            // darker back
+    const head = new THREE.Group(); head.position.set(0, 0.5, 0.82); g.add(head);
+    mk(ball, body, head, 0, 0, 0.14, 0.27, 0.17, 0.27);            // broad, triangular skull
+    const bk = mk(beakG, beak, head, 0, -0.06, 0.4); bk.rotation.x = Math.PI / 2 + 0.6; // hooked beak, pointing down
+    const tail = mk(tailG, body, g, 0, 0.36, -1.12); tail.rotation.x = -Math.PI / 2 - 0.12;
+    const legs = [];
+    for (const [x, z] of [[0.36, 0.48], [-0.36, 0.48], [0.36, -0.42], [-0.36, -0.42]]) {
+      const p = new THREE.Group(); p.position.set(x, 0.42, z); p.rotation.z = Math.sign(x) * 0.38; g.add(p); // semi-sprawling
+      mk(leg, body, p, 0, -0.22, 0); legs.push(p);
+    }
+    const s = 0.7 * lerp(0.85, 1.12, r()); g.scale.setScalar(s); scene.add(g);
+    const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 6;
+    members.push({ g, head, legs, s, slot: [Math.cos(a) * d, Math.sin(a) * d], x: 0, z: 0, vx: 0, vz: 0, yaw: r() * 6.28, speed: 0, phase: r(), graze: r() * 6 });
+  }
+  return { members, cx: -30, cz: -18, heading: 0.8, speed: 0, state: 'graze', t: 0, wanderT: 0, heard: false };
+})() : null;
+function resetHerd() {
+  if (!herd) return;
+  Object.assign(herd, { cx: -30, cz: -18, heading: 0.8, speed: 0, state: 'graze', t: 0, wanderT: 0, wanderYaw: undefined, heard: false });
+  herd.members.forEach((m, i) => Object.assign(m, { x: herd.cx + m.slot[0], z: herd.cz + m.slot[1], vx: 0, vz: 0, yaw: m.yaw0 ?? (m.yaw0 = m.yaw), speed: 0, phase: m.phase0 ?? (m.phase0 = m.phase) }));
+}
+resetHerd();
+const herdBlocked = (x, z) => Math.hypot(x, z) > WORLD_R - 3 || waterDepthAt(x, z) > 0.5 || mudDepthAt(x, z) > 0.4
+  || obstacles.some((o) => o.x != null && Math.hypot(x - o.x, z - o.z) < o.r + 0.6);
+function herdStep(dt) {
+  if (!herd) return;
+  const H = herd, dx = H.cx - D.pos.x, dz = H.cz - D.pos.z, dist = Math.hypot(dx, dz);
+  H.t += dt;
+  // Sees a predator close (closer still if it's moving slowly), or heard one: startle, then run.
+  const seen = dist < (D.speed > 3 ? 22 : 13);
+  if ((seen || H.heard) && (H.state === 'graze' || H.state === 'calm')) { H.state = 'alert'; H.t = 0; }
+  H.heard = false;
+  if (H.state === 'alert' && H.t > 0.6) { H.state = 'flee'; H.t = 0; }
+  if (H.state === 'flee' && H.t > 6 && dist > 40) { H.state = 'calm'; H.t = 0; }
+  if (H.state === 'calm' && H.t > 4) H.state = 'graze';
+  let want = H.heading, v = 0;
+  if (H.state === 'flee') { want = Math.atan2(dx, dz); v = 5.5; }
+  else if (H.state === 'graze') { H.wanderT -= dt; if (H.wanderT <= 0) { H.wanderT = 4 + simRng() * 6; H.wanderYaw = H.heading + (simRng() - 0.5) * 1.6; } want = H.wanderYaw ?? H.heading; v = 0.25; }
+  // Steer the herd round trees, water and the edge.
+  for (const off of [0, 0.4, -0.4, 0.8, -0.8, 1.3, -1.3, 1.9, -1.9, Math.PI]) {
+    const a = want + off; if ([4, 9].every((k) => !herdBlocked(H.cx + Math.sin(a) * k, H.cz + Math.cos(a) * k))) { want = a; break; }
+  }
+  H.heading += clamp(wrapAngle(want - H.heading), -2.2 * dt, 2.2 * dt);
+  H.speed = damp(H.speed, v, H.state === 'flee' ? 1.6 : 1, dt);
+  const nx = H.cx + Math.sin(H.heading) * H.speed * dt, nz = H.cz + Math.cos(H.heading) * H.speed * dt;
+  if (!herdBlocked(nx, nz)) { H.cx = nx; H.cz = nz; } else H.wanderT = 0;
+  const ch = Math.cos(H.heading), sh = Math.sin(H.heading), run = H.state === 'flee';
+  H.members.forEach((m, i) => {
+    // Each keeps to its place in the herd (tighter when running), and off its neighbours.
+    const k = run ? 0.75 : 1, ox = m.slot[0] * k, oz = m.slot[1] * k;
+    let tx = H.cx + ox * ch + oz * sh - m.x, tz = H.cz - ox * sh + oz * ch - m.z;
+    for (const n of H.members) { if (n === m) continue; const ex = m.x - n.x, ez = m.z - n.z, d2 = ex * ex + ez * ez; if (d2 < 2.2 && d2 > 1e-6) { tx += ex / d2; tz += ez / d2; } }
+    const tl = Math.hypot(tx, tz), cap = H.speed * 1.3 + 0.35, s = Math.min(cap, tl * 0.8) / (tl || 1);
+    m.vx = damp(m.vx, tx * s, 3, dt); m.vz = damp(m.vz, tz * s, 3, dt);
+    const px = m.x + m.vx * dt, pz = m.z + m.vz * dt; if (!herdBlocked(px, pz)) { m.x = px; m.z = pz; }
+    m.speed = Math.hypot(m.vx, m.vz);
+    if (m.speed > 0.15) m.yaw += wrapAngle(Math.atan2(m.vx, m.vz) - m.yaw) * (1 - Math.exp(-5 * dt));
+    // Four feet a stride; each footfall is a sound event (heard, felt through the ground, played).
+    const stride = lerp(0.7, 1.8, smooth(0.5, 5, m.speed)), prev = m.phase;
+    m.phase = (m.phase + dt * Math.max(m.speed, 0.0) / stride) % 1;
+    if (m.speed > 0.15 && Math.floor(prev * 4) !== Math.floor(m.phase * 4)) {
+      const y = groundAt(m.x, m.z), sp = m.speed;
+      emit({ kind: 'step', who: 'herd', i, x: m.x, y, z: m.z, mass: HERD_MASS * m.s / 0.7, speed: sp, surface: surfaceName(m.x, m.z), claws: false, gain: 0.8, level: STEP_DB(HERD_MASS, sp, 0.8) + (run ? 6 : 0) });
+    }
+    // Show it.
+    const sw = Math.min(0.65, 0.08 + m.speed * 0.11), ph = m.phase * Math.PI * 2;
+    m.legs.forEach((l, j) => { l.rotation.x = Math.sin(ph + (j === 0 || j === 3 ? 0 : Math.PI)) * sw; });
+    m.graze += dt;
+    m.head.rotation.x = H.state === 'alert' ? -0.25 : run ? 0.1 : m.speed < 0.3 ? 0.55 + 0.1 * Math.sin(m.graze * 2.3) : 0.25;
+    m.g.position.set(m.x, groundAt(m.x, m.z) + Math.abs(Math.sin(ph * 2)) * 0.03 * Math.min(1, m.speed / 3), m.z);
+    m.g.rotation.set(0, m.yaw, 0);
+  });
 }
 
 /* ============================== tutorial ============================== */
@@ -3554,16 +3680,18 @@ function frame(now) {
     if (n === 6) acc = 0;
     flakes.update(dt); drips.update(dt); splash.update(dt); splat.update(dt); blood.update(dt); dust.update(dt); shells.update(dt); updateRipples(dt); updatePrints();
   }
-  updateCamera(dt);
+  updateCamera(window.__demo.hold ? 0 : dt); // under the test hook only __demo.step() moves time
   updateHud(dt);
   updateCourse();
   updateTut();
+  updateHaptics(dt);
   updateAudio();
   renderer.render(scene, camera);
 }
 // Test and debugging hook: lets an automated check drive the demo without a real controller.
 window.__demo = {
   SIM, AI, audio, resetSimForReplay, loadEngine, createAudioLayer, updateAudio, audioWorld, camera,
+  herd, HAPTIC, groundFeel, updateHaptics,
   D, cam, input, egg, tut, prey, TSTEPS, enterStep, SHRINKERS, scent, scentNear, layCarcassScent, pred, inCover, predHead, scentInfo: () => ({ on: scent.on, glow: scent.mat.opacity, marks: scent.marks.length }), heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, WATERS, MUDS, MAP, COURSE, COURSE_LEN, pathInfo, course, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
   start: () => startDemo('pad'),
   step(n = 60) { for (let i = 0; i < n; i++) { pollInput(STEP); simStep(STEP); flakes.update(STEP); drips.update(STEP); splash.update(STEP); splat.update(STEP); blood.update(STEP); dust.update(STEP); shells.update(STEP); updateRipples(STEP); updateCamera(STEP); } updatePrints(); },
