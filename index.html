@@ -146,7 +146,7 @@
         <span class="mdesc">A timed track from gate to gate: rocks and pebbles, fallen logs, a stream, a mud pit, a boulder slalom and a log bridge over a pond. The big log has to be jumped.</span>
       </button>
     </div>
-    <p class="lede small">A jumps · hold B to drink near water or sniff away from it · X bites · Y roars · right trigger sprints. Too fast over rocks and logs and it slips or stumbles; sprinting on tired legs, it can trip.</p>
+    <p class="lede small">A jumps (onto rocks too) · hold B to drink near water or sniff away from it · X bites · Y roars · right trigger sprints. Too fast over rocks and logs and it slips or stumbles; sprinting on tired legs, it can trip.</p>
     <p class="cta" id="introCta">D-pad or left stick to choose · A to enter</p>
     <button type="button" id="kbStart">No controller? Enter with keyboard and mouse</button>
   </div>
@@ -228,7 +228,8 @@ const POND = WATERS[0], MUD = MUDS[0];
 const SPAWN = MAP === 'course' ? { x: -42, z: 29, yaw: Math.PI / 2 } : { x: 0, z: 15, yaw: Math.PI };
 // One creature for now. Rock tiers, jumps, snout reach and momentum all scale from these.
 const CREATURE = { hip: 1.15, leg: 1.18, mass: 350, reach: 2.8, snout: 1.8 }; // reach: water it notices; snout: how far ahead the lowered snout dips
-const TIER = { pebble: 0.08 * CREATURE.hip, step: 0.55 * CREATURE.hip }; // step-ups to about knee height; above that, a wall
+const TIER = { pebble: 0.08 * CREATURE.hip, step: 0.55 * CREATURE.hip }; // step-ups to about knee height; above that, jump up or go round
+const SCRAMBLE = 0.3 * CREATURE.hip; // a leap that comes up this far short of a ledge still gets the feet over the edge and scrambles up
 const JUMP_K = Math.pow(CREATURE.mass / 350, -1 / 6) * CREATURE.hip / 1.15;
 // Falls, stumbles and slips scale with the animal: a bigger body topples and recovers more slowly (time ~ sqrt(size)),
 // a heavier one lands harder and flails less (more inertia), a lighter one is quicker and twitchier.
@@ -659,6 +660,8 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
   const rockGeo = (() => { const g = new THREE.IcosahedronGeometry(1, 1); const p = g.attributes.position;
     for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i); const k = 0.75 + 0.5 * vnoise(x * 1.7 + 3, z * 1.7 + y, 91); p.setXYZ(i, x * k, y * k * 0.7, z * k); }
     g.computeVertexNormals(); return g; })();
+  // Sandstone blocks: the same rock with its top cut flat, wide enough to stand on.
+  const mesaGeo = (() => { const g = rockGeo.clone(), p = g.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, Math.min(p.getY(i), 0.4)); g.computeVertexNormals(); return g; })();
   const rl = [];
   for (let i = 0; i < 300 && rl.length < (MAP === 'course' ? 24 : 42); i++) {
     const [x, z] = ringPoint(8, 56);
@@ -674,6 +677,8 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
     // Low sandstone slabs ahead of the start point, so step-ups are easy to find.
     for (const [x, z, s, sy] of [[-1.6, 7.6, 0.95, 0.42], [1.9, 5.4, 0.8, 0.5], [3.9, 8.8, 1.05, 0.34], [-4.4, 10.6, 0.75, 0.3], [0.8, 10.4, 0.55, 0.26], [-3.8, 4.4, 1.1, 0.62]])
       rl.push({ x, y: heightAt(x, z) - sy * 0.28, z, s, sy, ry: gr() * 6.28, flat: true });
+    // A ledge you can jump onto (about 0.9 m), and a tall rock beside it (about 1.5 m) that you can only reach from the ledge.
+    for (const [x, z, s, sy] of [[6.8, 7.4, 1.9, 3.4], [9.0, 5.4, 2.2, 6.0]]) rl.push({ x, y: heightAt(x, z) - sy * 0.15, z, s, sy, ry: gr() * 6.28, mesa: true, tilt: 0.05 });
   } else {
     const cr2 = rng(91), rock = (p, s, sy, flat, tilt) => rl.push({ x: p.x, y: heightAt(p.x, p.z) - sy * (flat ? 0.28 : 0.25), z: p.z, s, sy, ry: cr2() * 6.28, flat, tilt });
     // 1: rocks and pebbles, a scatter of pebbles with step-up rocks and low slabs through it.
@@ -693,10 +698,11 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
     { const W = WATERS[1], p = at(5, 0.5); courseLogs.push({ x: W.x, z: W.z, yaw: p.yaw, len: 12, rad: 0.36, cy: WATER_Y + 0.04, bridge: true }); }
   }
   for (const it of rl) { const k = it.tilt ?? (it.flat ? 0.12 : 0.3); it.tx = (gr() - 0.5) * k; it.tz = (gr() - 0.5) * k; } // tilted tops
-  const rp = rockGeo.attributes.position, rm = M4(), rq = new THREE.Quaternion();
+  const rm = M4(), rq = new THREE.Quaternion();
   rl.forEach((it, id) => {
     rm.compose(V(it.x, it.y, it.z), rq.setFromEuler(new THREE.Euler(it.tx, it.ry, it.tz)), V(it.s, it.sy || it.s, it.s));
     const g0 = heightAt(it.x, it.z), P = [], tri = [], nys = [], up = [];
+    const rp = (it.mesa ? mesaGeo : rockGeo).attributes.position;
     for (let i = 0; i < rp.count; i++) P.push(V(rp.getX(i), rp.getY(i), rp.getZ(i)).applyMatrix4(rm));
     let top = -1e9, rad = 0;
     for (let i = 0; i < P.length; i += 3) {
@@ -711,7 +717,8 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
     if (tier === 2) obstacles.push({ x: it.x, z: it.z, r: rad * 0.85, rock: id });
   });
   const rockMat = new THREE.MeshStandardMaterial({ color: new THREE.Color('#6b5547'), roughness: 0.92, flatShading: true, envMapIntensity: 0.4 });
-  scatter(rockGeo, rockMat, rl);
+  scatter(rockGeo, rockMat, rl.filter((it) => !it.mesa));
+  scatter(mesaGeo, rockMat, rl.filter((it) => it.mesa));
 
   // Fallen logs: hazards with height, just like rocks. A thin one is stepped over, a thick one has to be jumped.
   const ll = courseLogs.slice();
@@ -1743,12 +1750,32 @@ function startJump() {
   const k = clamp(D.stamina / cost, 0.4, 1);
   D.stamina = Math.max(0, D.stamina - cost * k);
   // Standing hop ~0.4 m, running leap up to ~1 m; a full sprint has less stance time to push up, so it flattens out.
-  const clear = lerp(0.4, 1.0, run) * lerp(1, 0.75, smooth(4.5, 7.4, v)) * JUMP_K * lerp(0.55, 1, (k - 0.4) / 0.6);
-  D.jump = { ph: 'crouch', t: 0, dur: lerp(0.3, 0.22, run), clear, vy: 0, y: 0, y0: 0, gU: 0, tuck: 0, peak: 0, x0: D.pos.x, z0: D.pos.z };
+  const fresh = JUMP_K * lerp(0.55, 1, (k - 0.4) / 0.6);
+  let clear = lerp(0.4, 1.0, run) * lerp(1, 0.75, smooth(4.5, 7.4, v)) * fresh, push = 0;
+  // A ledge ahead within reach: it crouches deeper, jumps just high enough and pushes forward enough to land on top.
+  const fx = Math.sin(D.yaw), fz = Math.cos(D.yaw), feet = Math.max(dino.legs[0].groundY, dino.legs[1].groundY);
+  for (let d = 0.4; d <= 3.4; d += 0.1) {
+    if (groundAt(D.pos.x + fx * d, D.pos.z + fz * d) - feet <= TIER.step) continue;
+    let h = 0; for (let e = d; e <= d + 0.8; e += 0.1) h = Math.max(h, groundAt(D.pos.x + fx * e, D.pos.z + fz * e) - feet); // how high it gets just past the edge
+    const cap = lerp(0.85, 1.0, run) * fresh;
+    if (h - SCRAMBLE < cap) {
+      clear = clamp(h + 0.12, clear, cap);
+      const vy = Math.sqrt(2 * 9.81 * clear), T = vy / 9.81 + Math.sqrt(2 * Math.max(0, clear - h) / (9.81 * 1.4));
+      push = Math.min(4.5, (d + 0.6) / T);
+    }
+    break;
+  }
+  D.jump = { ph: 'crouch', t: 0, dur: lerp(0.3, 0.22, run) + (push ? 0.06 : 0), clear, push, vy: 0, y: 0, y0: 0, gU: 0, tuck: 0, peak: 0, x0: D.pos.x, z0: D.pos.z };
+}
+function startDrop(y) {
+  D.jump = { ph: 'air', t: 0.2, dur: 0, clear: 0, vy: 0.6, y, y0: y, gU: 0, tuck: 0, peak: 0, x0: D.pos.x, z0: D.pos.z, drop: true };
+  for (const L of dino.legs) { L.swing = false; L.liftPos.copy(L.planted); L.liftRock = -1; L.pathRock = -1; L.rise = 0; }
 }
 function jumpGround(j) {
   let g = -1e9;
-  for (const L of dino.legs) { const w = tmp.v.copy(L.neutral).applyAxisAngle(UP, D.yaw).add(D.pos); g = Math.max(g, groundAt(w.x, w.z)); }
+  // A face too far above the feet is not footing: the leap came up short there and slides down it.
+  for (const L of dino.legs) { const w = tmp.v.copy(L.neutral).applyAxisAngle(UP, D.yaw).add(D.pos), gy = groundAt(w.x, w.z); if (gy <= j.y + SCRAMBLE) g = Math.max(g, gy); }
+  if (g < -1e8) g = heightAt(D.pos.x, D.pos.z);
   j.gU = g; return g;
 }
 function updateJump(dt) {
@@ -1757,7 +1784,7 @@ function updateJump(dt) {
     if (j.t < j.dur) return;
     j.ph = 'air'; j.t = 0; j.vy = Math.sqrt(2 * 9.81 * j.clear) + 9.81 * dt * 0.5; // half-step so the fixed-step arc peaks at the target
     j.y = j.y0 = (dino.legs[0].planted.y + dino.legs[1].planted.y) / 2 - 0.035;
-    D.speed *= 0.92; sfx.step(0.9, 'ground'); rumble(90, 0.3, 0.5);
+    D.speed = Math.max(D.speed * 0.92, j.push || 0); sfx.step(0.9, 'ground'); rumble(90, 0.3, 0.5);
     for (const L of dino.legs) { L.swing = false; L.liftPos.copy(L.planted); L.liftRock = -1; L.pathRock = -1; L.rise = 0; }
     return;
   }
@@ -1767,8 +1794,10 @@ function updateJump(dt) {
   if (j.vy < 0 && j.y <= g) jumpLand(j);
 }
 function jumpLand(j) {
-  const imp = clamp(-j.vy / 5, 0, 1.3);
-  D.lastJump = { peak: j.peak, dist: Math.hypot(D.pos.x - j.x0, D.pos.z - j.z0), clear: j.clear, impact: imp };
+  const imp = clamp(-j.vy / 5, 0, 1.3), short = j.gU - j.y; // came down below the ledge top: the feet caught the edge
+  D.lastJump = { peak: j.peak, dist: Math.hypot(D.pos.x - j.x0, D.pos.z - j.z0), clear: j.clear, impact: imp, scramble: short > 0.06, top: j.gU, drop: !!j.drop };
+  if (j.gU - j.y0 > TIER.step) D.speed *= 0.7; // landing up on a ledge checks the run
+  if (short > 0.06) { D.speed *= 0.6; D.stamina = Math.max(0, D.stamina - 0.05 * short / SCRAMBLE); sNoise({ type: 'bandpass', freq: 2400, to: 900, q: 1.5, dur: 0.22, gain: 0.12 }); } // claws scraping up the edge
   D.landT = 0; D.landK = clamp(-j.vy / 5, 0.3, 1); D.jump = null; D.phase = 0; D.speed *= 0.9;
   const gs = dino.legs.map((L) => {
     const w = L.neutral.clone().applyAxisAngle(UP, D.yaw).add(D.pos), gi = groundInfo(w.x, w.z), g = { rock: gi.rock, edge: gi.edge, ny: gi.ny, y: gi.y };
@@ -1793,7 +1822,7 @@ function jumpLand(j) {
   }
   // A bad landing on a rock (or one foot up, one down) runs the same stability check.
   const uneven = Math.abs(gs[0].y - gs[1].y) / TIER.step;
-  dino.legs.forEach((L, li) => { L.rise = 0; L.pathRock = -1; L.liftRock = -1; if (gs[li].rock >= 0 && ROCKS[gs[li].rock].tier >= 1) stability(L, li, gs[li], imp + uneven * 0.6); });
+  dino.legs.forEach((L, li) => { L.rise = 0; L.pathRock = -1; L.liftRock = -1; if (gs[li].rock >= 0 && ROCKS[gs[li].rock].tier >= 1) stability(L, li, gs[li], short > 0.06 ? imp * 0.5 : imp + uneven * 0.6); }); // a scramble comes in slow: the edge is the risk, not the impact
 }
 
 // ---- drink and sniff (B held) ----
@@ -1957,13 +1986,16 @@ function simStep(dt) {
   const L0 = dino.legs[0], L1 = dino.legs[1];
   const feetLevel = air ? D.jump.y : Math.min(L0.groundY, L1.groundY);
   for (const o of obstacles) {
-    if (o.rock != null && feetLevel > ROCKS[o.rock].top - 0.12) continue; // up on it, or jumping over it
-    for (const [off, rad] of [[0, 0.45], [1.0, 0.42], [1.9, 0.24], [-1.0, 0.3]]) {
+    const R = o.rock != null ? ROCKS[o.rock] : null;
+    // Body parts: hips (legs), chest, head, tail, each with the height of its underside above the feet (x hip height).
+    // A part that is higher than the rock passes over it; in the air the legs only need to get within scrambling reach of the top.
+    for (const [off, rad, under] of [[0, 0.45, 0], [1.0, 0.42, 0.6], [1.9, 0.24, 0.8], [-1.0, 0.3, 0.6]]) {
+      if (R && R.top < feetLevel + (off === 0 ? (air ? SCRAMBLE : Math.max(0.12, R.h * 0.5)) : under * CREATURE.hip)) continue; // (feet above half its height: up on it)
       const px = D.pos.x + fwd.x * off, pz = D.pos.z + fwd.z * off;
       let ox = o.x, oz = o.z;
       if (o.seg) { const [ax, az, bx, bz] = o.seg, ex = bx - ax, ez = bz - az, t = clamp(((px - ax) * ex + (pz - az) * ez) / (ex * ex + ez * ez), 0, 1); ox = ax + ex * t; oz = az + ez * t; }
       const dx = px - ox, dz = pz - oz; const d = Math.hypot(dx, dz); const min = o.r + rad;
-      if (d < min && d > 1e-4) { D.pos.x += (dx / d) * (min - d); D.pos.z += (dz / d) * (min - d); }
+      if (d < min && d > 1e-4) { const k = Math.min(min - d, 0.12); D.pos.x += (dx / d) * k; D.pos.z += (dz / d) * k; } // deep overlaps (sliding off a face) ease out
     }
   }
   const rr = Math.hypot(D.pos.x, D.pos.z); if (rr > WORLD_R) D.pos.multiplyScalar(WORLD_R / rr);
@@ -1979,8 +2011,9 @@ function simStep(dt) {
   const v = D.speed, Fr = v * v / (9.81 * CREATURE.hip);
   // Uneven ground ahead (step-up rocks): shorter, more careful steps with a longer stance.
   {
-    let rh = 0; const hx = Math.sin(D.yaw), hz = Math.cos(D.yaw), sx = Math.cos(D.yaw), sz = -Math.sin(D.yaw);
-    for (let d = 0.4; d <= 2.6; d += 0.55) for (const o of [-0.2, 0.2]) { const x = D.pos.x + hx * d + sx * o, z = D.pos.z + hz * d + sz * o; rh = Math.max(rh, groundAt(x, z) - heightAt(x, z)); }
+    // Measured against the rock (or ground) it is standing on, so the flat top of a big rock is not rough.
+    let rh = 0; const hx = Math.sin(D.yaw), hz = Math.cos(D.yaw), sx = Math.cos(D.yaw), sz = -Math.sin(D.yaw), base = groundAt(D.pos.x, D.pos.z) - heightAt(D.pos.x, D.pos.z);
+    for (let d = 0.4; d <= 2.6; d += 0.55) for (const o of [-0.2, 0.2]) { const x = D.pos.x + hx * d + sx * o, z = D.pos.z + hz * d + sz * o; rh = Math.max(rh, Math.abs(groundAt(x, z) - heightAt(x, z) - base)); }
     D.rough = damp(D.rough || 0, smooth(TIER.pebble, TIER.step * 0.8, rh), 4, dt);
   }
   const duty = 0.5 + 0.14 * Math.tanh((0.5 - Fr) / 0.25) + 0.06 * D.rough;
@@ -2030,7 +2063,9 @@ function simStep(dt) {
       let landZ = D.pos.z - lx * Math.sin(yawL) + lz * Math.cos(yawL) + Math.cos(ym) * v * rem;
       let gL = groundAt(landX, landZ);
       const drop = L.liftPos.y - 0.035 - gL;
-      if (drop > TIER.pebble) { const ex = 0.3 * smooth(TIER.pebble, TIER.step, drop); landX += fwd.x * ex; landZ += fwd.z * ex; gL = groundAt(landX, landZ); } // stepping down reaches further
+      // A ledge drop is not a step: keep the foot up on top (the body steps off as a whole, below).
+      if (drop > TIER.step) for (let b = 0.15; b <= 0.75 && drop > TIER.step; b += 0.15) { const x = landX - fwd.x * b, z = landZ - fwd.z * b, g = groundAt(x, z); if (L.liftPos.y - 0.035 - g <= TIER.step) { landX = x; landZ = z; gL = g; } }
+      if (L.liftPos.y - 0.035 - gL > TIER.pebble && L.liftPos.y - 0.035 - gL <= TIER.step) { const ex = 0.3 * smooth(TIER.pebble, TIER.step, drop); landX += fwd.x * ex; landZ += fwd.z * ex; const g2 = groundAt(landX, landZ); if (L.liftPos.y - 0.035 - g2 <= TIER.step) gL = g2; else { landX -= fwd.x * ex; landZ -= fwd.z * ex; } } // stepping down reaches further
       const e = s * s * (3 - 2 * s);
       L.footPos.x = lerp(L.liftPos.x, landX, e); L.footPos.z = lerp(L.liftPos.z, landZ, e);
       const baseY = lerp(L.liftPos.y, gL + 0.035, e);
@@ -2060,6 +2095,14 @@ function simStep(dt) {
       L.footPos.set(D.pos.x + lx * Math.cos(D.yaw) + lz * Math.sin(D.yaw), j.y + 0.035 + 0.36 * j.tuck * JUMP_K, D.pos.z - lx * Math.sin(D.yaw) + lz * Math.cos(D.yaw));
       L.groundY = groundAt(L.footPos.x, L.footPos.z); L.liftS = 0; L.stanceU = 0;
     }
+  }
+
+  // Walking off a ledge: once the hips are past the edge and the drop is more than a step, it goes down as a fall.
+  // With the stick let go, it pulls up at the edge instead.
+  if (!D.jump && !D.fall && D.act === 'none') {
+    const top = Math.max(L0.groundY, L1.groundY), ahead = (d) => top - groundAt(D.pos.x + fwd.x * d, D.pos.z + fwd.z * d) > TIER.step;
+    if (ahead(0.25) && D.speed > 0.2 && target > 0.1) startDrop(top);
+    else if (target <= 0.1 && top - groundAt(D.pos.x + fwd.x * (0.4 + D.speed * D.speed / 8), D.pos.z + fwd.z * (0.4 + D.speed * D.speed / 8)) > TIER.step * 0.5) D.speed = Math.max(0, D.speed - 8 * dt);
   }
 
   // ---- falls and staggers ----
@@ -2184,7 +2227,7 @@ function simStep(dt) {
   if (D.landT >= 0) { const t = (D.landT += dt); absorb = D.landK * 0.3 * (t < 0.08 ? smooth(0, 0.08, t) : 1 - smooth(0.12, 0.55, t)); if (t > 0.55) D.landT = -1; }
   const footLow = Math.min(L0.groundY, L1.groundY), footAvg = (L0.groundY + L1.groundY) / 2;
   if (air) D.bodyY = D.jump.y - rootG;
-  else D.bodyY = damp(D.bodyY, clamp(lerp(footAvg, footLow, 0.4) - rootG, -0.35, 0.55) * 0.85, 10, dt);
+  else { const lift = Math.max(0, footLow - rootG - 0.4); D.bodyY = damp(D.bodyY, clamp(lerp(footAvg, footLow, 0.4) - rootG - lift, -0.35, 0.55) * 0.85 + lift, 10, dt); } // up on a big rock, the body rides on the feet
   dino.rig.position.set(D.pos.x, rootG, D.pos.z);
   dino.rig.rotation.set(0, D.yaw, 0);
   const hd = D.hd, dip = D.dip * D.hd; // head down: the neck reaches forward and down, the reach feedback works the neck base
