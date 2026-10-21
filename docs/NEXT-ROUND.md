@@ -406,3 +406,14 @@ Nothing from this list is left open.
   to the wheel, so the A that confirms doesn't jump and the B that cancels doesn't drink. Camera behind moved to
   the left stick click. Tested with an emulated controller: opened, picked bellow (up-right) and boom (down),
   confirmed with a second click and with A, cancelled with B, Y still roars, left stick click recentres.
+- **Realistic drinking and mouth sounds (no tones):** the old swallow was a closed-mouth voice, a pure 106 Hz
+  "bloop" 29 dB above its own spectrum. Now:
+  - The scoop is a burst of small bubbles where the snout breaks the surface.
+  - As the head comes up, a few drops fall off the jaws back into the pond, each a single bubble rising in pitch.
+  - The swallow is two low bubble gurgles of water going down the throat, muffled by the neck. Its centroid is
+    near 400 Hz, it peaks only 22 dB over its spectrum, and it sits under the scoop.
+  - The bite was a ringing three-mode block; now it's a hard, heavily damped teeth click (7 inharmonic modes,
+    about 10 ms ring; spectral flatness 0.47 against 0.01).
+  - Tearing meat is wet suction with gristle crackle.
+  - Sniffs breathe through a short nasal tube (resonances from 1.4 kHz up) and are about 12 dB louder.
+  - Measured old against new with the wind muted, the same events through each version's audio layer.
