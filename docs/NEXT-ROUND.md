@@ -8,8 +8,14 @@ Changes queued from playtest feedback. Nothing here is built yet.
      so it should act more like a rudder than a whip.
    - The demo currently bends the tip the most (tail bone weights rise toward the
      tip). Reverse that falloff.
-   - Add a short lag on sharp turns, so the tail swings out briefly before it
-     follows the curve of the body.
+   - Turn behavior is an OPEN DECISION (Brain tension, red): a path-following,
+     actively steered tail sits inside the turn (~0.73 m at sprint in the sandbox),
+     while a passive, inertia-driven tail lags inside briefly, then settles outside
+     (~1.23 m at sprint). My earlier "swings out briefly, then follows" had the sign
+     backwards. If passive, add a term scaled by speed × yaw rate.
+   - Stiffer rear joints (5x) shift bending to the base: the two base joints go from
+     27% to 44% of the total bend. Tune damping on the whole tail, not per joint
+     (per-joint critical damping still overshot 24%).
 
 2. **Walk-to-sprint posture change, made clearly visible.**
    - At a sprint, level the trunk and lean it forward. Straighten and extend the
@@ -19,6 +25,21 @@ Changes queued from playtest feedback. Nothing here is built yet.
    - At a walk, keep a relaxed S-curved neck, a higher head and a slight tail droop.
    - The demo only hints at this now (a small pelvis pitch and tail lift). Make it
      much stronger. Tune the numbers from the Brain movement training results.
+   - Gait fixes from the Brain movement training (lessons dlist/E2–E6):
+     - Walk-to-run switch by Froude number, not by a fraction of top speed:
+       `duty = 0.5 + 0.14*tanh((0.5 - v*v/(9.81*1.15))/0.25)`. The switch moves from
+       3.98 to 2.38 m/s, and the 3.4 m/s trot becomes a true run.
+     - Stride from Alexander's relation: `stride = 2.3*1.18*(v*v/(9.81*1.18))^0.3`
+       (sprint stride 4.33 m, cadence 1.71 Hz instead of 2.21 Hz).
+     - Lift the heel through stance: rotate the metatarsus toward toe-off instead of
+       holding the rest angle. Otherwise the longer stride leaves the leg 14.5 cm short.
+     - Lean comes from the feet: shift the planted-foot window back by about
+       0.11 m per 1 m/s² of acceleration. Cap acceleration at about 2.1 m/s²
+       (2–5 m/s) and 1.2 m/s² near 7 m/s. Trunk pitch, neck and head lowering are
+       style only (each moves the center of mass under 2 cm).
+     - Foot planting in turns: predict the heading at touchdown, and freeze the speed
+       in the centring term at lift-off. Without this the feet skid about 1 m/s in
+       turns and 0.43 m/s when accelerating.
 
 3. **Rocks you can step on, instead of rocks that act as walls.**
    - Size tiers scale with the creature's leg length (hip height), not fixed
