@@ -386,3 +386,18 @@ Nothing from this list is left open.
 - **Touch sprint made visible:** sprint on touch was already "push the stick past its ring", but nothing showed
   the edge. A dashed ochre ring now always marks the sprint boundary (about 1.25× the stick's travel) with a
   "Sprint" label under it, and it turns solid while sprinting. Emulated phone check: sprint reached 7.1 m/s.
+- **Slips, stumbles and trips sound like a skidding foot:** a skid is stick-slip, so it plays as a dense run of
+  tiny foot contacts (about 55 a second) that slows and fades as the foot catches. That gives grit on dirt, claw
+  scrapes on rock, suction in mud and bubbles in water. Slip 0.22 s, stumble 0.38 s, trip 0.55 s, scaled by body
+  size. The old two-thump scuff is gone.
+- **A fall growls:** when a trip puts it on the ground, the impact thud is followed by a growl.
+- **Calls are emotes now:**
+  - **Y** plays a roar that depends on the dino's condition: winded below 30% stamina (short and breathy),
+    parched when thirsty (raspy), hungry when starving (low and long), otherwise the full roar. Thirst and
+    hunger only exist in the tutorial so far; the valley joins in when survival stats arrive (M2).
+  - **The call wheel** has six calls: roar, bellow, growl, boom (closed mouth), hiss, chuff. Controller: hold the
+    right stick, point it at a call, let go (a tap still puts the camera behind). Keyboard: hold R, or press 1 to 6.
+    Touch: hold Y, slide onto a call, lift.
+  - Pitch is set relative to the vocal tract, so the same call scales from adult to hatchling.
+  - The rival answers challenge calls (roars, bellow, growl) but not a boom, hiss or chuff.
+  - The jaw and roar animation follow each call's length and mouth opening.

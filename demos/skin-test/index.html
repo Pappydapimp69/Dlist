@@ -126,6 +126,17 @@
     width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; border: 1.5px solid rgba(239, 230, 214, 0.35);
     background: rgba(17, 13, 10, 0.25); pointer-events: none; opacity: 0.5; }
   .tstick.live { opacity: 1; }
+  /* Call wheel: hold the right stick (or R, or hold Y on touch) and point at a call. */
+  .wheel { position: fixed; left: 50%; top: 50%; width: 300px; height: 300px; margin: -150px 0 0 -150px; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, rgba(17, 13, 10, 0.78) 0 34%, rgba(17, 13, 10, 0.55) 35% 100%); border: 1px solid var(--line);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  .wheel .opt { position: absolute; left: 50%; top: 50%; width: 92px; margin: -22px 0 0 -46px; text-align: center; display: grid; gap: 2px;
+    padding: 6px 4px; border-radius: 6px; border: 1px solid transparent; color: var(--ink-2); font-size: 0.86rem; }
+  .wheel .opt small { font-size: 0.6rem; color: var(--ink-3); letter-spacing: 0.04em; }
+  .wheel .opt.on { color: var(--ink); border-color: rgba(212, 155, 83, 0.7); background: rgba(212, 155, 83, 0.16); }
+  .wheel .mid { position: absolute; left: 50%; top: 50%; width: 120px; margin-left: -60px; transform: translateY(-50%); text-align: center; display: grid; gap: 3px; }
+  .wheel .mid b { font-family: var(--f-display); font-style: italic; font-weight: 500; font-size: 1.15rem; }
+  .wheel .mid span { font-size: 0.66rem; color: var(--ink-3); }
   /* The sprint boundary, always drawn: push the thumb out past this dashed ring to sprint. */
   .tstick::before { content: ""; position: absolute; inset: -16px; border-radius: 50%; border: 1.5px dashed rgba(212, 155, 83, 0.55); }
   .tstick::after { content: "Sprint"; position: absolute; left: 50%; bottom: -32px; transform: translateX(-50%); font: 600 0.58rem/1 var(--f-ui);
@@ -200,6 +211,8 @@
   </div>
 </div>
 
+<div class="wheel" id="callWheel" hidden aria-live="polite"><div class="mid"><b id="wheelName">Roar</b><span id="wheelHint">Y: roar</span></div></div>
+
 <aside class="keys" id="keys">
   <h2 id="keysTitle">Controller</h2>
   <dl id="keysList"></dl>
@@ -224,7 +237,7 @@
         <span class="mdesc">A timed track from gate to gate: rocks and pebbles, fallen logs, a stream, a mud pit, a boulder slalom and a log bridge over a pond. The big log has to be jumped.</span>
       </button>
     </div>
-    <p class="lede small">A jumps (onto rocks too) · hold B to drink near water or sniff away from it · X bites · Y roars · right trigger sprints · hold the left trigger to lie down and rest. Too fast over rocks and logs and it slips or stumbles; sprinting on tired legs, it can trip.</p>
+    <p class="lede small">A jumps (onto rocks too) · hold B to drink near water or sniff away from it · X bites · Y roars (hold the right stick for other calls) · right trigger sprints · hold the left trigger to lie down and rest. Too fast over rocks and logs and it slips or stumbles; sprinting on tired legs, it can trip.</p>
     <p class="cta" id="introCta">D-pad or left stick to choose · A to enter</p>
     <button type="button" id="kbStart">No controller? Enter with keyboard and mouse</button>
   </div>
@@ -1584,16 +1597,42 @@ const sfx = {
   lap: () => mouthSound('lap', 52),
   gulp: () => mouthSound('gulp', 55),
   sniff: (k = 1) => mouthSound('sniff', 48 + 6 * k, { k }),
-  scuff: () => bodySound('scuff', 70),
+  // A slip, stumble or trip is the foot skidding over the ground: a scrape, longer and louder the worse it is.
+  slide: (level) => bodySound('slide', level === 'slip' ? 68 : level === 'stumble' ? 72 : 75, { speed: D.speed / WS, dur: (level === 'slip' ? 0.22 : level === 'stumble' ? 0.38 : 0.55) * BODY.ts }),
   thud: () => bodySound('thud', 84 + 6 * Math.log10(BODY.mk * 10)),
+  call: (style) => { const c = CALLS[style], k = TUT ? 0.35 : 1; mouthSound('call', c.level - (TUT ? 36 : 0), { style, mode: c.mode, duration: c.duration * k, notes: c.notes || (TUT && style === 'roar' ? 2 : 1), gap: (c.gap || 0.3) * k, f0k: c.f0k, f0Endk: c.f0Endk, f0abs: c.f0abs, roughness: c.roughness ?? 0.3, breath: c.breath ?? 0.15, jitter: c.jitter ?? 0.2, amp: c.amp * (TUT ? 0.45 : 1) }); },
   scramble: () => bodySound('scramble', 68),
-  roar: () => (TUT ? sfx.chirp(2) : mouthSound('call', 108, { mode: 'open', duration: 1.6, roughness: 0.55, amp: 3.2 })), // amp: mixed about 10 dB over a footstep at the same distance
+  roar: () => sfx.call('roar'),
   // Hatchling call: one or two short notes from a ~8 cm vocal tract (Brain: dlist E8).
   chirp: (notes = 1, ui = false) => mouthSound('call', 72, { mode: 'open', duration: notes > 1 ? 0.24 : 0.18, notes, gap: 0.3, roughness: 0, amp: 1.2, ui }), // ui: the step-passed cue, not heard in the world
   tear: () => mouthSound('tear', 60),
   // The prey's alarm squeak, from where the prey is.
   squeak: (k = 1) => emit({ kind: 'call', who: 'prey', mode: 'open', duration: 0.12, notes: 2, gap: 0.14, pitch: k, roughness: 0, amp: 1, x: prey.x, y: groundAt(prey.x, prey.z) + 0.3, z: prey.z, level: 70 }),
 };
+
+// Calls. f0k is pitch as a fraction of the tract's highest clean open-mouth pitch (0.3 F1, Brain: dlist E8), so
+// the same call scales from adult to hatchling. amp is mixed so a roar sits about 10 dB over a footstep.
+// challenge: the rival answers it.
+const CALLS = {
+  roar: { label: 'Roar', note: 'challenge', mode: 'open', duration: 1.6, f0k: 0.8, f0Endk: 0.56, roughness: 0.55, amp: 3.2, level: 108, challenge: true },
+  bellow: { label: 'Bellow', note: 'long call', mode: 'open', duration: 2.6, f0k: 0.7, f0Endk: 0.48, roughness: 0.25, breath: 0.1, amp: 3.0, level: 110, challenge: true },
+  growl: { label: 'Growl', note: 'threat', mode: 'open', duration: 1.1, f0k: 0.45, f0Endk: 0.4, roughness: 0.95, breath: 0.25, jitter: 0.6, amp: 2.2, level: 92, challenge: true },
+  boom: { label: 'Boom', note: 'closed mouth', mode: 'closed', duration: 1.9, roughness: 0.05, amp: 2.4, level: 98 },
+  hiss: { label: 'Hiss', note: 'warning', mode: 'open', duration: 0.8, f0abs: 4, breath: 1, roughness: 0, jitter: 0, amp: 1.6, level: 80 },
+  chuff: { label: 'Chuff', note: 'friendly', mode: 'open', duration: 0.22, notes: 2, gap: 0.3, f0k: 0.9, roughness: 0.2, breath: 0.5, amp: 1.6, level: 85 },
+  // What Y plays depends on how the animal is: worn out, parched, starving, or fine.
+  winded: { label: 'Winded roar', note: 'low stamina', mode: 'open', duration: 0.9, f0k: 0.7, f0Endk: 0.45, roughness: 0.35, breath: 0.6, amp: 2.0, level: 100, challenge: true },
+  parched: { label: 'Parched roar', note: 'thirsty', mode: 'open', duration: 1.3, f0k: 0.8, f0Endk: 0.6, roughness: 0.8, breath: 0.55, amp: 2.6, level: 104, challenge: true },
+  hungry: { label: 'Hungry roar', note: 'starving', mode: 'open', duration: 2.0, f0k: 0.6, f0Endk: 0.45, roughness: 0.7, breath: 0.2, amp: 3.2, level: 108, challenge: true },
+};
+const WHEEL = ['roar', 'bellow', 'growl', 'boom', 'hiss', 'chuff']; // clockwise from the top
+// Y's roar by condition: stamina first, then thirst, then hunger (thirst and hunger exist in the tutorial so far).
+function roarStyle() {
+  if (D.stamina < 0.3) return 'winded';
+  if (TUT && tut.thirst < 0.4) return 'parched';
+  if (TUT && tut.hunger < 0.4) return 'hungry';
+  return 'roar';
+}
 
 // Creatures you can hear but not see yet: they wander beyond the trees on the sim's own seeded RNG.
 // The rival answers your roar; the Saurosuchus goes quiet when it hears you.
@@ -1626,7 +1665,7 @@ function aiStep(dt) {
     if (prey && prey.spawned && ev.who === 'player') prey.heardDb = Math.max(prey.heardDb, heardLevel(ev, prey.x, prey.z));
     for (const a of AI) {
       if (ev.who === a.id || heardLevel(ev, a.x, a.z) < HEAR_DB) continue;
-      if (a.id === 'rival' && ev.kind === 'call' && ev.who === 'player' && a.answer < 0) a.answer = D.time + 0.9 + 0.7 * simRng(); // answers a challenge
+      if (a.id === 'rival' && ev.kind === 'call' && ev.who === 'player' && CALLS[ev.style]?.challenge && a.answer < 0) a.answer = D.time + 0.9 + 0.7 * simRng(); // answers a challenge
       if (a.id === 'saurosuchus' && ev.who === 'player') a.quiet = Math.max(a.quiet, D.time + (ev.kind === 'call' ? 25 : 8)); // a predator that hears you stops calling
     }
     if (ev.who !== 'player' && ev.kind === 'call') { const L = heardLevel(ev, D.pos.x, D.pos.z); if (L >= HEAR_DB) SIM.heard = { who: AI.find((a) => a.id === ev.who) || { name: ev.who === 'prey' ? 'the Exaeretodon' : 'something' }, mode: ev.mode, level: L, x: ev.x, z: ev.z, t: D.time }; }
@@ -1645,6 +1684,7 @@ const audioRng = rng(0xa0d10);
 function createAudioLayer(engine) {
   const vary = (db) => 10 ** (((audioRng() * 2 - 1) * db) / 20);
   const S = {
+    tract: TUT ? 0.08 : 0.7, // player's vocal tract (m), for relative call pitch
     voice: engine.createSource('voice', TUT ? { tract: 0.08, sac: 0.04, priority: 20, level: 72, seed: 11 } : { creature: 'herrerasaurus', priority: 20, level: 108, seed: 11 }),
     crunch: engine.createSource('footsteps', { level: 60, seed: 16 }), // tearing shell or meat at the mouth: debris grains
     feet: engine.createSource('footsteps', { priority: 6, seed: 12 }),
@@ -1665,7 +1705,9 @@ function createAudioLayer(engine) {
         case 'step': at(S.feet, ev); S.feet.step({ mass: ev.mass, speed: ev.speed, surface: ev.surface, claws: ev.claws, gain: ev.gain * vary(1.5) }); break;
         case 'call': {
           const src = ev.who === 'player' ? S.voice : ev.who === 'prey' ? S.prey : S.ai[ev.who]; if (!src) break; at(src, ev);
-          callOn(src, ev, { mode: ev.mode, duration: ev.duration * (0.96 + 0.08 * audioRng()), roughness: ev.roughness, amp: ev.amp, ...(ev.pitch ? { f0: 420 * ev.pitch } : {}) });
+          const cap = 0.3 * 343 / (4 * S.tract), f0 = ev.f0abs ?? (ev.f0k && ev.who === 'player' ? cap * ev.f0k : ev.pitch ? 420 * ev.pitch : undefined);
+          callOn(src, ev, { mode: ev.mode, duration: ev.duration * (0.96 + 0.08 * audioRng()), roughness: ev.roughness, amp: ev.amp, breath: ev.breath, jitter: ev.jitter,
+            ...(f0 ? { f0, f0End: ev.f0abs ?? (ev.f0Endk ? cap * ev.f0Endk : f0 * 0.75) } : {}) });
           break;
         }
         case 'tear': at(S.crunch, ev); S.crunch.step({ mass: 2, speed: 3, surface: 'sand', claws: false, gain: 0.8 }); break;
@@ -1674,7 +1716,14 @@ function createAudioLayer(engine) {
         case 'gulp': at(S.voice, ev); S.voice.call({ mode: 'closed', duration: 0.16, amp: 0.3, roughness: 0, jitter: 0, breath: 0 }); break;
         // A sniff is breath noise through the nasal passage, no voicing: a 4 Hz "pitch" leaves only the aspiration.
         case 'sniff': at(S.nose, ev); S.nose.call({ mode: 'open', duration: 0.07, f0: 4, f0End: 4, amp: 0.35 * ev.k, breath: 1, roughness: 0, jitter: 0 }); break;
-        case 'scuff': at(S.feet, ev); S.feet.step({ mass: ev.mass, speed: 1.2, surface: ev.surface, claws: true, gain: 0.6 }); S.feet.step({ mass: ev.mass, speed: 0.8, surface: ev.surface, claws: true, gain: 0.4, delay: 0.09 }); break;
+        // A skid is stick-slip: a dense run of tiny contacts as the foot drags. Grit on dirt, claw scrapes on rock,
+        // suction in mud, bubbles in water, slowing and fading as it catches.
+        case 'slide': {
+          at(S.feet, ev); const n = Math.max(6, Math.round(ev.dur * 55));
+          for (let k = 0; k < n; k++) { const u = k / n;
+            S.feet.step({ mass: ev.mass * 0.06, speed: 0.3 + 0.5 * (1 - u), surface: ev.surface, claws: true, gain: 0.5 * (1 - u) ** 0.6 * (0.6 + 0.4 * audioRng()), delay: u * ev.dur + 0.006 * audioRng() }); }
+          break;
+        }
         case 'thud': at(S.feet, ev); S.feet.step({ mass: ev.mass * 3, speed: 4, surface: ev.surface, claws: false, gain: 1.4 }); break;
         case 'scramble': at(S.feet, ev); for (let k = 0; k < 3; k++) S.feet.step({ mass: ev.mass * 0.6, speed: 2, surface: ev.surface === 'packedDirt' ? 'sandstone' : ev.surface, claws: true, gain: 0.6, delay: 0.07 * k }); break;
       }
@@ -1787,7 +1836,10 @@ function pollInput(dt) {
     const now = swallowMask ? raw.map((v, i) => v && !swallowMask[i]) : raw;
     const btn = (i) => !!now[i];
     const edge = (i) => now[i] && !padPrev[i];
-    edges.a = edge(0); edges.b = edge(1); edges.x = edge(2); edges.y = edge(3); edges.start = edge(9); edges.rs = edge(11);
+    edges.a = edge(0); edges.b = edge(1); edges.x = edge(2); edges.y = edge(3); edges.start = edge(9); edges.rs = false;
+    // Right stick: a tap puts the camera behind; held, it opens the call wheel (point at a call, let go to call it).
+    if (btn(11)) { wheel.holdT += dt; if (!wheel.open && wheel.holdT > 0.2 && started && !paused) openWheel('pad'); }
+    else if (wheel.holdT > 0) { if (wheel.open) closeWheel(true); else edges.rs = true; wheel.holdT = 0; }
     edges.up = edge(12); edges.down = edge(13);
     const [lx, ly] = radial(p.axes[0] || 0, p.axes[1] || 0);
     const [rx, ry] = radial(p.axes[2] || 0, p.axes[3] || 0, 0.14);
@@ -1795,6 +1847,7 @@ function pollInput(dt) {
     if (padActive) setDevice('pad');
     if (input.device === 'pad') {
       input.moveF = -ly; input.moveR = lx; input.lookX = rx; input.lookY = ry;
+      if (wheel.open && wheel.dev === 'pad') { pickWheel(rx, ry, 0.5); input.lookX = input.lookY = 0; } // the stick points at a call, not the camera
       input.sprint = p.buttons[7] ? p.buttons[7].value : 0;
       input.drink = btn(1);
       input.rest = (p.buttons[6] ? p.buttons[6].value : 0) > 0.5; // left trigger, read as analog like the sprint trigger
@@ -1814,6 +1867,7 @@ function pollInput(dt) {
     input.lookY = mouse.dy * 0.3;
     mouse.dx = mouse.dy = 0;
     input.sprint = k('ShiftLeft') || k('ShiftRight') ? 1 : 0;
+    if (wheel.rDown != null && !wheel.open && D.time - wheel.rDown > 0.25 && started && !paused) openWheel('keys');
     input.drink = k('KeyG');
     input.rest = k('KeyZ');
   }
@@ -1862,11 +1916,15 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.code === 'Space') input.jumpKey = true;
   if (e.code === 'KeyF') input.biteKey = true;
-  if (e.code === 'KeyR') input.roarKey = true;
+  if (e.code === 'KeyR') wheel.rDown = D.time; // tap: roar on release; held: the wheel (see pollInput)
+  const digit = /^Digit([1-6])$/.exec(e.code); if (digit) { input.callStyle = WHEEL[+digit[1] - 1]; if (wheel.open) closeWheel(false); }
   if (e.code === 'KeyC') input.recenterKey = true;
   if (e.code === 'Escape') openMenu();
 });
-window.addEventListener('keyup', (e) => keys.delete(e.code));
+window.addEventListener('keyup', (e) => {
+  keys.delete(e.code);
+  if (e.code === 'KeyR' && wheel.rDown != null) { if (wheel.open) closeWheel(true); else if (started && !paused) input.roarKey = true; wheel.rDown = null; }
+});
 canvas.addEventListener('pointerdown', (e) => { initAudio(); if (e.pointerType === 'touch') return; mouse.down = true; canvas.setPointerCapture(e.pointerId); });
 canvas.addEventListener('pointerup', () => { mouse.down = false; });
 canvas.addEventListener('pointermove', (e) => { if (mouse.down) { mouse.dx += e.movementX * 0.08; mouse.dy += e.movementY * 0.08; setDevice('keys'); } });
@@ -1907,18 +1965,23 @@ let lastTouch = matchMedia('(pointer: coarse)').matches;
     b.addEventListener('pointerdown', (e) => {
       e.preventDefault(); b.setPointerCapture(e.pointerId); b.classList.add('down');
       if (k === 'a') input.jumpKey = true; else if (k === 'b') touch.b = true; else if (k === 'rest') touch.rest = true; else if (k === 'x') input.biteKey = true;
-      else if (k === 'y') input.roarKey = true; else if (k === 'cam') input.recenterKey = true; else if (k === 'menu') openMenu();
+      else if (k === 'y') { const r = b.getBoundingClientRect(); wheel.tx = r.left + r.width / 2; wheel.ty = r.top + r.height / 2; wheel.yDown = true; clearTimeout(wheel.timer); wheel.timer = setTimeout(() => { if (wheel.yDown && started && !paused) openWheel('touch'); }, 280); }
+      else if (k === 'cam') input.recenterKey = true; else if (k === 'menu') openMenu();
     });
-    const up = () => { b.classList.remove('down'); if (k === 'b') touch.b = false; if (k === 'rest') touch.rest = false; };
+    const up = (e) => {
+      b.classList.remove('down'); if (k === 'b') touch.b = false; if (k === 'rest') touch.rest = false;
+      if (k === 'y' && wheel.yDown) { wheel.yDown = false; clearTimeout(wheel.timer); if (wheel.open) closeWheel(e.type === 'pointerup'); else if (e.type === 'pointerup') input.roarKey = true; }
+    };
     for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, up);
+    if (k === 'y') b.addEventListener('pointermove', (e) => { if (wheel.open && wheel.dev === 'touch') pickWheel(e.clientX - wheel.tx, e.clientY - wheel.ty, 28); });
   });
   document.getElementById('touch').addEventListener('contextmenu', (e) => e.preventDefault());
 }
 
 const KEYS = {
-  pad: [['Move', 'Left stick'], ['Camera', 'Right stick'], ['Sprint', 'Right trigger (hold)'], ['Jump', 'A'], ['Drink / sniff', 'B (hold)'], ['Bite', 'X'], ['Roar', 'Y'], ['Rest', 'Left trigger (hold)'], ['Camera behind', 'Click right stick'], ['Menu', 'Start']],
-  touch: [['Move', 'Left thumb (past the dashed ring sprints)'], ['Camera', 'Drag on the right'], ['Sprint', 'stick pushed past the dashed ring'], ['Jump', 'A'], ['Drink / sniff', 'B (hold)'], ['Bite', 'X'], ['Roar', 'Y'], ['Rest', 'Zz (hold)'], ['Camera behind', '\u21BA'], ['Menu', '\u2630']],
-  keys: [['Move', 'W A S D'], ['Camera', 'Drag mouse or Q / E'], ['Sprint', 'Shift (hold)'], ['Jump', 'Space'], ['Drink / sniff', 'G (hold)'], ['Bite', 'F'], ['Roar', 'R'], ['Rest', 'Z (hold)'], ['Camera behind', 'C'], ['Menu', 'Esc']],
+  pad: [['Move', 'Left stick'], ['Camera', 'Right stick'], ['Sprint', 'Right trigger (hold)'], ['Jump', 'A'], ['Drink / sniff', 'B (hold)'], ['Bite', 'X'], ['Roar', 'Y'], ['Calls', 'Hold right stick, point, let go'], ['Rest', 'Left trigger (hold)'], ['Camera behind', 'Tap right stick'], ['Menu', 'Start']],
+  touch: [['Move', 'Left thumb (past the dashed ring sprints)'], ['Camera', 'Drag on the right'], ['Sprint', 'stick pushed past the dashed ring'], ['Jump', 'A'], ['Drink / sniff', 'B (hold)'], ['Bite', 'X'], ['Roar', 'Y'], ['Calls', 'Hold Y, slide to one, lift'], ['Rest', 'Zz (hold)'], ['Camera behind', '\u21BA'], ['Menu', '\u2630']],
+  keys: [['Move', 'W A S D'], ['Camera', 'Drag mouse or Q / E'], ['Sprint', 'Shift (hold)'], ['Jump', 'Space'], ['Drink / sniff', 'G (hold)'], ['Bite', 'F'], ['Roar', 'R'], ['Calls', 'Hold R, or keys 1 to 6'], ['Rest', 'Z (hold)'], ['Camera behind', 'C'], ['Menu', 'Esc']],
 };
 function setDevice(d) {
   if (input.device === d && document.getElementById('keysList').childElementCount) return;
@@ -1960,6 +2023,31 @@ document.querySelectorAll('#mapPick .map').forEach((b, i) => b.addEventListener(
 document.getElementById('kbStart').addEventListener('click', () => { initAudio(); enterMap(tapDev()); });
 document.getElementById('intro').addEventListener('click', () => { if (picker.ready) startDemo(tapDev()); }); // after a map switch, a tap or click starts it
 
+/* ============================== call wheel ============================== */
+const wheel = { open: false, pick: null, dev: '', holdT: 0, rDown: null, yDown: false, timer: 0, tx: 0, ty: 0 };
+{
+  const el = document.getElementById('callWheel');
+  WHEEL.forEach((st, i) => {
+    const a = (i / WHEEL.length) * Math.PI * 2, o = document.createElement('div');
+    o.className = 'opt'; o.innerHTML = `${CALLS[st].label}<small>${i + 1} · ${CALLS[st].note}</small>`;
+    o.style.transform = `translate(${Math.sin(a) * 104}px, ${-Math.cos(a) * 104}px)`; el.appendChild(o);
+  });
+}
+function renderWheel() {
+  document.querySelectorAll('#callWheel .opt').forEach((o, i) => o.classList.toggle('on', i === wheel.pick));
+  const st = wheel.pick != null ? WHEEL[wheel.pick] : null;
+  document.getElementById('wheelName').textContent = st ? CALLS[st].label : 'Choose a call';
+  document.getElementById('wheelHint').textContent = st ? CALLS[st].note : `Y now: ${CALLS[roarStyle()].label.toLowerCase()}`;
+}
+function openWheel(dev) { wheel.open = true; wheel.pick = null; wheel.dev = dev; renderWheel(); document.getElementById('callWheel').hidden = false; }
+// Direction picks a slot, clockwise from the top; inside the dead zone nothing is picked (letting go then cancels).
+function pickWheel(x, y, dead) {
+  if (Math.hypot(x, y) < dead) return;
+  const n = WHEEL.length, a = (Math.atan2(x, -y) + Math.PI * 2) % (Math.PI * 2), i = Math.round(a / (Math.PI * 2 / n)) % n;
+  if (i !== wheel.pick) { wheel.pick = i; renderWheel(); }
+}
+function closeWheel(fire) { if (fire && wheel.pick != null) input.callStyle = WHEEL[wheel.pick]; wheel.open = false; wheel.pick = null; document.getElementById('callWheel').hidden = true; }
+
 /* ============================== pause menu ============================== */
 const MENU = [
   { label: 'Resume', state: () => '', act: () => closeMenu() },
@@ -1977,7 +2065,7 @@ function renderMenu() {
 }
 document.getElementById('menuList').addEventListener('click', (e) => { const li = e.target.closest('li'); if (!li) return; menuIdx = +li.dataset.i; activateMenu(); });
 function openMenu() {
-  if (!started) return; paused = true; menuIdx = 0; renderMenu(); document.getElementById('menu').hidden = false;
+  if (!started) return; if (wheel.open) closeWheel(false); paused = true; menuIdx = 0; renderMenu(); document.getElementById('menu').hidden = false;
   document.querySelector('#menu .hint').textContent = input.device === 'touch' ? 'Tap an option · Resume to go back' : 'D-pad or left stick to choose · A to select · B or Start to resume';
 }
 function closeMenu() { paused = false; document.getElementById('menu').hidden = true; swallow = true; input.drink = input.rest = false; } // the B that closed the menu must not start a drink or sniff
@@ -2102,7 +2190,7 @@ function startFall(kind, score, li, down) {
   D.fall = { kind, level, down, t: 0, dur: dur * BODY.ts, side: dino.legs[li].sx, leg: li, sev: clamp(score, 0.5, 1.5), thud: false, lie: 0, kick: 0 };
   D.speed *= level === 'trip' ? 0.45 : level === 'slip' ? 0.97 : lerp(0.94, 0.8, k);
   D.jump = null; if (D.act !== 'none' && level !== 'slip') endAct();
-  sfx.scuff(); if (level === 'stumble') sfx.scuff();
+  sfx.slide(level);
   rumble(level === 'trip' ? 260 : level === 'slip' ? 90 : 180, level === 'slip' ? 0.3 : 0.5, Math.min(1, (level === 'trip' ? 0.6 : level === 'slip' ? 0.15 : 0.5) * BODY.mk));
   if (level !== 'slip') cam.jolt = Math.max(cam.jolt, down ? 0.06 : 0.04 + 0.05 * k);
 }
@@ -2305,7 +2393,12 @@ function simStep(dt) {
   const mag = Math.min(1, Math.hypot(mF, mR));
   const downed = !!(D.fall && D.fall.down);
   if (active && !downed && !egged && (input.bite || input.biteKey) && D.biteT < 0 && D.roarT < 0) { D.biteT = 0; rumble(90, 0.4, 0.5); }
-  if (active && !downed && !egged && (input.roar || input.roarKey) && D.roarT < 0 && D.biteT < 0) { D.roarT = 0; sfx.roar(); rumble(TUT ? 400 : 1300, 0.35, 0.25); D.roars = (D.roars || 0) + 1; }
+  if (active && !downed && !egged && (input.roar || input.roarKey || input.callStyle) && D.roarT < 0 && D.biteT < 0) {
+    const style = input.callStyle || roarStyle(), c = CALLS[style];
+    D.roarT = 0; D.call = { style, dur: c.duration * (TUT ? 0.35 : 1), jaw: c.mode === 'closed' ? 0.06 : style === 'hiss' ? 0.45 : style === 'chuff' ? 0.35 : 0.86 };
+    sfx.call(style); rumble(TUT ? 400 : Math.min(1300, 400 + 600 * c.duration), 0.35, 0.25); D.roars = (D.roars || 0) + 1;
+  }
+  input.callStyle = null;
   if (input.recenter || input.recenterKey) cam.recenter = true;
   const jumpPress = active && (input.jump || input.jumpKey);
   input.biteKey = input.roarKey = input.recenterKey = input.jumpKey = false;
@@ -2515,7 +2608,7 @@ function simStep(dt) {
       flail = (0.9 * smooth(0, t1 * 0.6, t) * (1 - smooth(t1 * 0.7, t1 * 1.2, t)) + 0.5 * Math.sin(Math.PI * rise)) * BODY.agile;
       F.kick = smooth(t1, t1 + 0.15, t) * (1 - smooth(t2 + F.tR * 0.1, t2 + F.tR * 0.45, t)); // legs paddle while down and scrabble as it rises
       if (t >= t1 && !F.thud) {
-        F.thud = true; sfx.thud(); rumble(240, 0.6, Math.min(1, 0.7 * BODY.mk)); cam.jolt = Math.max(cam.jolt, 0.07 * BODY.mk);
+        F.thud = true; sfx.thud(); sfx.call('growl'); rumble(240, 0.6, Math.min(1, 0.7 * BODY.mk)); cam.jolt = Math.max(cam.jolt, 0.07 * BODY.mk);
         const sx = Math.cos(D.yaw), sz = -Math.sin(D.yaw);
         for (let k = 0; k < 18; k++) { const u = (k / 17 - 0.5) * 3.4, px = D.pos.x + fwd.x * u + sx * F.side * 0.75, pz = D.pos.z + fwd.z * u + sz * F.side * 0.75; dust.spawn(V(px, groundAt(px, pz) + 0.05, pz), V(sx * F.side * (0.4 + Math.random()), 0.3 + Math.random() * 0.5, sz * F.side * (0.4 + Math.random())), { life: 1 + Math.random() * 0.6, size: 1.5 + Math.random() * 1.5 }); }
       }
@@ -2554,11 +2647,11 @@ function simStep(dt) {
     if (o > 0.56) { D.biteT = -1; D.snapped = false; }
   }
   if (D.roarT >= 0) {
-    const o = (D.roarT += dt);
-    roarE = smooth(0, 0.35, o) * (1 - smooth(1.45, 1.95, o));
-    jawOpen = Math.max(jawOpen, roarE * 0.86 + 0.04 * Math.sin(o * 38) * roarE);
-    shake = Math.sin(o * 21) * 0.06 * roarE;
-    if (o > 2.0) D.roarT = -1;
+    const o = (D.roarT += dt), C = D.call || { dur: 1.6, jaw: 0.86 }, e0 = Math.min(0.35, C.dur * 0.3);
+    roarE = smooth(0, e0, o) * (1 - smooth(C.dur - 0.15, C.dur + 0.35, o));
+    jawOpen = Math.max(jawOpen, roarE * C.jaw + 0.04 * Math.sin(o * 38) * roarE * C.jaw);
+    shake = Math.sin(o * 21) * 0.06 * roarE * C.jaw;
+    if (o > C.dur + 0.4) D.roarT = -1;
   }
   const pant = smooth(2, 5, D.sprintT);
   jawOpen = Math.max(jawOpen, pant * (0.12 + 0.06 * Math.sin(D.time * 9)));
@@ -2794,6 +2887,7 @@ function updateHud(dt) {
   const F = D.fall, actTxt = { alert: 'Noticed water', turn: 'Turning to the water', shuffle: 'Stepping closer', drink: 'Drinking', eat: 'Eating', air: 'Sniffing the air, nose into the wind', ground: 'Sniffing its own trail' }[D.act];
   const gait = Froude(D.speed) < 0.5 ? 'Walk' : D.speed < 5 ? 'Run' : 'Sprint';
   hud.pace.textContent = F ? (F.down ? (F.kind === 'trip' ? 'Tripped, getting up' : 'Fell, getting up') : F.level === 'slip' ? 'Slipped, caught itself' : (F.kind === 'trip' ? 'Caught a toe, stumbled' : 'Stumbled'))
+    : D.roarT >= 0 && D.call ? `${CALLS[D.call.style].label} (${CALLS[D.call.style].note})`
     : D.jump ? (D.jump.ph === 'crouch' ? 'Crouching to jump' : 'Airborne') : D.resting ? 'Lying down, resting' : D.rest > 0.05 ? 'Getting up' : inEgg() ? 'Inside the egg' : actTxt || (D.speed < 0.15 ? 'Standing' : `${gait}, ${D.speed.toFixed(1)} m/s`);
 }
 
@@ -3089,6 +3183,7 @@ window.__demo = {
   step(n = 60) { for (let i = 0; i < n; i++) { pollInput(STEP); simStep(STEP); flakes.update(STEP); drips.update(STEP); splash.update(STEP); splat.update(STEP); dust.update(STEP); shells.update(STEP); updateRipples(STEP); updateCamera(STEP); } updatePrints(); },
   teleport(x, z, yaw = D.yaw) { D.pos.set(x, 0, z); D.yaw = yaw; clearMotion(); plantFeetAtNeutral(); cam.yaw = yaw + Math.PI; },
   counts: () => ({ flakes: flakes.items.length, drips: drips.items.length, prints: prints.length }),
+  fall: (level) => startFall(level === 'trip' ? 'trip' : 'stumble', level === 'slip' ? 0.7 : level === 'stumble' ? 1.0 : 1.6, 0, level === 'trip'), // forces a slip, stumble or trip
 };
 requestAnimationFrame(frame);
 </script>
