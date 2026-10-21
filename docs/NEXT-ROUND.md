@@ -121,3 +121,19 @@ Changes queued from playtest feedback. Nothing here is built yet.
      stumble check (item 4), landing in mud splashes, landing in water soaks.
    - Update the on-screen controls, the intro text and the menu hint for the
      new layout. The menu's "A to select" stays A.
+
+7. **Drink and sniff on B (hold), context-sensitive.**
+   - Water in range: within reach of the snout, about 2–3 m for an adult (scale with
+     neck length and size).
+   - In range and in front: start drinking right away.
+   - In range but to the side or behind: the head turns toward the water for 2 s (it
+     noticed it). If B is still held, the body turns in place to face it. The camera
+     does not move. Then drinking starts.
+   - In range but just out of reach after turning: shuffle a step or two closer
+     automatically, then drink.
+   - Drinking loop: lower the head, dip the snout and scoop with the jaw, then lift and
+     tip the head back to swallow (visible throat gulp), and repeat while held. This
+     is bird-style drinking, a reasonable guess for theropods.
+   - No water in range: sniff instead. Head down, nose working along the ground, with
+     small head sweeps. A hook for scent tracking later.
+   - Letting go of B at any point cancels and returns to normal posture.
