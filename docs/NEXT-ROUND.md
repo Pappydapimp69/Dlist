@@ -319,3 +319,27 @@ Nothing from this list is left open.
   5 m/s) and stamina below half. Walking or jogging over rough ground can still slip or stumble, but it
   never goes down. A tired test run over every step-up rock gave 5 trips and 67 slips or stumbles when
   sprinting, and 0 trips and 17 slips or stumbles at a walk.
+- **Jumping up onto rocks:** any rock or log too tall to step onto can be jumped onto if it's within reach.
+  A running leap clears about 1 m, and if the feet come up to about 0.35 m short of the top (0.3 × hip
+  height), they catch the edge and it scrambles up, with a claw scrape, some lost speed and a little stamina.
+  A jump aimed at a ledge ahead sets itself: the dino crouches a bit deeper, jumps just high enough and pushes
+  forward enough to land on top, so a standing jump from the foot of a waist-high ledge works too. Collisions
+  now go by body part: the chest, head and tail pass over anything lower than they are, so the dino can walk
+  right up to a ledge with its chest over it. Up on a big rock, the body rides on the feet instead of being
+  capped near ground level.
+- **Ledges in the valley:** two flat-topped sandstone blocks beside the start. The 0.9 m one can be jumped
+  onto from the ground. The 1.5 m one is out of reach from the ground but can be reached from the lower one.
+  The 1.4–2.2 m boulders stay out of reach. On the course, the slalom boulders (0.8–0.94 m) and stream
+  stones can now be climbed too.
+- **Stepping off:** pushing the stick over an edge higher than a step makes it drop off as a fall, landing
+  heavily. With the stick let go, it pulls up at the edge instead. A foot never steps down a ledge by itself.
+  Test runs: a standing jump and running jumps from 4.0–4.4 m out landed on the 0.9 m block, and from 4.8 m
+  out fell short. Ledge to tall block worked, and walking off the tall block dropped it with a hard landing.
+  The obstacle course still finishes (38.7 s), and trips are still sprint-only.
+- **Touch controls for phones and tablets:** a tap on a touch screen switches to touch mode (a controller or
+  keyboard switches back). The left side is a floating thumbstick that appears under the thumb; pushing past
+  its ring sprints, and the ring glows. Dragging on the right side turns the camera (about 0.3° per pixel).
+  Xbox-coloured A (jump), B (hold to drink or sniff), X (bite) and Y (roar) buttons sit bottom right, with
+  camera-behind and menu buttons above them. The splash says "Tap a map to enter", the menu is tapped, and
+  the HUD gets compact in touch mode. Tested with emulated touch on an 844 × 390 landscape phone: walking,
+  sprinting, a two-finger stick plus camera drag, a jump and the menu all worked.

@@ -1,7 +1,3 @@
-<!doctype html>
-<html lang="en">
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Herrerasaurus Skin Test</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -111,6 +107,36 @@
   .tut.pass { border-color: rgba(212, 155, 83, 0.6); }
   @media (min-width: 1440px) { .tut { top: calc(14px + env(safe-area-inset-top, 0px)); } }
   @media (max-width: 760px) { .tut { top: auto; bottom: calc(150px + env(safe-area-inset-bottom, 0px)); } } /* phones: clear of the chips, above the readout */
+  /* Touch: floating stick on the left, camera drag on the right, Xbox-style face buttons bottom right. */
+  #touch { position: fixed; inset: 0; display: none; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  body.touch.playing #touch { display: block; }
+  body.touch .keys, body.touch #padChip { display: none; }
+  body.touch .readout { pointer-events: none; bottom: auto; top: calc(66px + env(safe-area-inset-top, 0px)); width: 236px; padding: 7px 10px; gap: 4px; }
+  body.touch .readout .row { grid-template-columns: 50px 56px 1fr; gap: 8px; }
+  body.touch .meta { display: none; }
+  @media (max-width: 760px) { body.touch .chips { top: calc(14px + env(safe-area-inset-top, 0px)); } body.touch .plate { max-width: calc(100% - 180px); } }
+  .tzone { position: absolute; top: 0; bottom: 0; }
+  #tMove { left: 0; width: 45%; }
+  #tLook { right: 0; width: 55%; }
+  .tstick { position: absolute; left: calc(100px + env(safe-area-inset-left, 0px)); top: calc(100% - 150px - env(safe-area-inset-bottom, 0px));
+    width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; border: 1.5px solid rgba(239, 230, 214, 0.35);
+    background: rgba(17, 13, 10, 0.25); pointer-events: none; opacity: 0.5; }
+  .tstick.live { opacity: 1; }
+  .tstick.sprint { border-color: var(--ochre); box-shadow: 0 0 0 4px rgba(212, 155, 83, 0.25); }
+  .tstick i { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: rgba(239, 230, 214, 0.35); }
+  .tbtns { position: absolute; right: calc(16px + env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: 188px; height: 188px; pointer-events: none; }
+  .tbtn { position: absolute; width: 62px; height: 62px; border-radius: 50%; border: 2px solid var(--line); background: rgba(17, 13, 10, 0.55);
+    color: var(--ink); font: 600 1.15rem/1 var(--f-ui); display: grid; place-content: center; justify-items: center; gap: 3px; padding: 0;
+    pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; }
+  .tbtn small { font-size: 0.56rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); }
+  .tbtn.down { background: rgba(239, 230, 214, 0.24); }
+  .tbtn[data-b="a"] { left: 63px; bottom: 0; border-color: #6cbf5a; }
+  .tbtn[data-b="b"] { right: 0; top: 63px; border-color: #d9534f; }
+  .tbtn[data-b="x"] { left: 0; top: 63px; border-color: #4a90d9; }
+  .tbtn[data-b="y"] { left: 63px; top: 0; border-color: #e5c34a; }
+  .tbtn.small { width: 46px; height: 46px; font-size: 1rem; }
+  .tbtn[data-b="menu"] { right: 0; top: -58px; }
+  .tbtn[data-b="cam"] { right: 56px; top: -58px; }
   @media (max-width: 760px) { .keys { display: none; } .binomial { font-size: 1.1rem; } .chips { top: calc(108px + env(safe-area-inset-top, 0px)); } } /* chips sit under the title plate on phones */
 </style>
 
@@ -136,7 +162,7 @@
 
 <div class="chips">
   <span class="chip warn" id="padChip">No controller yet. Press any button on it.</span>
-  <span class="chip" id="soundChip">Sound is off. Click anywhere to turn it on.</span>
+  <span class="chip" id="soundChip">Sound is off. Click or tap anywhere to turn it on.</span>
 </div>
 
 <section class="readout" aria-live="off">
@@ -147,6 +173,20 @@
   <div class="row"><span class="lab">Stamina</span><span class="bar stam"><i id="stamBar"></i></span><span class="val" id="stamVal">Fresh</span></div>
   <div class="row pace"><span class="lab">Pace</span><span class="val" id="paceVal">Standing</span></div>
 </section>
+
+<div id="touch" aria-hidden="true">
+  <div class="tzone" id="tMove"></div>
+  <div class="tzone" id="tLook"></div>
+  <div class="tstick" id="tStick"><i></i></div>
+  <div class="tbtns">
+    <button type="button" class="tbtn small" data-b="cam" aria-label="Camera behind">&#8634;</button>
+    <button type="button" class="tbtn small" data-b="menu" aria-label="Menu">&#9776;</button>
+    <button type="button" class="tbtn" data-b="y">Y<small>Roar</small></button>
+    <button type="button" class="tbtn" data-b="x">X<small>Bite</small></button>
+    <button type="button" class="tbtn" data-b="b">B<small>Drink</small></button>
+    <button type="button" class="tbtn" data-b="a">A<small>Jump</small></button>
+  </div>
+</div>
 
 <aside class="keys" id="keys">
   <h2 id="keysTitle">Controller</h2>
@@ -172,7 +212,7 @@
         <span class="mdesc">A timed track from gate to gate: rocks and pebbles, fallen logs, a stream, a mud pit, a boulder slalom and a log bridge over a pond. The big log has to be jumped.</span>
       </button>
     </div>
-    <p class="lede small">A jumps · hold B to drink near water or sniff away from it · X bites · Y roars · right trigger sprints · hold LB to lie down and rest. Too fast over rocks and logs and it slips or stumbles; sprinting on tired legs, it can trip.</p>
+    <p class="lede small">A jumps (onto rocks too) · hold B to drink near water or sniff away from it · X bites · Y roars · right trigger sprints · hold LB to lie down and rest. Too fast over rocks and logs and it slips or stumbles; sprinting on tired legs, it can trip.</p>
     <p class="cta" id="introCta">D-pad or left stick to choose · A to enter</p>
     <button type="button" id="kbStart">No controller? Enter with keyboard and mouse</button>
   </div>
@@ -268,7 +308,8 @@ const POND = WATERS[0], MUD = MUDS[0];
 const SPAWN = MAP === 'course' ? { x: -42, z: 29, yaw: Math.PI / 2 } : TUT ? { x: NEST.x, z: NEST.z, yaw: Math.PI * 0.9 } : { x: 0, z: 15, yaw: Math.PI };
 // One creature for now. Rock tiers, jumps, snout reach and momentum all scale from these.
 const CREATURE = { hip: 1.15, leg: 1.18, mass: 350, reach: 2.8, snout: 1.8 }; // reach: water it notices; snout: how far ahead the lowered snout dips
-const TIER = { pebble: 0.08 * CREATURE.hip, step: 0.55 * CREATURE.hip }; // step-ups to about knee height; above that, a wall
+const TIER = { pebble: 0.08 * CREATURE.hip, step: 0.55 * CREATURE.hip }; // step-ups to about knee height; above that, jump up or go round
+const SCRAMBLE = 0.3 * CREATURE.hip; // a leap that comes up this far short of a ledge still gets the feet over the edge and scrambles up
 const JUMP_K = Math.pow(CREATURE.mass / 350, -1 / 6) * CREATURE.hip / 1.15;
 // Falls, stumbles and slips scale with the animal: a bigger body topples and recovers more slowly (time ~ sqrt(size)),
 // a heavier one lands harder and flails less (more inertia), a lighter one is quicker and twitchier.
@@ -710,6 +751,8 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
   const rockGeo = (() => { const g = new THREE.IcosahedronGeometry(1, 1); const p = g.attributes.position;
     for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i); const k = 0.75 + 0.5 * vnoise(x * 1.7 + 3, z * 1.7 + y, 91); p.setXYZ(i, x * k, y * k * 0.7, z * k); }
     g.computeVertexNormals(); return g; })();
+  // Sandstone blocks: the same rock with its top cut flat, wide enough to stand on.
+  const mesaGeo = (() => { const g = rockGeo.clone(), p = g.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, Math.min(p.getY(i), 0.4)); g.computeVertexNormals(); return g; })();
   const rl = [];
   for (let i = 0; i < 300 && rl.length < (MAP === 'course' ? 24 : TUT ? 26 : 42); i++) {
     const [x, z] = ringPoint(8, 56);
@@ -729,6 +772,8 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
     // Low sandstone slabs ahead of the start point, so step-ups are easy to find.
     for (const [x, z, s, sy] of [[-1.6, 7.6, 0.95, 0.42], [1.9, 5.4, 0.8, 0.5], [3.9, 8.8, 1.05, 0.34], [-4.4, 10.6, 0.75, 0.3], [0.8, 10.4, 0.55, 0.26], [-3.8, 4.4, 1.1, 0.62]])
       rl.push({ x, y: heightAt(x, z) - sy * 0.28, z, s, sy, ry: gr() * 6.28, flat: true });
+    // A ledge you can jump onto (about 0.9 m), and a tall rock beside it (about 1.5 m) that you can only reach from the ledge.
+    for (const [x, z, s, sy] of [[6.8, 7.4, 1.9, 3.4], [9.0, 5.4, 2.2, 6.0]]) rl.push({ x, y: heightAt(x, z) - sy * 0.15, z, s, sy, ry: gr() * 6.28, mesa: true, tilt: 0.05 });
   } else {
     const cr2 = rng(91), rock = (p, s, sy, flat, tilt) => rl.push({ x: p.x, y: heightAt(p.x, p.z) - sy * (flat ? 0.28 : 0.25), z: p.z, s, sy, ry: cr2() * 6.28, flat, tilt });
     // 1: rocks and pebbles, a scatter of pebbles with step-up rocks and low slabs through it.
@@ -748,10 +793,11 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
     { const W = WATERS[1], p = at(5, 0.5); courseLogs.push({ x: W.x, z: W.z, yaw: p.yaw, len: 12, rad: 0.36, cy: WATER_Y + 0.04, bridge: true }); }
   }
   for (const it of rl) { const k = it.tilt ?? (it.flat ? 0.12 : 0.3); it.tx = (gr() - 0.5) * k; it.tz = (gr() - 0.5) * k; } // tilted tops
-  const rp = rockGeo.attributes.position, rm = M4(), rq = new THREE.Quaternion();
+  const rm = M4(), rq = new THREE.Quaternion();
   rl.forEach((it, id) => {
     rm.compose(V(it.x, it.y, it.z), rq.setFromEuler(new THREE.Euler(it.tx, it.ry, it.tz)), V(it.s, it.sy || it.s, it.s));
     const g0 = heightAt(it.x, it.z), P = [], tri = [], nys = [], up = [];
+    const rp = (it.mesa ? mesaGeo : rockGeo).attributes.position;
     for (let i = 0; i < rp.count; i++) P.push(V(rp.getX(i), rp.getY(i), rp.getZ(i)).applyMatrix4(rm));
     let top = -1e9, rad = 0;
     for (let i = 0; i < P.length; i += 3) {
@@ -766,7 +812,8 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
     if (tier === 2) obstacles.push({ x: it.x, z: it.z, r: rad * 0.85, rock: id });
   });
   const rockMat = new THREE.MeshStandardMaterial({ color: new THREE.Color('#6b5547'), roughness: 0.92, flatShading: true, envMapIntensity: 0.4 });
-  scatter(rockGeo, rockMat, rl);
+  scatter(rockGeo, rockMat, rl.filter((it) => !it.mesa));
+  scatter(mesaGeo, rockMat, rl.filter((it) => it.mesa));
 
   // Fallen logs: hazards with height, just like rocks. A thin one is stepped over, a thick one has to be jumped.
   const ll = courseLogs.slice();
@@ -1483,7 +1530,7 @@ function initAudio() {
 }
 function soundChip() {
   const chip = document.getElementById('soundChip'), run = audio.ctx && audio.ctx.state === 'running';
-  chip.textContent = run ? 'Sound is on' : 'Sound is waiting on the browser. Press any key or click once.'; chip.className = run ? 'chip ok' : 'chip warn';
+  chip.textContent = run ? 'Sound is on' : (matchMedia('(pointer: coarse)').matches ? 'Sound is waiting on the browser. Tap once.' : 'Sound is waiting on the browser. Press any key or click once.'); chip.className = run ? 'chip ok' : 'chip warn';
 }
 const audioLive = () => audio.on && audio.ctx.state === 'running';
 function sNoise({ dur = 0.1, type = 'lowpass', freq = 300, to = null, q = 0.7, gain = 0.5, attack = 0.004, delay = 0 }) {
@@ -1629,6 +1676,13 @@ function pollInput(dt) {
     input.drink = k('KeyG');
     input.rest = k('KeyZ');
   }
+  if (input.device === 'touch') {
+    // Camera drag maps straight to an angle (about 0.3 degrees per pixel), whatever the frame rate.
+    const k = Math.max(dt, 1 / 240);
+    input.moveF = touch.mf; input.moveR = touch.mr; input.sprint = touch.sprint; input.drink = touch.b;
+    input.lookX = (touch.dx * 0.005) / (2.5 * k); input.lookY = (touch.dy * 0.004) / (1.6 * k);
+    touch.dx = touch.dy = 0;
+  }
   if (paused) {
     if (edges.up) moveMenu(-1);
     if (edges.down) moveMenu(1);
@@ -1672,26 +1726,71 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Escape') openMenu();
 });
 window.addEventListener('keyup', (e) => keys.delete(e.code));
-canvas.addEventListener('pointerdown', (e) => { initAudio(); mouse.down = true; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointerdown', (e) => { initAudio(); if (e.pointerType === 'touch') return; mouse.down = true; canvas.setPointerCapture(e.pointerId); });
 canvas.addEventListener('pointerup', () => { mouse.down = false; });
 canvas.addEventListener('pointermove', (e) => { if (mouse.down) { mouse.dx += e.movementX * 0.08; mouse.dy += e.movementY * 0.08; setDevice('keys'); } });
-window.addEventListener('pointerdown', () => initAudio());
+window.addEventListener('pointerdown', (e) => {
+  initAudio();
+  if (e.pointerType === 'touch') { lastTouch = true; if (started && input.device !== 'touch') setDevice('touch'); } else if (e.pointerType === 'mouse') lastTouch = false;
+}, true);
+
+/* ---- touch controls ---- */
+// Left side: a floating stick that appears under the thumb; pushed past its ring it sprints. Right side: drag to look.
+const touch = { mf: 0, mr: 0, sprint: 0, b: false, dx: 0, dy: 0, stickId: null, lookId: null, ox: 0, oy: 0, lx: 0, ly: 0 };
+let lastTouch = matchMedia('(pointer: coarse)').matches;
+{
+  const stick = document.getElementById('tStick'), knob = stick.firstElementChild, R = 56, move = document.getElementById('tMove'), look = document.getElementById('tLook');
+  const place = () => { stick.style.left = touch.ox + 'px'; stick.style.top = touch.oy + 'px'; };
+  const stickTo = (e) => {
+    let dx = e.clientX - touch.ox, dy = e.clientY - touch.oy; const d = Math.hypot(dx, dy), max = R * 1.4;
+    if (d > max) { touch.ox += dx * (1 - max / d); touch.oy += dy * (1 - max / d); dx *= max / d; dy *= max / d; place(); } // the stick follows a thumb that runs off it
+    const [x, y] = radial(dx / R, dy / R, 0.12, 1);
+    touch.mr = x; touch.mf = -y; touch.sprint = smooth(1.08, 1.3, Math.hypot(dx, dy) / R);
+    knob.style.transform = `translate(${dx}px, ${dy}px)`; stick.classList.toggle('sprint', touch.sprint > 0.5);
+  };
+  move.addEventListener('pointerdown', (e) => {
+    if (touch.stickId != null) return; touch.stickId = e.pointerId; move.setPointerCapture(e.pointerId);
+    touch.ox = e.clientX; touch.oy = e.clientY; place(); stick.classList.add('live'); stickTo(e);
+  });
+  move.addEventListener('pointermove', (e) => { if (e.pointerId === touch.stickId) stickTo(e); });
+  const stickEnd = (e) => {
+    if (e.pointerId !== touch.stickId) return; touch.stickId = null; touch.mf = touch.mr = touch.sprint = 0;
+    knob.style.transform = ''; stick.classList.remove('live', 'sprint'); stick.style.left = stick.style.top = '';
+  };
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) move.addEventListener(ev, stickEnd);
+  look.addEventListener('pointerdown', (e) => { if (touch.lookId != null) return; touch.lookId = e.pointerId; look.setPointerCapture(e.pointerId); touch.lx = e.clientX; touch.ly = e.clientY; });
+  look.addEventListener('pointermove', (e) => { if (e.pointerId !== touch.lookId) return; touch.dx += e.clientX - touch.lx; touch.dy += e.clientY - touch.ly; touch.lx = e.clientX; touch.ly = e.clientY; });
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) look.addEventListener(ev, (e) => { if (e.pointerId === touch.lookId) touch.lookId = null; });
+  document.querySelectorAll('#touch .tbtn').forEach((b) => {
+    const k = b.dataset.b;
+    b.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); b.setPointerCapture(e.pointerId); b.classList.add('down');
+      if (k === 'a') input.jumpKey = true; else if (k === 'b') touch.b = true; else if (k === 'x') input.biteKey = true;
+      else if (k === 'y') input.roarKey = true; else if (k === 'cam') input.recenterKey = true; else if (k === 'menu') openMenu();
+    });
+    const up = () => { b.classList.remove('down'); if (k === 'b') touch.b = false; };
+    for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, up);
+  });
+  document.getElementById('touch').addEventListener('contextmenu', (e) => e.preventDefault());
+}
 
 const KEYS = {
   pad: [['Move', 'Left stick'], ['Camera', 'Right stick'], ['Sprint', 'Right trigger (hold)'], ['Jump', 'A'], ['Drink / sniff', 'B (hold)'], ['Bite', 'X'], ['Roar', 'Y'], ['Rest', 'LB (hold)'], ['Camera behind', 'Click right stick'], ['Menu', 'Start']],
+  touch: [['Move', 'Left thumb (push to the edge to sprint)'], ['Camera', 'Drag on the right'], ['Jump', 'A'], ['Drink / sniff', 'B (hold)'], ['Bite', 'X'], ['Roar', 'Y'], ['Camera behind', '\u21BA'], ['Menu', '\u2630']],
   keys: [['Move', 'W A S D'], ['Camera', 'Drag mouse or Q / E'], ['Sprint', 'Shift (hold)'], ['Jump', 'Space'], ['Drink / sniff', 'G (hold)'], ['Bite', 'F'], ['Roar', 'R'], ['Rest', 'Z (hold)'], ['Camera behind', 'C'], ['Menu', 'Esc']],
 };
 function setDevice(d) {
   if (input.device === d && document.getElementById('keysList').childElementCount) return;
-  input.device = d;
-  document.getElementById('keysTitle').textContent = d === 'pad' ? 'Controller' : 'Keyboard and mouse';
+  input.device = d; document.body.classList.toggle('touch', d === 'touch');
+  if (d !== 'touch') touch.mf = touch.mr = touch.sprint = 0, touch.b = false;
+  document.getElementById('keysTitle').textContent = d === 'pad' ? 'Controller' : d === 'touch' ? 'Touch' : 'Keyboard and mouse';
   document.getElementById('keysList').innerHTML = KEYS[d].map(([a, b]) => `<div style="display:contents"><dt>${a}</dt><dd>${b}</dd></div>`).join('');
 }
 setDevice('pad');
 
 function startDemo(dev) {
   if (started) return;
-  started = true; setDevice(dev);
+  started = true; setDevice(dev); document.body.classList.add('playing');
   document.getElementById('intro').hidden = true;
 }
 // Splash: pick a map. Entering the map that is already loaded starts at once; the other one reloads the page
@@ -1704,7 +1803,9 @@ function renderSplash() {
   document.querySelectorAll('#mapPick .map').forEach((b, i) => { b.classList.toggle('on', i === picker.sel); b.setAttribute('aria-selected', i === picker.sel); });
   document.getElementById('mapPick').hidden = picker.ready;
   document.getElementById('introLede').textContent = picker.ready ? MAP_NAME[MAP] + ' is loaded.' : 'Choose a map.';
-  document.getElementById('introCta').textContent = picker.ready ? 'Press any button on your Xbox controller to start' : 'D-pad or left stick to choose · A to enter';
+  document.getElementById('introCta').textContent = lastTouch ? (picker.ready ? 'Tap to start' : 'Tap a map to enter')
+    : picker.ready ? 'Press any button on your Xbox controller to start' : 'D-pad or left stick to choose · A to enter';
+  document.getElementById('kbStart').hidden = lastTouch;
 }
 function enterMap(dev) {
   const m = MAPS[picker.sel];
@@ -1713,8 +1814,10 @@ function enterMap(dev) {
   location.hash = m; location.reload(); return false;
 }
 renderSplash();
-document.querySelectorAll('#mapPick .map').forEach((b, i) => b.addEventListener('click', () => { initAudio(); picker.sel = i; renderSplash(); enterMap('keys'); }));
-document.getElementById('kbStart').addEventListener('click', () => { initAudio(); enterMap('keys'); });
+const tapDev = () => (lastTouch ? 'touch' : 'keys');
+document.querySelectorAll('#mapPick .map').forEach((b, i) => b.addEventListener('click', () => { initAudio(); picker.sel = i; renderSplash(); enterMap(tapDev()); }));
+document.getElementById('kbStart').addEventListener('click', () => { initAudio(); enterMap(tapDev()); });
+document.getElementById('intro').addEventListener('click', () => { if (picker.ready) startDemo(tapDev()); }); // after a map switch, a tap or click starts it
 
 /* ============================== pause menu ============================== */
 const MENU = [
@@ -1731,7 +1834,10 @@ function renderMenu() {
   document.getElementById('menuList').innerHTML = MENU.map((m, i) => `<li role="menuitem" tabindex="-1" data-i="${i}" class="${i === menuIdx ? 'on' : ''}"><span>${m.label}</span><span class="state">${m.state()}</span></li>`).join('');
 }
 document.getElementById('menuList').addEventListener('click', (e) => { const li = e.target.closest('li'); if (!li) return; menuIdx = +li.dataset.i; activateMenu(); });
-function openMenu() { if (!started) return; paused = true; menuIdx = 0; renderMenu(); document.getElementById('menu').hidden = false; }
+function openMenu() {
+  if (!started) return; paused = true; menuIdx = 0; renderMenu(); document.getElementById('menu').hidden = false;
+  document.querySelector('#menu .hint').textContent = input.device === 'touch' ? 'Tap an option · Resume to go back' : 'D-pad or left stick to choose · A to select · B or Start to resume';
+}
 function closeMenu() { paused = false; document.getElementById('menu').hidden = true; swallow = true; input.drink = input.rest = false; } // the B that closed the menu must not start a drink or sniff
 function moveMenu(d) { menuIdx = (menuIdx + d + MENU.length) % MENU.length; renderMenu(); }
 function activateMenu() { MENU[menuIdx].act(); if (paused) renderMenu(); }
@@ -1878,12 +1984,32 @@ function startJump() {
   const k = clamp(D.stamina / cost, 0.4, 1);
   D.stamina = Math.max(0, D.stamina - cost * k);
   // Standing hop ~0.4 m, running leap up to ~1 m; a full sprint has less stance time to push up, so it flattens out.
-  const clear = lerp(0.4, 1.0, run) * lerp(1, 0.75, smooth(4.5, 7.4, v)) * JUMP_K * lerp(0.55, 1, (k - 0.4) / 0.6);
-  D.jump = { ph: 'crouch', t: 0, dur: lerp(0.3, 0.22, run), clear, vy: 0, y: 0, y0: 0, gU: 0, tuck: 0, peak: 0, x0: D.pos.x, z0: D.pos.z };
+  const fresh = JUMP_K * lerp(0.55, 1, (k - 0.4) / 0.6);
+  let clear = lerp(0.4, 1.0, run) * lerp(1, 0.75, smooth(4.5, 7.4, v)) * fresh, push = 0;
+  // A ledge ahead within reach: it crouches deeper, jumps just high enough and pushes forward enough to land on top.
+  const fx = Math.sin(D.yaw), fz = Math.cos(D.yaw), feet = Math.max(dino.legs[0].groundY, dino.legs[1].groundY);
+  for (let d = 0.4; d <= 3.4; d += 0.1) {
+    if (groundAt(D.pos.x + fx * d, D.pos.z + fz * d) - feet <= TIER.step) continue;
+    let h = 0; for (let e = d; e <= d + 0.8; e += 0.1) h = Math.max(h, groundAt(D.pos.x + fx * e, D.pos.z + fz * e) - feet); // how high it gets just past the edge
+    const cap = lerp(0.85, 1.0, run) * fresh;
+    if (h - SCRAMBLE < cap) {
+      clear = clamp(h + 0.12, clear, cap);
+      const vy = Math.sqrt(2 * 9.81 * clear), T = vy / 9.81 + Math.sqrt(2 * Math.max(0, clear - h) / (9.81 * 1.4));
+      push = Math.min(4.5, (d + 0.6) / T);
+    }
+    break;
+  }
+  D.jump = { ph: 'crouch', t: 0, dur: lerp(0.3, 0.22, run) + (push ? 0.06 : 0), clear, push, vy: 0, y: 0, y0: 0, gU: 0, tuck: 0, peak: 0, x0: D.pos.x, z0: D.pos.z };
+}
+function startDrop(y) {
+  D.jump = { ph: 'air', t: 0.2, dur: 0, clear: 0, vy: 0.6, y, y0: y, gU: 0, tuck: 0, peak: 0, x0: D.pos.x, z0: D.pos.z, drop: true };
+  for (const L of dino.legs) { L.swing = false; L.liftPos.copy(L.planted); L.liftRock = -1; L.pathRock = -1; L.rise = 0; }
 }
 function jumpGround(j) {
   let g = -1e9;
-  for (const L of dino.legs) { const w = tmp.v.copy(L.neutral).applyAxisAngle(UP, D.yaw).add(D.pos); g = Math.max(g, groundAt(w.x, w.z)); }
+  // A face too far above the feet is not footing: the leap came up short there and slides down it.
+  for (const L of dino.legs) { const w = tmp.v.copy(L.neutral).applyAxisAngle(UP, D.yaw).add(D.pos), gy = groundAt(w.x, w.z); if (gy <= j.y + SCRAMBLE) g = Math.max(g, gy); }
+  if (g < -1e8) g = heightAt(D.pos.x, D.pos.z);
   j.gU = g; return g;
 }
 function updateJump(dt) {
@@ -1892,7 +2018,7 @@ function updateJump(dt) {
     if (j.t < j.dur) return;
     j.ph = 'air'; j.t = 0; j.vy = Math.sqrt(2 * 9.81 * j.clear) + 9.81 * dt * 0.5; // half-step so the fixed-step arc peaks at the target
     j.y = j.y0 = (dino.legs[0].planted.y + dino.legs[1].planted.y) / 2 - 0.035;
-    D.speed *= 0.92; sfx.step(0.9, 'ground'); rumble(90, 0.3, 0.5);
+    D.speed = Math.max(D.speed * 0.92, j.push || 0); sfx.step(0.9, 'ground'); rumble(90, 0.3, 0.5);
     for (const L of dino.legs) { L.swing = false; L.liftPos.copy(L.planted); L.liftRock = -1; L.pathRock = -1; L.rise = 0; }
     return;
   }
@@ -1902,8 +2028,10 @@ function updateJump(dt) {
   if (j.vy < 0 && j.y <= g) jumpLand(j);
 }
 function jumpLand(j) {
-  const imp = clamp(-j.vy / 5, 0, 1.3);
-  D.lastJump = { peak: j.peak, dist: Math.hypot(D.pos.x - j.x0, D.pos.z - j.z0), clear: j.clear, impact: imp };
+  const imp = clamp(-j.vy / 5, 0, 1.3), short = j.gU - j.y; // came down below the ledge top: the feet caught the edge
+  D.lastJump = { peak: j.peak, dist: Math.hypot(D.pos.x - j.x0, D.pos.z - j.z0), clear: j.clear, impact: imp, scramble: short > 0.06, top: j.gU, drop: !!j.drop };
+  if (j.gU - j.y0 > TIER.step) D.speed *= 0.7; // landing up on a ledge checks the run
+  if (short > 0.06) { D.speed *= 0.6; D.stamina = Math.max(0, D.stamina - 0.05 * short / SCRAMBLE); sNoise({ type: 'bandpass', freq: 2400, to: 900, q: 1.5, dur: 0.22, gain: 0.12 }); } // claws scraping up the edge
   D.landT = 0; D.landK = clamp(-j.vy / 5, 0.3, 1); D.jump = null; D.phase = 0; D.speed *= 0.9;
   const gs = dino.legs.map((L) => {
     const w = L.neutral.clone().applyAxisAngle(UP, D.yaw).add(D.pos), gi = groundInfo(w.x, w.z), g = { rock: gi.rock, edge: gi.edge, ny: gi.ny, y: gi.y };
@@ -1928,7 +2056,7 @@ function jumpLand(j) {
   }
   // A bad landing on a rock (or one foot up, one down) runs the same stability check.
   const uneven = Math.abs(gs[0].y - gs[1].y) / TIER.step;
-  dino.legs.forEach((L, li) => { L.rise = 0; L.pathRock = -1; L.liftRock = -1; if (gs[li].rock >= 0 && ROCKS[gs[li].rock].tier >= 1) stability(L, li, gs[li], imp + uneven * 0.6); });
+  dino.legs.forEach((L, li) => { L.rise = 0; L.pathRock = -1; L.liftRock = -1; if (gs[li].rock >= 0 && ROCKS[gs[li].rock].tier >= 1) stability(L, li, gs[li], short > 0.06 ? imp * 0.5 : imp + uneven * 0.6); }); // a scramble comes in slow: the edge is the risk, not the impact
 }
 
 // ---- drink and sniff (B held) ----
@@ -2105,13 +2233,16 @@ function simStep(dt) {
   const L0 = dino.legs[0], L1 = dino.legs[1];
   const feetLevel = air ? D.jump.y : Math.min(L0.groundY, L1.groundY);
   for (const o of obstacles) {
-    if (o.rock != null && feetLevel > ROCKS[o.rock].top - 0.12) continue; // up on it, or jumping over it
-    for (const [off, rad] of [[0, 0.45], [1.0, 0.42], [1.9, 0.24], [-1.0, 0.3]]) {
+    const R = o.rock != null ? ROCKS[o.rock] : null;
+    // Body parts: hips (legs), chest, head, tail, each with the height of its underside above the feet (x hip height).
+    // A part that is higher than the rock passes over it; in the air the legs only need to get within scrambling reach of the top.
+    for (const [off, rad, under] of [[0, 0.45, 0], [1.0, 0.42, 0.6], [1.9, 0.24, 0.8], [-1.0, 0.3, 0.6]]) {
+      if (R && R.top < feetLevel + (off === 0 ? (air ? SCRAMBLE : Math.max(0.12, R.h * 0.5)) : under * CREATURE.hip)) continue; // (feet above half its height: up on it)
       const px = D.pos.x + fwd.x * off, pz = D.pos.z + fwd.z * off;
       let ox = o.x, oz = o.z;
       if (o.seg) { const [ax, az, bx, bz] = o.seg, ex = bx - ax, ez = bz - az, t = clamp(((px - ax) * ex + (pz - az) * ez) / (ex * ex + ez * ez), 0, 1); ox = ax + ex * t; oz = az + ez * t; }
       const dx = px - ox, dz = pz - oz; const d = Math.hypot(dx, dz); const min = o.r + rad;
-      if (d < min && d > 1e-4) { D.pos.x += (dx / d) * (min - d); D.pos.z += (dz / d) * (min - d); }
+      if (d < min && d > 1e-4) { const k = Math.min(min - d, 0.12); D.pos.x += (dx / d) * k; D.pos.z += (dz / d) * k; } // deep overlaps (sliding off a face) ease out
     }
   }
   const rr = Math.hypot(D.pos.x, D.pos.z); if (rr > WORLD_R) D.pos.multiplyScalar(WORLD_R / rr);
@@ -2127,8 +2258,9 @@ function simStep(dt) {
   const v = D.speed, Fr = v * v / (9.81 * CREATURE.hip);
   // Uneven ground ahead (step-up rocks): shorter, more careful steps with a longer stance.
   {
-    let rh = 0; const hx = Math.sin(D.yaw), hz = Math.cos(D.yaw), sx = Math.cos(D.yaw), sz = -Math.sin(D.yaw);
-    for (let d = 0.4; d <= 2.6; d += 0.55) for (const o of [-0.2, 0.2]) { const x = D.pos.x + hx * d + sx * o, z = D.pos.z + hz * d + sz * o; rh = Math.max(rh, groundAt(x, z) - heightAt(x, z)); }
+    // Measured against the rock (or ground) it is standing on, so the flat top of a big rock is not rough.
+    let rh = 0; const hx = Math.sin(D.yaw), hz = Math.cos(D.yaw), sx = Math.cos(D.yaw), sz = -Math.sin(D.yaw), base = groundAt(D.pos.x, D.pos.z) - heightAt(D.pos.x, D.pos.z);
+    for (let d = 0.4; d <= 2.6; d += 0.55) for (const o of [-0.2, 0.2]) { const x = D.pos.x + hx * d + sx * o, z = D.pos.z + hz * d + sz * o; rh = Math.max(rh, Math.abs(groundAt(x, z) - heightAt(x, z) - base)); }
     D.rough = damp(D.rough || 0, smooth(TIER.pebble, TIER.step * 0.8, rh), 4, dt);
   }
   const duty = 0.5 + 0.14 * Math.tanh((0.5 - Fr) / 0.25) + 0.06 * D.rough;
@@ -2178,7 +2310,9 @@ function simStep(dt) {
       let landZ = D.pos.z - lx * Math.sin(yawL) + lz * Math.cos(yawL) + Math.cos(ym) * v * rem;
       let gL = groundAt(landX, landZ);
       const drop = L.liftPos.y - 0.035 - gL;
-      if (drop > TIER.pebble) { const ex = 0.3 * smooth(TIER.pebble, TIER.step, drop); landX += fwd.x * ex; landZ += fwd.z * ex; gL = groundAt(landX, landZ); } // stepping down reaches further
+      // A ledge drop is not a step: keep the foot up on top (the body steps off as a whole, below).
+      if (drop > TIER.step) for (let b = 0.15; b <= 0.75 && drop > TIER.step; b += 0.15) { const x = landX - fwd.x * b, z = landZ - fwd.z * b, g = groundAt(x, z); if (L.liftPos.y - 0.035 - g <= TIER.step) { landX = x; landZ = z; gL = g; } }
+      if (L.liftPos.y - 0.035 - gL > TIER.pebble && L.liftPos.y - 0.035 - gL <= TIER.step) { const ex = 0.3 * smooth(TIER.pebble, TIER.step, drop); landX += fwd.x * ex; landZ += fwd.z * ex; const g2 = groundAt(landX, landZ); if (L.liftPos.y - 0.035 - g2 <= TIER.step) gL = g2; else { landX -= fwd.x * ex; landZ -= fwd.z * ex; } } // stepping down reaches further
       const e = s * s * (3 - 2 * s);
       L.footPos.x = lerp(L.liftPos.x, landX, e); L.footPos.z = lerp(L.liftPos.z, landZ, e);
       const baseY = lerp(L.liftPos.y, gL + 0.035, e);
@@ -2208,6 +2342,14 @@ function simStep(dt) {
       L.footPos.set(D.pos.x + lx * Math.cos(D.yaw) + lz * Math.sin(D.yaw), j.y + 0.035 + 0.36 * j.tuck * JUMP_K, D.pos.z - lx * Math.sin(D.yaw) + lz * Math.cos(D.yaw));
       L.groundY = groundAt(L.footPos.x, L.footPos.z); L.liftS = 0; L.stanceU = 0;
     }
+  }
+
+  // Walking off a ledge: once the hips are past the edge and the drop is more than a step, it goes down as a fall.
+  // With the stick let go, it pulls up at the edge instead.
+  if (!D.jump && !D.fall && D.act === 'none') {
+    const top = Math.max(L0.groundY, L1.groundY), ahead = (d) => top - groundAt(D.pos.x + fwd.x * d, D.pos.z + fwd.z * d) > TIER.step;
+    if (ahead(0.25) && D.speed > 0.2 && target > 0.1) startDrop(top);
+    else if (target <= 0.1 && top - groundAt(D.pos.x + fwd.x * (0.4 + D.speed * D.speed / 8), D.pos.z + fwd.z * (0.4 + D.speed * D.speed / 8)) > TIER.step * 0.5) D.speed = Math.max(0, D.speed - 8 * dt);
   }
 
   // ---- falls and staggers ----
@@ -2341,7 +2483,7 @@ function simStep(dt) {
   if (D.landT >= 0) { const t = (D.landT += dt); absorb = D.landK * 0.3 * (t < 0.08 ? smooth(0, 0.08, t) : 1 - smooth(0.12, 0.55, t)); if (t > 0.55) D.landT = -1; }
   const footLow = Math.min(L0.groundY, L1.groundY), footAvg = (L0.groundY + L1.groundY) / 2;
   if (air) D.bodyY = D.jump.y - rootG;
-  else D.bodyY = damp(D.bodyY, clamp(lerp(footAvg, footLow, 0.4) - rootG, -0.35, 0.55) * 0.85, 10, dt);
+  else { const lift = Math.max(0, footLow - rootG - 0.4); D.bodyY = damp(D.bodyY, clamp(lerp(footAvg, footLow, 0.4) - rootG - lift, -0.35, 0.55) * 0.85 + lift, 10, dt); } // up on a big rock, the body rides on the feet
   dino.rig.position.set(D.pos.x, rootG, D.pos.z);
   dino.rig.rotation.set(0, D.yaw, 0);
   const hd = D.hd, dip = D.dip * D.hd; // head down: the neck reaches forward and down, the reach feedback works the neck base
