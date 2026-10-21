@@ -51,3 +51,22 @@ Changes queued from playtest feedback. Nothing here is built yet.
      loss). A big miss is a full trip: down for about 1–2 s, then get back up.
    - Learnable, not a dice roll: the same approach gives the same result, with only
      slight seeded variation.
+
+5. **Herrerasaurus model accuracy pass.** Herrerasaurus was a ground-dwelling,
+   bipedal predator, not a climber. Fixes:
+   - **Lips:** cover the teeth when the mouth is closed, and show them only when it
+     opens. Recent work suggests theropods had lizard-like lips.
+   - **Flexible lower jaw:** Herrerasaurus had a joint partway along the lower jaw.
+     Add a small flex there during bites (a mid-jaw bone).
+   - **Skull shape:** deeper and boxier toward the back where the jaw muscles sat,
+     with a visible opening in front of each eye (antorbital fenestra) and a nostril.
+     Less tube-shaped.
+   - **Hands:** bigger, more strongly curved claws on fingers I–III, plus two tiny
+     vestigial fingers (IV, V).
+   - **Feet:** add the small first toe (dewclaw) set higher on the foot, alongside
+     the three main weight-bearing toes.
+   - **Skin: try fuzz.** No Herrerasaurus skin has been found, so the covering is
+     unknown. Try a light coat of simple filaments (shell or strand fuzz) over parts
+     of the body, mainly the back, neck and upper tail, while keeping scales on the
+     feet, snout and belly. Colors remain invented. Fuzz must interact with the
+     wet and mud system: it should clump and darken when wet, and mat with mud.
