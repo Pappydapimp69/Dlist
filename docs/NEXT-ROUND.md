@@ -262,3 +262,15 @@ Nothing from this list is left open.
   the analog trigger matters. Approaching every step-up rock from 3 angles (129 runs, full stamina): 1.5 m/s
   0% staggers, 3.2 m/s 1%, 4.2 m/s 16%, 4.7 m/s 32%, 5.6 m/s 46%, no falls. At 20% stamina, falls were 1 at
   4.7 m/s and 4 at 5.7 m/s.
+- **Stumble physics instead of a score formula:** the old check was one formula, roughly speed × rock type
+  with a ±0.08 jitter, so the same situation always gave the same result. It's replaced by three measured
+  failure modes:
+  - **Trip:** the swung toe (0.2 m ahead of the ball) actually strikes a rock face. Fresh legs look far
+    enough ahead to clear it; tired legs look less far ahead (down to 18%) and lift lower, so toes catch.
+  - **Slip:** friction demand at touchdown (leg angle from hip to foot, plus surface tilt along and across
+    the foot) against grip. Grip μ is about 0.95 on dry sandstone and 1.05 on dirt, ×0.5 on wet stone and
+    ×0.45–0.8 with mud on the feet.
+  - **Roll:** fewer than 3 of 5 foot points are supported (landing half off an edge).
+  Recovery capacity scales with stamina. Results now vary with real foot placement and gait phase.
+  Full-sprint approaches straight at every step-up rock (129 runs): fresh 60 staggers (slip 36, roll 25,
+  trip 0); 10% stamina 69 staggers and 5 falls, with trips appearing (5). A full walk: 6 staggers.
