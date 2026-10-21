@@ -1515,21 +1515,23 @@ function stability(L, li, g, impact = 0) {
   const tx = L.footPos.x - L.liftPos.x, tz = L.footPos.z - L.liftPos.z, tl = Math.hypot(tx, tz);
   const rx = L.footPos.x - rk.x, rz = L.footPos.z - rk.z, rl = Math.hypot(rx, rz);
   const glance = tl > 0.05 && rl > 0.02 ? 1 - Math.abs(tx * rx + tz * rz) / (tl * rl) : 0;
-  const trip = (Math.max(0, L.rise) / TIER.step) * Math.pow(v / 4, 1.6) * mom * (0.75 + 0.5 * glance);
+  // A toe only catches what the swing lift didn't clear: rises under about 60% of the step height are free.
+  const clearH = 0.6 * Math.min(0.42, 0.12 + 0.045 * v), trip = (Math.max(0, L.rise - clearH) / TIER.step) * Math.pow(v / 4, 1.4) * mom * (0.75 + 0.5 * glance) * 1.6;
   const onRock = g.rock >= 0;
   const slope = onRock ? 0.5 * rk.slope + 0.5 * Math.acos(clamp(g.ny, -1, 1)) : 0;
   const hx = heightAt(L.footPos.x + 0.3, L.footPos.z) - heightAt(L.footPos.x - 0.3, L.footPos.z), hz = heightAt(L.footPos.x, L.footPos.z + 0.3) - heightAt(L.footPos.x, L.footPos.z - 0.3);
   const gSlope = Math.atan(Math.hypot(hx, hz) / 0.6);
   const edge = onRock ? smooth(0.55, 1, g.edge) : 0.35;
   const grip = clamp(0.6 * Math.max(D.wet[0], D.wet[1]) + D.mudCover[0] * (1 - D.mudFlake[0]) * (1 - 0.7 * D.mudDry[0]), 0, 1);
-  const stumble = (0.9 * slope + 0.5 * gSlope + 0.8 * edge + 0.9 * grip) * (0.3 + v / 6) * mom + 0.35 * impact * (0.5 + slope + edge);
+  const stumble = (0.8 * slope + 0.35 * gSlope + 0.6 * edge + 0.9 * grip) * (0.2 + v / 8) * mom + 0.35 * impact * (0.5 + slope + edge);
   const vary = (rng((Math.imul(rid + 1, 2654435761) ^ Math.imul(li + 1, 40503) ^ 0x5bd1e995) >>> 0)() - 0.5) * 0.16;
   const kind = trip >= stumble ? 'trip' : 'stumble', score = Math.max(trip, stumble) + vary;
   // Fresh legs only ever stagger. Below half stamina a bad step can put it down, easing in as it tires.
-  const downAt = D.stamina >= 0.5 ? Infinity : lerp(1.0, 3.0, smooth(0.25, 0.5, D.stamina));
-  D.check = { rock: rid, leg: li, trip, stumble, glance, slope, edge, grip, vary, score, kind, v, downAt, outcome: score >= downAt ? 'down' : score >= 0.5 ? 'stagger' : 'ok' };
+  // Going down stays rare even when tired: it needs a bad step and low stamina together.
+  const downAt = D.stamina >= 0.5 ? Infinity : lerp(1.6, 3.2, smooth(0.1, 0.5, D.stamina));
+  D.check = { rock: rid, leg: li, trip, stumble, glance, slope, edge, grip, vary, score, kind, v, downAt, outcome: score >= downAt ? 'down' : score >= 0.6 ? 'stagger' : 'ok' };
   D.checks++;
-  if (score >= 0.5 && !D.fall) startFall(kind, score, li, score >= downAt);
+  if (score >= 0.6 && !D.fall) startFall(kind, score, li, score >= downAt);
 }
 function startFall(kind, score, li, down) {
   const k = clamp((score - 0.5) * 2, 0, 1);

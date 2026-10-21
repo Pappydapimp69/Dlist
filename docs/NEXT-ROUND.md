@@ -251,3 +251,8 @@ Nothing from this list is left open.
   scoring rock-edge landings, tilted faces and toe-heel straddles as bad. Each leg's timing can drift up to
   ±0.1 of a cycle (a high step lands later), so the two legs take visibly different steps, then fall back
   into rhythm on flat ground.
+- **Rarer, more forgiving trips:** a toe only catches the part of a rise that the swing lift didn't clear
+  (about 60% of the lift height is free). Stumble scoring is gentler with speed and edge landings, the
+  stagger threshold went from 0.5 to 0.6, and going down needs a score of 1.6–3.2 below half stamina (never
+  at or above half). Measured on 129 sprint approaches straight at every step-up rock: no falls at full
+  stamina, 1 at 40%, 9 at 20%, 12 at 5%. A run (3.4 m/s) over the same rocks: 2 staggers and no falls.
