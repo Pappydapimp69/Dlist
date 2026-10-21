@@ -33,9 +33,9 @@
   .meta { margin: 0; color: var(--ink-2); font-size: 0.78rem; letter-spacing: 0.02em; }
 
   .readout { position: fixed; left: calc(16px + env(safe-area-inset-left, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-    width: min(360px, calc(100% - 32px)); background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+    width: min(386px, calc(100% - 32px)); box-sizing: border-box; background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
     padding: 10px 12px; display: grid; gap: 7px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
-  .row { display: grid; grid-template-columns: 52px 72px 1fr; align-items: center; gap: 10px; min-width: 0; }
+  .row { display: grid; grid-template-columns: 60px 72px 1fr; align-items: center; gap: 10px; min-width: 0; }
   .lab { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-3); }
   .bar { height: 6px; background: rgba(239, 230, 214, 0.1); border-radius: 3px; overflow: hidden; }
   .bar i { display: block; height: 100%; width: 0%; background: var(--water); transition: width 120ms linear; }
@@ -80,7 +80,7 @@
   .menu li.on { background: rgba(212, 155, 83, 0.14); border-color: rgba(212, 155, 83, 0.5); }
   .menu li.on .state { color: var(--ochre); }
   .hint { margin: 0; color: var(--ink-3); font-size: 0.78rem; }
-  @media (max-width: 760px) { .keys { display: none; } .binomial { font-size: 1.1rem; } }
+  @media (max-width: 760px) { .keys { display: none; } .binomial { font-size: 1.1rem; } .chips { top: calc(108px + env(safe-area-inset-top, 0px)); } } /* chips sit under the title plate on phones */
 </style>
 
 <canvas id="view" aria-label="3D view: an adult Herrerasaurus beside a pond and a mud pit"></canvas>
