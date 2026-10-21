@@ -72,6 +72,15 @@
     border: 1px solid var(--line); border-radius: 5px; padding: 7px 11px; cursor: pointer; }
   .card button:hover { color: var(--ink); border-color: rgba(239, 230, 214, 0.35); }
   .card button:focus-visible, .menu li:focus-visible { outline: 2px solid var(--ochre); outline-offset: 2px; }
+  .splash { width: min(720px, 100%); }
+  .maps { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .card .map { justify-self: stretch; display: grid; gap: 6px; text-align: left; padding: 14px 16px; border-radius: 6px;
+    border: 1px solid var(--line); background: rgba(239, 230, 214, 0.04); color: var(--ink); cursor: pointer; }
+  .card .map.on { border-color: rgba(212, 155, 83, 0.7); background: rgba(212, 155, 83, 0.14); }
+  .map .mname { font-family: var(--f-display); font-style: italic; font-size: 1.35rem; }
+  .map .mdesc { font-size: 0.8rem; line-height: 1.45; color: var(--ink-2); }
+  .lede.small { font-size: 0.8rem; }
+  @media (max-width: 600px) { .maps { grid-template-columns: 1fr; } }
   .menu h2 { margin: 0; font-family: var(--f-display); font-style: italic; font-weight: 500; font-size: 1.6rem; }
   .menu ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
   .menu li { display: flex; justify-content: space-between; gap: 16px; padding: 9px 12px; border-radius: 5px; cursor: pointer;
@@ -122,13 +131,23 @@
 </aside>
 
 <div class="overlay" id="intro">
-  <div class="card">
-    <p class="eyebrow">Dlist tech demo · skin test</p>
+  <div class="card splash">
+    <p class="eyebrow">Dlist tech demo</p>
     <h1>Herrerasaurus</h1>
-    <p class="lede">Wade into the pond to get wet. Wet skin and fuzz dry in 8 seconds. Walk through the mud pit to get muddy. The mud dries into a crust after 8 seconds, then flakes off once you've walked for 30 seconds. The pond washes mud off.</p>
-    <p class="lede">Low rocks are footholds; tall ones are walls. Take them too fast and it stumbles. Once it's tired, below half stamina, it can trip and go down. Press A to jump. Hold B near the water to drink, or away from it to sniff the air, or the ground where its own wet or muddy tracks are. Try the obstacle course from the Start menu.</p>
-    <p class="cta" id="introCta">Press any button on your Xbox controller to start</p>
-    <button type="button" id="kbStart">No controller? Start with keyboard and mouse</button>
+    <p class="lede" id="introLede">Choose a map.</p>
+    <div class="maps" id="mapPick" role="listbox" aria-label="Map">
+      <button type="button" class="map" data-map="valley" role="option">
+        <span class="mname">Valley</span>
+        <span class="mdesc">Open floodplain with a pond and a mud pit. Wade in to get wet; wet skin and fuzz dry in 8 s. Mud crusts after 8 s and flakes off after 30 s of walking; the pond washes it off.</span>
+      </button>
+      <button type="button" class="map" data-map="course" role="option">
+        <span class="mname">Obstacle course</span>
+        <span class="mdesc">A timed track from gate to gate: rocks and pebbles, fallen logs, a stream, a mud pit, a boulder slalom and a log bridge over a pond. The big log has to be jumped.</span>
+      </button>
+    </div>
+    <p class="lede small">A jumps · hold B to drink near water or sniff away from it · X bites · Y roars · right trigger sprints. Too fast over rocks and logs and it slips or stumbles; tired, it can trip.</p>
+    <p class="cta" id="introCta">D-pad or left stick to choose · A to enter</p>
+    <button type="button" id="kbStart">No controller? Enter with keyboard and mouse</button>
   </div>
 </div>
 
@@ -294,8 +313,8 @@ const FOG_COLOR = new THREE.Color().setRGB(0.47, 0.44, 0.38);
 scene.fog = new THREE.FogExp2(FOG_COLOR, 0.0115);
 const uTime = { value: 0 };
 
-// Late-afternoon sun, low and warm, so shadows are long and wet skin catches highlights.
-const SUN_DIR = V(-0.55, 0.42, 0.62).normalize();
+// Midday sun near its highest point (about 80 degrees up, inside the 15% band around the apogee), so shadows are short.
+const SUN_DIR = V(-0.12, 0.985, 0.13).normalize();
 const skyMat = new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false, fog: false,
   uniforms: { uSun: { value: SUN_DIR } },
@@ -305,13 +324,13 @@ const skyMat = new THREE.ShaderMaterial({
     void main(){
       vec3 d = normalize(vDir);
       float h = d.y;
-      vec3 zen = vec3(0.12, 0.19, 0.32);
-      vec3 hor = vec3(0.50, 0.465, 0.40);
+      vec3 zen = vec3(0.11, 0.2, 0.36);
+      vec3 hor = vec3(0.52, 0.5, 0.45);
       vec3 gnd = vec3(0.30, 0.26, 0.21);
       vec3 col = mix(hor, zen, pow(smoothstep(0.0, 1.0, max(h, 0.0)), 0.5));
       col = mix(col, gnd, smoothstep(0.0, -0.3, h));
       float s = max(dot(d, uSun), 0.0);
-      col += vec3(1.0, 0.72, 0.42) * (pow(s, 6.0) * 0.32 + pow(s, 900.0) * 9.0);
+      col += vec3(1.0, 0.9, 0.74) * (pow(s, 6.0) * 0.32 + pow(s, 900.0) * 9.0);
       gl_FragColor = vec4(col, 1.0);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
@@ -330,7 +349,7 @@ scene.add(sky);
 
 const hemi = new THREE.HemisphereLight(new THREE.Color().setRGB(0.55, 0.6, 0.68), new THREE.Color().setRGB(0.28, 0.2, 0.13), 0.55);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(new THREE.Color().setRGB(1.0, 0.8, 0.58), 3.1);
+const sun = new THREE.DirectionalLight(new THREE.Color().setRGB(1.0, 0.93, 0.82), 3.2);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.camera.left = -24; sun.shadow.camera.right = 24;
@@ -392,7 +411,7 @@ const T_SIZE = 180, T_SEG = 240;
       if (h < WATER_Y && dp < w.r + 2) c.lerp(cUnder, smooth(0, -0.4, h));
     }
     for (const m of MUDS) c.lerp(cMudBank, 1 - smooth(m.r - 0.5, m.r + 2.6, Math.hypot(x - m.x, z - m.z)));
-    if (MAP === 'course') c.lerp(cPale, (1 - smooth(1.8, 3.2, pathInfo(x, z).d)) * 0.45); // a worn track marks the course
+    if (MAP === 'course') { const pd = pathInfo(x, z).d; c.lerp(cPale, (1 - smooth(2.2, 3.0, pd)) * 0.7); c.lerp(cBank, smooth(2.9, 3.2, pd) * (1 - smooth(3.4, 3.9, pd)) * 0.6); } // a worn track with a darker edge line
     col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
@@ -714,6 +733,19 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
     const posts = [];
     COURSE.forEach((p, i) => { const j = Math.min(i, COURSE.length - 2), q = at(j, i === COURSE.length - 1 ? 1 : 0); for (const o of [-3.4, 3.4]) { const a = at(j, i === COURSE.length - 1 ? 1 : 0, o); posts.push({ x: a.x, y: heightAt(a.x, a.z) - 0.1, z: a.z, s: 1, sy: i === COURSE.length - 1 ? 1.5 : 1, ry: 0 }); obstacles.push({ x: a.x, z: a.z, r: 0.2 }); } void q; });
     scatter(postGeo, conMat, posts);
+    // Edge stakes every 3 m down both sides of the track (not in the water or mud), so the boundary reads from a distance.
+    const stakeGeo = mergeColored([{ geo: new THREE.CylinderGeometry(0.05, 0.07, 0.75, 6), color: (x, y) => new THREE.Color(y > 0.3 ? '#b5743a' : '#3f2e21'), matrix: M4().makeTranslation(0, 0.37, 0) }]);
+    const stakes = [];
+    for (let i = 0; i < COURSE.length - 1; i++) {
+      const [ax, az] = COURSE[i], [bx, bz] = COURSE[i + 1], L = Math.hypot(bx - ax, bz - az);
+      for (let d = 1.5; d < L - 1; d += 3) for (const o of [-3.4, 3.4]) {
+        const a = at(i, d / L, o);
+        if (pathInfo(a.x, a.z).d < 3.2 || heightAt(a.x, a.z) < WATER_Y + 0.08 || inMudPit(a.x, a.z)) continue; // skip inside bends, water and mud
+        stakes.push({ x: a.x, y: heightAt(a.x, a.z) - 0.05, z: a.z, s: 1, ry: 0, tx: (hashI(i, d * 10, 3) - 0.5) * 0.12 });
+        obstacles.push({ x: a.x, z: a.z, r: 0.1 });
+      }
+    }
+    scatter(stakeGeo, conMat, stakes);
   }
 }
 
@@ -1415,7 +1447,17 @@ function pollInput(dt) {
     if (padId !== p.id) { padId = p.id; chip.textContent = 'Controller connected: ' + p.id.replace(/\s*\(.*$/, '').slice(0, 40); chip.className = 'chip ok'; }
     const raw = p.buttons.map((b) => b.pressed);
     if (raw.some((v, i) => v && !padPrev[i]) && !audioLive()) initAudio(); // sound starts with the first button press, where the browser allows it
-    if (!started && raw.some(Boolean)) { startDemo('pad'); swallow = true; }
+    if (!started) {
+      const rise = (i) => raw[i] && !padPrev[i], ax = p.axes[0] || 0;
+      if (picker.ready) { if (raw.some(Boolean)) { startDemo('pad'); swallow = true; } }
+      else {
+        let d = rise(14) || rise(13) ? 1 : rise(15) || rise(12) ? -1 : 0; // D-pad left/right (and up/down)
+        if (Math.abs(ax) > 0.6) { picker.hold -= dt; if (picker.hold <= 0) { d = ax > 0 ? 1 : -1; picker.hold = 0.3; } } else picker.hold = 0;
+        if (d) { picker.sel = (picker.sel + d + MAPS.length) % MAPS.length; renderSplash(); }
+        if (rise(0)) { if (enterMap('pad')) swallow = true; }
+      }
+      if (!started) { padPrev = raw; return; }
+    }
     // Only the buttons that were down stay swallowed; sticks and triggers keep working (holding RT or LB across the menu must not freeze the controls).
     if (swallow) { swallow = false; swallowMask = raw.map((v, i) => v && i !== 6 && i !== 7); }
     if (swallowMask) { for (let i = 0; i < raw.length; i++) if (!raw[i]) swallowMask[i] = false; if (!swallowMask.some(Boolean)) swallowMask = null; }
@@ -1469,7 +1511,13 @@ function pollInput(dt) {
 window.addEventListener('keydown', (e) => {
   initAudio();
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
-  if (!started) { if (e.code === 'Enter' || e.code === 'Space') startDemo('keys'); return; }
+  if (!started) {
+    if (picker.ready) { startDemo('keys'); return; }
+    if (['ArrowLeft', 'ArrowUp', 'KeyA', 'KeyW'].includes(e.code)) { picker.sel = (picker.sel + MAPS.length - 1) % MAPS.length; renderSplash(); }
+    else if (['ArrowRight', 'ArrowDown', 'KeyD', 'KeyS'].includes(e.code)) { picker.sel = (picker.sel + 1) % MAPS.length; renderSplash(); }
+    else if (e.code === 'Enter' || e.code === 'Space') enterMap('keys');
+    return;
+  }
   setDevice('keys');
   if (e.repeat) return;
   keys.add(e.code);
@@ -1509,7 +1557,26 @@ function startDemo(dev) {
   started = true; setDevice(dev);
   document.getElementById('intro').hidden = true;
 }
-document.getElementById('kbStart').addEventListener('click', () => { initAudio(); startDemo('keys'); });
+// Splash: pick a map. Entering the map that is already loaded starts at once; the other one reloads the page
+// on that map, which then asks for one button press (the browser only shows a controller after a press).
+const MAPS = ['valley', 'course'];
+const picker = { sel: MAPS.indexOf(MAP), ready: false, hold: 0 };
+try { if (sessionStorage.getItem('dlist.enter') === MAP) { picker.ready = true; sessionStorage.removeItem('dlist.enter'); } } catch (e) { /* no session storage: pick again */ }
+function renderSplash() {
+  document.querySelectorAll('#mapPick .map').forEach((b, i) => { b.classList.toggle('on', i === picker.sel); b.setAttribute('aria-selected', i === picker.sel); });
+  document.getElementById('mapPick').hidden = picker.ready;
+  document.getElementById('introLede').textContent = picker.ready ? (MAP === 'course' ? 'Obstacle course' : 'Valley') + ' is loaded.' : 'Choose a map.';
+  document.getElementById('introCta').textContent = picker.ready ? 'Press any button on your Xbox controller to start' : 'D-pad or left stick to choose · A to enter';
+}
+function enterMap(dev) {
+  const m = MAPS[picker.sel];
+  if (m === MAP) { startDemo(dev); return true; }
+  try { sessionStorage.setItem('dlist.enter', m); } catch (e) { /* the next load shows the picker again */ }
+  location.hash = m; location.reload(); return false;
+}
+renderSplash();
+document.querySelectorAll('#mapPick .map').forEach((b, i) => b.addEventListener('click', () => { initAudio(); picker.sel = i; renderSplash(); enterMap('keys'); }));
+document.getElementById('kbStart').addEventListener('click', () => { initAudio(); enterMap('keys'); });
 
 /* ============================== pause menu ============================== */
 const MENU = [
@@ -1519,7 +1586,7 @@ const MENU = [
   { label: 'Skin readout', state: () => (settings.readout ? 'Shown' : 'Hidden'), act: () => { settings.readout = !settings.readout; document.querySelector('.readout').hidden = !settings.readout; } },
   { label: 'Reset Herrerasaurus', state: () => '', act: () => { resetDino(); closeMenu(); } },
   ...(MAP === 'course' ? [{ label: 'Restart course', state: () => '', act: () => { resetDino(); course.state = 'ready'; closeMenu(); } }] : []),
-  { label: 'Map', state: () => (MAP === 'course' ? 'Obstacle course' : 'Valley'), act: () => { location.hash = MAP === 'course' ? 'valley' : 'course'; location.reload(); } },
+  { label: 'Map', state: () => (MAP === 'course' ? 'Obstacle course' : 'Valley'), act: () => { const m = MAP === 'course' ? 'valley' : 'course'; try { sessionStorage.setItem('dlist.enter', m); } catch (e) { /* picker shows again */ } location.hash = m; location.reload(); } },
 ];
 function renderMenu() {
   document.getElementById('menuList').innerHTML = MENU.map((m, i) => `<li role="menuitem" tabindex="-1" data-i="${i}" class="${i === menuIdx ? 'on' : ''}"><span>${m.label}</span><span class="state">${m.state()}</span></li>`).join('');
@@ -2254,11 +2321,6 @@ const course = { state: 'ready', t0: 0, time: 0, best: null, el: null };
 if (MAP === 'course') {
   document.getElementById('coursePanel').hidden = false;
   try { const b = parseFloat(localStorage.getItem('dlist.course.best')); if (b > 0) course.best = b; } catch (e) { /* storage blocked: no best time */ }
-  document.querySelector('.eyebrow').textContent = 'Dlist tech demo · obstacle course';
-  document.querySelector('.card h1').textContent = 'Obstacle course';
-  const ledes = document.querySelectorAll('.lede');
-  ledes[0].textContent = 'Run the marked track from gate to gate: rocks and pebbles, fallen logs, a stream, a mud pit, a boulder slalom and a log bridge over a pond. The clock starts at the first gate.';
-  ledes[1].textContent = 'Thin logs are stepped over; the big one has to be jumped with A. Take hazards too fast and it slips or stumbles; tired, it can trip. Switch maps from the Start menu.';
 }
 const fmtT = (t) => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`;
 function courseStep() {
