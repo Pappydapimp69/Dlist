@@ -1614,14 +1614,14 @@ const sfx = {
   // A slip, stumble or trip is the foot skidding over the ground: a scrape, longer and louder the worse it is.
   slide: (level) => bodySound('slide', level === 'slip' ? 68 : level === 'stumble' ? 72 : 75, { speed: D.speed / WS, dur: (level === 'slip' ? 0.22 : level === 'stumble' ? 0.38 : 0.55) * BODY.ts }),
   thud: () => bodySound('thud', 84 + 6 * Math.log10(BODY.mk * 10)),
-  call: (style) => { const c = CALLS[style], k = TUT ? 0.35 : 1; mouthSound('call', c.level - (TUT ? 36 : 0), { style, mode: c.mode, duration: c.duration * k, notes: c.notes || (TUT && style === 'roar' ? 2 : 1), gap: (c.gap || 0.3) * k, f0k: c.f0k, f0Endk: c.f0Endk, f0abs: c.f0abs, roughness: c.roughness ?? 0.3, breath: c.breath ?? 0.15, jitter: c.jitter ?? 0.2, amp: c.amp * (TUT ? 0.45 : 1) }); },
+  call: (style) => { const c = CALLS[style], k = TUT ? 0.35 : 1; mouthSound('call', c.level - (TUT ? 36 : 0), { style, mode: c.mode, duration: c.duration * k, notes: c.notes || 1, gap: (c.gap || 0.3) * k, f0k: c.f0k, f0Endk: c.f0Endk, f0abs: c.f0abs, roughness: c.roughness ?? 0.3, breath: c.breath ?? 0.15, jitter: c.jitter ?? 0.2, amp: c.amp * (TUT ? 0.45 : 1) }); },
   scramble: () => bodySound('scramble', 68),
   roar: () => sfx.call('roar'),
   // Hatchling call: one or two short notes from a ~8 cm vocal tract (Brain: dlist E8).
-  chirp: (notes = 1, ui = false) => mouthSound('call', 72, { mode: 'open', duration: notes > 1 ? 0.24 : 0.18, notes, gap: 0.3, roughness: 0, amp: 1.2, ui }), // ui: the step-passed cue, not heard in the world
+  chirp: (notes = 1) => mouthSound('call', 72, { mode: 'open', duration: notes > 1 ? 0.26 : 0.2, notes, gap: 0.3, roughness: 0.25, breath: 0.5, jitter: 1, amp: 1.2 }),
   tear: () => mouthSound('tear', 60),
   // The prey's alarm squeak, from where the prey is.
-  squeak: (k = 1) => emit({ kind: 'call', who: 'prey', mode: 'open', duration: 0.12, notes: 2, gap: 0.14, pitch: k, roughness: 0, amp: 1, x: prey.x, y: groundAt(prey.x, prey.z) + 0.3, z: prey.z, level: 70 }),
+  squeak: (k = 1) => emit({ kind: 'call', who: 'prey', mode: 'open', duration: 0.17, notes: 1, pitch: k, roughness: 0.35, breath: 0.6, jitter: 1, amp: 1, x: prey.x, y: groundAt(prey.x, prey.z) + 0.3, z: prey.z, level: 70 }),
 };
 
 // Calls. f0k is pitch as a fraction of the tract's highest clean open-mouth pitch (0.3 F1, Brain: dlist E8), so
@@ -1717,7 +1717,8 @@ function createAudioLayer(engine) {
   if (MAP === 'course') engine.createSource('water', { preset: 'stream', level: 62, seed: 31, position: { x: WATERS[0].x, y: WATERS[0].z, z: WATER_Y } });
   const at = (src, ev) => src.setPosition(ev.x / WS, ev.z / WS, ev.y / WS);
   const later = []; // second notes of two-note calls, by audio clock (cosmetic only)
-  const callOn = (src, ev, o) => { src.call(o); if (ev.notes > 1) later.push({ at: engine.ctx.currentTime + ev.gap, run: () => src.call({ ...o, f0: o.f0 && o.f0 * 1.12 }) }); };
+  // Animals repeat a note a little lower and never on an exact interval or beat; a fixed +12% second note read as a cartoon "boop-beep".
+  const callOn = (src, ev, o) => { src.call(o); if (ev.notes > 1) { const k = 0.88 + 0.1 * audioRng(); later.push({ at: engine.ctx.currentTime + ev.gap * (0.8 + 0.4 * audioRng()), run: () => src.call({ ...o, duration: o.duration * (0.8 + 0.3 * audioRng()), f0: o.f0 && o.f0 * k, f0End: o.f0End && o.f0End * k }) }); } };
   return {
     S,
     play(ev) {
@@ -1726,15 +1727,17 @@ function createAudioLayer(engine) {
         case 'call': {
           const juv = ev.who === 'player' && S.voiceJ && tut.size > 0.5;
           const src = ev.who === 'player' ? (juv ? S.voiceJ : S.voice) : ev.who === 'prey' ? S.prey : S.ai[ev.who]; if (!src) break; at(src, ev);
-          const cap = 0.3 * 343 / (4 * (juv ? 0.14 : S.tract)), f0 = ev.f0abs ?? (ev.f0k && ev.who === 'player' ? cap * ev.f0k : ev.pitch ? 420 * ev.pitch : undefined);
-          callOn(src, ev, { mode: ev.mode, duration: ev.duration * (0.96 + 0.08 * audioRng()), roughness: ev.roughness, amp: ev.amp, breath: ev.breath, jitter: ev.jitter,
-            ...(f0 ? { f0, f0End: ev.f0abs ?? (ev.f0Endk ? cap * ev.f0Endk : f0 * 0.75) } : {}) });
+          const vp = ev.f0abs ? 1 : 0.94 + 0.12 * audioRng(); // no two calls on the same pitch
+          const cap = 0.3 * 343 / (4 * (juv ? 0.14 : S.tract)), f0 = ev.f0abs ?? (ev.f0k && ev.who === 'player' ? cap * ev.f0k * vp : ev.pitch ? 420 * ev.pitch * vp : undefined);
+          callOn(src, ev, { mode: ev.mode, duration: ev.duration * (0.92 + 0.16 * audioRng()), roughness: ev.roughness, amp: ev.amp, breath: ev.breath ?? 0.3, jitter: ev.jitter ?? 0.8,
+            ...(f0 ? { f0, f0End: ev.f0abs ?? (ev.f0Endk ? cap * ev.f0Endk * vp : f0 * 0.75) } : {}) });
           break;
         }
         case 'tear': at(S.crunch, ev); S.crunch.step({ mass: 2, speed: 3, surface: 'sand', claws: false, gain: 0.8 }); break;
         case 'bite': at(S.jaw, ev); S.jaw.strike(4 * vary(1), 0.75); break;
         case 'lap': at(S.mouth, ev); S.mouth.splash(8 + Math.round(6 * audioRng()), 0.45); break;
-        case 'gulp': at(S.voice, ev); S.voice.call({ mode: 'closed', duration: 0.16, amp: 0.3, roughness: 0, jitter: 0, breath: 0 }); break;
+        // A swallow is wet, not voiced: a few small bubbles and a soft suction, not a tone (a closed-mouth "bloop" read as a cartoon).
+        case 'gulp': at(S.mouth, ev); S.mouth.splash(2 + Math.round(2 * audioRng()), 0.18); at(S.crunch, ev); S.crunch.step({ mass: 0.6, speed: 0.6, surface: 'mud', claws: false, gain: 0.35 }); break;
         // A sniff is breath noise through the nasal passage, no voicing: a 4 Hz "pitch" leaves only the aspiration.
         case 'sniff': at(S.nose, ev); S.nose.call({ mode: 'open', duration: 0.07, f0: 4, f0End: 4, amp: 0.35 * ev.k, breath: 1, roughness: 0, jitter: 0 }); break;
         // A skid is stick-slip: a dense run of tiny contacts as the foot drags. Grit on dirt, claw scrapes on rock,
@@ -3179,7 +3182,7 @@ function tutStep(dt) {
   }
   updateScent(dt);
   if (tut.passT >= 0) { tut.passT += dt; if (tut.passT > 1.2) enterStep(tut.step + 1); return; }
-  if (s.pass && s.pass(s)) { tut.passT = 0; sfx.chirp(1, true); }
+  if (s.pass && s.pass(s)) tut.passT = 0; // the panel border marks it; no jingle
 }
 // The Saurosuchus called (TD20): the hatchling turns its head to it and the panel says what it was. Text and head turn carry it with sound off.
 function onPredatorHeard(a) {
