@@ -377,3 +377,9 @@ Nothing from this list is left open.
     the prey's position. Sound positions in the tutorial are divided by its 4x world scale. The prey's wandering
     now draws from the sim RNG instead of Math.random, so tutorial replays match too. The distant rival and
     Saurosuchus stay out of the tutorial.
+  - **Sleeping prey hears events (merged from tutorial stage 2):** the sleeper's "noisy" check now reads the
+    sim's sound events: the loudest player sound at its bed, wake at 30 dB. A physical footstep can't separate
+    a hatchling's walk from its sprint (only about 7 dB apart), so events carry stealth-style noise ratings:
+    sprint footfalls +10 dB, jump landings +14 dB. Measured: a walk never wakes it, a sprint does within about
+    3.5 m, a standing jump within 3 m, and a roar always does. A full walk straight up to it and a bite caught
+    it asleep. The tutorial's step-passed chirp is marked as UI, so the world doesn't hear it.

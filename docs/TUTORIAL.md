@@ -89,7 +89,59 @@ with a Cognitive Update.
 | T6 | Done. Rest works on every map (left trigger / Z). In the tutorial, low stamina caps the sprint (7.4 down to 4.2 m/s) so resting matters. |
 | T7 | Done. A headless bot plays the whole tutorial through the real input path; 3 of 3 runs reach Done (prey AI is random). Valley and course checked unchanged. Screenshots checked by eye at 1280x720 and 390x844. |
 
-## 7. Risks
+## 8. Stage 2 — jump and sniff
+
+Appended after Rest. Teaches the two bound verbs Stage 1 never explains: jump and
+sniff (Brain: assert every bound verb is explained).
+
+### Decisions
+
+| # | Decision | Why |
+|---|---|---|
+| TD11 | **Jump passes when the player crosses the fallen log**, any way across. | The log is too tall to step over, so crossing proves a jump. Ledge jumping now exists: they may land on the log and step off, and that still counts. (ZaneGPT.) |
+| TD12 | **The scent trail is a fixed, authored path**, not deposits from a moving animal. | A scent source that isn't moving lays nothing under a travel-gated deposit (Brain: stationary-emitter lesson). The prey sleeps, so it can't lay its own trail. |
+| TD13 | **Scent marks glow while sniffing and linger ~6 s after letting go.** | Holding B stops movement. Glow-only-while-held would make tracking stop-start. (ZaneGPT.) |
+| TD14 | **The sleeping prey lies upwind** of the trail start (the wind blows from the southwest). | So "smell the air" points the right way. (ZaneGPT.) |
+| TD15 | **Thicket around the prey, with a 6 m clearing at its bed.** | Ferns hide it until you've tracked it close; Stage 1 showed fern-hidden prey is otherwise invisible. |
+| TD16 | **The prey wakes on noise events:** a sprint, jump or roar within 12 m, or 3 s standing within 2.5 m. Awake, it flees like the first one. | Discrete noise events, not a continuous field (Brain: split events from fields). Roar waking it ties back to the Roar lesson. |
+
+### Layout
+
+| Place | Where |
+|---|---|
+| Fallen log | (8, -30), east-west, 16 m long, ~0.9 m tall, boulders at both ends |
+| Trail start | just south of the log |
+| Prey bed | about (-8, -42), upwind, in a fern thicket |
+
+### Steps
+
+| # | Step | Text | Passes when |
+|---|---|---|---|
+| 8 | Jump | A fallen log blocks the way. Run at it and press {jump} to leap over. | Crosses the log's line |
+| 9 | Smell | Hold {drink} away from water to smell the air. Something's on the wind. | 2 s of air sniffing |
+| 10 | Track | Put your nose down where the marks start and hold {drink} to follow the scent. The trail glows while you sniff. | Within 10 m of the sleeping prey |
+| 11 | Sneak | It's asleep. Walk up slowly — sprinting, jumping or roaring wakes it — and press {bite}. | Bite connects with prey #2 |
+| 12 | Done | — | — |
+
+### Milestones
+
+| # | Milestone |
+|---|---|
+| S1 | Log, boulders, thicket, scent trail in the map |
+| S2 | Jump and Smell steps |
+| S3 | Scent glow, Track step, sleeping prey, noise wake-ups, Sneak step |
+| S4 | Bot walkthrough of both stages, screenshots, valley/course regression |
+
+### Build log
+
+| Milestone | Result |
+|---|---|
+| S1 | Done. 16 m log (0.9 m tall) at (8, -30) with four boulders; 120 extra ferns ring the bed; the trail corridor and bed stay open. |
+| S2 | Done. **Found in testing:** with the trail laid at Smell, B by the log picked ground-sniffing over air, so Smell couldn't pass (the outranked-verb trap again). The trail now appears at Track. |
+| S3 | Done. 18 scent marks glow while sniffing and fade over 6 s after. Prey #2 sleeps lying down; noise wakes it. |
+| S4 | Done. Bot: Stage 1 into Jump 3/3, Stage 2 Jump through Done. **Also fixed:** a kill under the body couldn't be eaten (reach was measured only ahead of the snout, though the text says "stand over the kill"), and the Rest threshold dropped from 90% to 97% since the text only says "until it drops". |
+
+## 9. Risks
 
 | Risk | Mitigation |
 |---|---|

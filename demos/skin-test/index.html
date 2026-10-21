@@ -273,6 +273,20 @@ const TUT = MAP === 'tutorial';
 const WS = TUT ? 4 : 1;
 const NEST = { x: 0, z: 34, r: 4.6, rim: 0.42 };
 const TRAIL = [[0, 34], [6, 16], [-2, -4], [-20, -22]]; // nest, first marker, pond, hunting ground
+// Stage 2 (docs/TUTORIAL.md §8): a fallen log to jump, then an authored scent trail upwind to a sleeping prey in a thicket.
+const LOG2 = { x: 8, z: -30, len: 16, rad: 0.45 };
+const BED = [-8, -42];
+const SCENT_PATH = [[8, -32.5], [5, -35], [3, -38.5], [-0.5, -39.5], [-3.5, -42], [-6.5, -42.5]];
+function pathD(path, x, z) {
+  let best = Infinity;
+  for (let i = 0; i < path.length - 1; i++) {
+    const [ax, az] = path[i], [bx, bz] = path[i + 1], ex = bx - ax, ez = bz - az;
+    const t = clamp(((x - ax) * ex + (z - az) * ez) / (ex * ex + ez * ez), 0, 1);
+    best = Math.min(best, Math.hypot(x - ax - ex * t, z - az - ez * t));
+  }
+  return best;
+}
+const nearStage2 = (x, z, pad) => pathD(SCENT_PATH, x, z) < pad + 2 || Math.hypot(x - BED[0], z - BED[1]) < 6 + pad || (Math.abs(x - LOG2.x) < LOG2.len / 2 + 4 && Math.abs(z - LOG2.z) < 4 + pad);
 function trailD(x, z) {
   let best = Infinity;
   for (let i = 0; i < TRAIL.length - 1; i++) {
@@ -643,7 +657,7 @@ function clearOf(x, z, pad) {
   if (MUDS.some((m) => Math.hypot(x - m.x, z - m.z) < m.r + pad)) return false;
   if (Math.hypot(x - SPAWN.x, z - SPAWN.z) < 6) return false;
   if (MAP === 'course' && pathInfo(x, z).d < pad + 2.5) return false;
-  if (TUT && (trailD(x, z) < pad + 2.5 || Math.hypot(x - NEST.x, z - NEST.z) < NEST.r + pad + 1)) return false;
+  if (TUT && (trailD(x, z) < pad + 2.5 || Math.hypot(x - NEST.x, z - NEST.z) < NEST.r + pad + 1 || nearStage2(x, z, pad))) return false;
   return true;
 }
 function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp(rMin * rMin, rMax * rMax, R())); return [Math.cos(a) * r, Math.sin(a) * r]; }
@@ -660,11 +674,20 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
     const h = heightAt(x, z);
     if (h < WATER_Y + 0.12 || MUDS.some((m) => Math.hypot(x - m.x, z - m.z) < m.r + 0.8) || Math.hypot(x - SPAWN.x, z - SPAWN.z) < 3 || (MAP === 'course' && pathInfo(x, z).d < 3.2)) continue;
     // The hunting ground is an open clearing: in fern taller than it, a half-metre-tall prey animal can't be seen.
-    if (TUT && (trailD(x, z) < 3.4 || Math.hypot(x - NEST.x, z - NEST.z) < NEST.r + 0.4 || WATERS.some((w) => Math.hypot(x - w.x, z - w.z) < w.r + 2.5) || Math.hypot(x - TRAIL[3][0], z - TRAIL[3][1]) < 20)) continue;
+    if (TUT && (trailD(x, z) < 3.4 || Math.hypot(x - NEST.x, z - NEST.z) < NEST.r + 0.4 || WATERS.some((w) => Math.hypot(x - w.x, z - w.z) < w.r + 2.5) || Math.hypot(x - TRAIL[3][0], z - TRAIL[3][1]) < 20 || nearStage2(x, z, 0.5))) continue;
     const clump = fbm(x * 0.09, z * 0.09, 71);
     if (R() > smooth(0.35, 0.6, clump) + 0.12) continue;
     const fs = lerp(0.65, 1.45, R()) * (TUT ? lerp(2.2, 3.4, R()) : 1); // tutorial ferns stand over a hatchling's head
     (R() < 0.55 ? la : lb).push({ x, y: h - 0.03, z, s: fs, ry: R() * 6.28 });
+  }
+  if (TUT) {
+    // The thicket: the sleeping prey is hidden until you've tracked it close (TD15). Its bed and the trail into it stay open.
+    const tr = rng(512);
+    for (let k = 0, n = 0; k < 600 && n < 120; k++) {
+      const a = tr() * Math.PI * 2, d = 6.5 + tr() * 9, x = BED[0] + Math.cos(a) * d, z = BED[1] + Math.sin(a) * d;
+      if (pathD(SCENT_PATH, x, z) < 2.2 || Math.hypot(x, z) > WORLD_R - 2) continue;
+      (tr() < 0.55 ? la : lb).push({ x, y: heightAt(x, z) - 0.03, z, s: lerp(0.9, 1.4, tr()) * lerp(2.6, 3.6, tr()), ry: tr() * 6.28 }); n++;
+    }
   }
   scatter(fernA, fernMat, la); scatter(fernB, fernMat, lb);
 
@@ -769,6 +792,10 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
     // A couple of low slabs beside the first stretch of trail: somewhere to try a step-up.
     for (const [x, z, s, sy] of [[3.6, 27, 0.9, 0.36], [-2.6, 22, 0.75, 0.3]])
       rl.push({ x, y: heightAt(x, z) - sy * 0.28, z, s, sy, ry: gr() * 6.28, flat: true });
+    // Stage 2: a fallen trunk too tall to step over, with boulders at both ends so the way is over it, not round it.
+    courseLogs.push({ x: LOG2.x, z: LOG2.z, yaw: 0, len: LOG2.len, rad: LOG2.rad, sink: 0 });
+    for (const [x, z, s, sy] of [[LOG2.x - LOG2.len / 2 - 1.2, LOG2.z, 2.2, 3.4], [LOG2.x + LOG2.len / 2 + 1.2, LOG2.z, 2.3, 3.6], [LOG2.x - LOG2.len / 2 - 3.6, LOG2.z + 1.5, 1.8, 3.0], [LOG2.x + LOG2.len / 2 + 3.6, LOG2.z - 1.2, 1.9, 3.2]])
+      rl.push({ x, y: heightAt(x, z) - sy * 0.25, z, s, sy, ry: gr() * 6.28 });
   } else if (MAP === 'valley') {
     // Low sandstone slabs ahead of the start point, so step-ups are easy to find.
     for (const [x, z, s, sy] of [[-1.6, 7.6, 0.95, 0.42], [1.9, 5.4, 0.8, 0.5], [3.9, 8.8, 1.05, 0.34], [-4.4, 10.6, 0.75, 0.3], [0.8, 10.4, 0.55, 0.26], [-3.8, 4.4, 1.1, 0.62]])
@@ -1524,7 +1551,8 @@ function emit(ev) {
 // The tutorial world is built 4x oversize around a hatchling: sound uses its real mass, speed and distances.
 const HATCH_MASS = 0.5; // kg, a game estimate for a fresh Herrerasaurus hatchling
 const SOUND_MASS = TUT ? HATCH_MASS : CREATURE.mass;
-const STEP_DB = (mass, speed, gain) => 62 + 10 * Math.log10(mass / 350) + 8 * clamp(speed / 7.4, 0, 1) + 20 * Math.log10(Math.max(gain, 0.05));
+// dB at 1 m: 62 for an adult walking at 3.4 m/s, +10 dB per tenfold mass, +4.5 dB per doubling of impact speed.
+const STEP_DB = (mass, speed, gain) => 62 + 10 * Math.log10(mass / 350) + 15 * Math.log10(Math.max(speed, 0.3) / 3.4) + 20 * Math.log10(Math.max(gain, 0.05));
 function surfaceName(x, z) {
   const k = surfaceAt(x, z).kind; if (k !== 'ground') return k;
   const r = groundInfo(x, z).rock; return r < 0 ? 'packedDirt' : ROCKS[r].log ? 'wood' : 'sandstone';
@@ -1532,8 +1560,11 @@ function surfaceName(x, z) {
 function mouthAt() { const f = 2.0, x = D.pos.x + Math.sin(D.yaw) * f, z = D.pos.z + Math.cos(D.yaw) * f; return { x, y: groundAt(x, z) + 0.9 + D.bodyY * 0.8, z }; }
 function footstep(p, gain) {
   const surface = surfaceName(p.x, p.z);
-  const speed = D.speed / WS;
-  emit({ kind: 'step', who: 'player', x: p.x, y: groundAt(p.x, p.z), z: p.z, mass: SOUND_MASS, speed, surface, claws: true, gain, level: STEP_DB(SOUND_MASS, speed, gain) });
+  const speed = Math.max(D.speed, D.landV || 0) / WS; // a landing hits at its fall speed
+  // Noise ratings on top of the physics (stealth-game style, game estimates): sprint footfalls slam (+10 dB),
+  // a jump landing puts the whole body down at once (+14 dB).
+  const noise = D.landV ? 14 : D.speed > 5 && input.sprint > 0.25 ? 10 : 0;
+  emit({ kind: 'step', who: 'player', x: p.x, y: groundAt(p.x, p.z), z: p.z, mass: SOUND_MASS, speed, surface, claws: true, gain, level: STEP_DB(SOUND_MASS, speed, gain) + noise });
 }
 function bodySound(kind, level, extra) { const s = surfaceName(D.pos.x, D.pos.z); emit({ kind, who: 'player', x: D.pos.x, y: groundAt(D.pos.x, D.pos.z), z: D.pos.z, mass: SOUND_MASS, surface: s, level, ...extra }); }
 function mouthSound(kind, level, extra) { const m = mouthAt(); emit({ kind, who: 'player', x: m.x, y: m.y, z: m.z, level, ...extra }); }
@@ -1547,7 +1578,7 @@ const sfx = {
   scramble: () => bodySound('scramble', 68),
   roar: () => (TUT ? sfx.chirp(2) : mouthSound('call', 108, { mode: 'open', duration: 1.6, roughness: 0.55, amp: 3.2 })), // amp: mixed about 10 dB over a footstep at the same distance
   // Hatchling call: one or two short notes from a ~8 cm vocal tract (Brain: dlist E8).
-  chirp: (notes = 1) => mouthSound('call', 72, { mode: 'open', duration: notes > 1 ? 0.24 : 0.18, notes, gap: 0.3, roughness: 0, amp: 1.2 }),
+  chirp: (notes = 1, ui = false) => mouthSound('call', 72, { mode: 'open', duration: notes > 1 ? 0.24 : 0.18, notes, gap: 0.3, roughness: 0, amp: 1.2, ui }), // ui: the step-passed cue, not heard in the world
   tear: () => mouthSound('tear', 60),
   // The prey's alarm squeak, from where the prey is.
   squeak: (k = 1) => emit({ kind: 'call', who: 'prey', mode: 'open', duration: 0.12, notes: 2, gap: 0.14, pitch: k, roughness: 0, amp: 1, x: prey.x, y: groundAt(prey.x, prey.z) + 0.3, z: prey.z, level: 70 }),
@@ -1558,7 +1589,7 @@ const sfx = {
 const SIM_SEED = 0x51a1;
 let simRng = rng(SIM_SEED);
 const HEAR_DB = 38;
-const heardLevel = (ev, x, z) => { const d = Math.hypot(ev.x - x, ev.z - z); return ev.level - 20 * Math.log10(Math.max(1, d)) - 0.005 * d; };
+const heardLevel = (ev, x, z) => { const d = Math.hypot(ev.x - x, ev.z - z) / WS; return ev.level - 20 * Math.log10(Math.max(0.5, d)) - 0.005 * d; }; // real metres (the tutorial is 4x)
 const AI = TUT ? [] : [ // the tutorial nest is kept quiet
   { id: 'rival', name: 'a rival Herrerasaurus', creature: 'herrerasaurus', mode: 'open', level: 106, r: 50, ang: 2.4, w: 0.012, gap: [22, 40], dur: [1.3, 1.8], next: 8, quiet: 0, answer: -1 },
   { id: 'saurosuchus', name: 'a Saurosuchus', creature: 'large', mode: 'closed', level: 100, r: 56, ang: -0.9, w: -0.008, gap: [30, 55], dur: [1.8, 2.4], next: 19, quiet: 0, answer: -1 },
@@ -1578,13 +1609,16 @@ function aiCall(a) {
 }
 // Runs at the start of each sim step: hear the last step's events, then act.
 function aiStep(dt) {
+  if (prey && prey.spawned) prey.heardDb = -99; // loudest player sound the prey heard last step
   for (const ev of SIM.tick) {
+    if (ev.ui) continue;
+    if (prey && prey.spawned && ev.who === 'player') prey.heardDb = Math.max(prey.heardDb, heardLevel(ev, prey.x, prey.z));
     for (const a of AI) {
       if (ev.who === a.id || heardLevel(ev, a.x, a.z) < HEAR_DB) continue;
       if (a.id === 'rival' && ev.kind === 'call' && ev.who === 'player' && a.answer < 0) a.answer = D.time + 0.9 + 0.7 * simRng(); // answers a challenge
       if (a.id === 'saurosuchus' && ev.who === 'player') a.quiet = Math.max(a.quiet, D.time + (ev.kind === 'call' ? 25 : 8)); // a predator that hears you stops calling
     }
-    if (ev.who !== 'player' && ev.kind === 'call') { const L = heardLevel(ev, D.pos.x, D.pos.z); if (L >= HEAR_DB) SIM.heard = { who: AI.find((a) => a.id === ev.who), mode: ev.mode, level: L, x: ev.x, z: ev.z, t: D.time }; }
+    if (ev.who !== 'player' && ev.kind === 'call') { const L = heardLevel(ev, D.pos.x, D.pos.z); if (L >= HEAR_DB) SIM.heard = { who: AI.find((a) => a.id === ev.who) || { name: ev.who === 'prey' ? 'the Exaeretodon' : 'something' }, mode: ev.mode, level: L, x: ev.x, z: ev.z, t: D.time }; }
   }
   SIM.tick.length = 0;
   for (const a of AI) {
@@ -2135,7 +2169,7 @@ function jumpLand(j) {
     L.footPos.set(w.x, g.y + 0.035, w.z); L.planted.copy(L.footPos); L.swing = false; L.liftS = 0; L.groundY = g.y;
     return g;
   });
-  dino.legs.forEach((L) => onFootfall(L, 1.15));
+  D.landV = -j.vy; dino.legs.forEach((L) => onFootfall(L, 1.15)); D.landV = 0;
   const s0 = surfaceAt(D.pos.x, D.pos.z);
   rumble(220, 0.55, 0.55 + 0.45 * imp); cam.jolt = Math.max(cam.jolt, 0.05 + 0.1 * imp);
   if (s0.kind === 'ground') for (let k = 0; k < 10 + Math.round(14 * imp); k++) { const a = Math.random() * 6.28; dust.spawn(V(D.pos.x + Math.cos(a) * 0.4, s0.y + 0.03, D.pos.z + Math.sin(a) * 0.4), V(Math.cos(a) * (0.8 + Math.random()), 0.25 + Math.random() * 0.4, Math.sin(a) * (0.8 + Math.random())), { life: 0.9 + Math.random() * 0.5, size: 1 + Math.random() * 1.5 }); }
@@ -2175,6 +2209,7 @@ function scentNear() {
   const sx = D.pos.x + Math.sin(D.yaw) * 1.4, sz = D.pos.z + Math.cos(D.yaw) * 1.4;
   let best = null, bd = 2.0;
   for (const p of prints) { if (scentOf(p) < 0.05) continue; const d = Math.hypot(p.x - sx, p.z - sz); if (d < bd) { bd = d; best = p; } }
+  if (TUT && scent.on) for (const p of scent.marks) { const d = Math.hypot(p.x - sx, p.z - sz); if (d < bd) { bd = d; best = p; } }
   return best;
 }
 function endAct() { D.act = 'none'; D.actT = 0; skinU.uGulp.value.w = 0; }
@@ -2724,7 +2759,7 @@ function updateHud(dt) {
     if (show) {
       const rel = wrapAngle(Math.atan2(H.x - D.pos.x, H.z - D.pos.z) - D.yaw), a = Math.abs(rel);
       const dir = a < 0.5 ? 'ahead' : a > 2.6 ? 'behind' : rel < 0 ? (a < 1.2 ? 'ahead to the right' : a > 1.95 ? 'behind to the right' : 'to the right') : (a < 1.2 ? 'ahead to the left' : a > 1.95 ? 'behind to the left' : 'to the left');
-      chip.textContent = `Heard ${H.who.name} ${H.mode === 'open' ? 'call' : 'boom'}, ${dir}, about ${Math.round(Math.hypot(H.x - D.pos.x, H.z - D.pos.z) / 5) * 5} m`;
+      const m = Math.hypot(H.x - D.pos.x, H.z - D.pos.z) / WS; chip.textContent = `Heard ${H.who.name} ${H.mode === 'open' ? 'call' : 'boom'}, ${dir}, about ${m < 10 ? Math.max(1, Math.round(m)) : Math.round(m / 5) * 5} m`;
     }
     chip.hidden = !show;
   }
@@ -2827,10 +2862,23 @@ function spawnPrey() {
 }
 // It keeps 3 m off the water too, so a kill never lands where it can only be reached by wading in too deep.
 const preyBlocked = (x, z) => Math.hypot(x, z) > WORLD_R - 4 || surfaceAt(x, z).kind !== 'ground' || WATERS.some((w) => Math.hypot(x - w.x, z - w.z) < w.r + 3) || obstacles.some((o) => o !== prey.obstacle && o.x != null && Math.hypot(x - o.x, z - o.z) < o.r + 0.7);
+const PREY_WAKE_DB = 30;
 function updatePrey(dt) {
   if (!prey || !prey.spawned) return;
   const dx = prey.x - D.pos.x, dz = prey.z - D.pos.z, dist = Math.hypot(dx, dz);
-  if (prey.alive) {
+  if (prey.alive && prey.state === 'sleep') {
+    // Asleep in its bed. Noise wakes it, or standing over it for 3 s (TD16). It hears the sim's sound events, not the
+    // engine. At 30 dB (measured): any call nearby, a sprint within about 3.5 m, a standing jump within 3 m,
+    // and a walk never (standing over it for 3 s still does).
+    const noisy = (prey.heardDb ?? -99) >= PREY_WAKE_DB;
+    prey.closeT = dist < 2.5 ? (prey.closeT || 0) + dt : 0;
+    if (noisy || prey.closeT > 3) { prey.state = 'flee'; prey.woke = true; sfx.squeak(0.8); }
+    const br = 0.015 * Math.sin(D.time * 1.7);
+    prey.g.scale.set(1, 1, 1); prey.g.rotation.set(0, prey.yaw, 0);
+    prey.g.position.set(prey.x, groundAt(prey.x, prey.z) - 0.3 + br, prey.z);
+    prey.legs.forEach((l) => { l.rotation.x = 1.25; });
+    prey.head.rotation.x = 0.55;
+  } else if (prey.alive) {
     // Flees when the hatchling is close, or closing fast. Flight speed sits between its walk and its sprint (TD9, Brain: speed parity).
     if (prey.state === 'graze' && (dist < 9 || (dist < 15 && D.speed > 3.5))) { prey.state = 'flee'; sfx.squeak(0.7); }
     if (prey.state === 'flee') {
@@ -2874,6 +2922,11 @@ function updatePrey(dt) {
   }
   if (prey.obstacle) { prey.obstacle.x = prey.x; prey.obstacle.z = prey.z; }
 }
+function spawnSleeper() {
+  Object.assign(prey, { id: 2, alive: true, spawned: true, x: BED[0], z: BED[1], yaw: 0.6, speed: 0, state: 'sleep', fatigue: 0, calmT: 0, stuckT: 0, lastX: BED[0], lastZ: BED[1], woke: false, closeT: 0, roarsHeard: D.roars || 0, meat: 1 });
+  prey.g.visible = true; prey.g.scale.set(1, 1, 1);
+  if (!prey.obstacle) { prey.obstacle = { x: BED[0], z: BED[1], r: 0.5 }; obstacles.push(prey.obstacle); }
+}
 function onBiteSnap(snout) {
   if (!prey || !prey.alive) return;
   // The snap lands if the snout is on the body (horizontal distance; a hatchling's head is above a low cynodont).
@@ -2884,7 +2937,8 @@ function onBiteSnap(snout) {
 function carcassNear() {
   if (!prey || prey.alive || !prey.spawned || prey.meat <= 0) return null;
   const sx = D.pos.x + Math.sin(D.yaw) * 1.6, sz = D.pos.z + Math.cos(D.yaw) * 1.6;
-  return Math.hypot(prey.x - sx, prey.z - sz) < 2.0 ? prey : null;
+  // In front of the snout, or right under it: "stand over the kill" has to work side-on too (the head turns to it).
+  return Math.hypot(prey.x - sx, prey.z - sz) < 2.0 || Math.hypot(prey.x - D.pos.x, prey.z - D.pos.z) < 2.2 ? prey : null;
 }
 
 // ---- marker: a soft light shaft standing in the world, so it never needs a screen projection (Brain: waypoint marker lesson) ----
@@ -2899,6 +2953,28 @@ const marker = (() => {
 })();
 const pondEdge = (() => { const [ax, az] = TRAIL[1], dx = ax - POND.x, dz = az - POND.z, d = Math.hypot(dx, dz); return [POND.x + dx / d * (POND.r + 0.6), POND.z + dz / d * (POND.r + 0.6)]; })();
 
+// ---- Stage 2 scent trail: an authored path of marks (TD12) that glow while sniffing and linger after (TD13) ----
+const scent = (() => {
+  const marks = [];
+  if (TUT) for (let i = 0; i < SCENT_PATH.length - 1; i++) {
+    const [ax, az] = SCENT_PATH[i], [bx, bz] = SCENT_PATH[i + 1], L = Math.hypot(bx - ax, bz - az), n = Math.ceil(L / 1.3);
+    for (let k = 0; k < n; k++) { const t = k / n, x = lerp(ax, bx, t) + (hashI(i, k, 5) - 0.5) * 0.5, z = lerp(az, bz, t) + (hashI(k, i, 6) - 0.5) * 0.5; marks.push({ x, z, y: groundAt(x, z) + 0.03, s: 1, t: 0, life: 1e12, yaw: Math.atan2(bx - ax, bz - az) }); }
+  }
+  const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#f0c27a'), transparent: true, opacity: 0, depthWrite: false, fog: false });
+  const geo = new THREE.CircleGeometry(0.22, 10); geo.rotateX(-Math.PI / 2);
+  const mesh = new THREE.InstancedMesh(geo, mat, Math.max(1, marks.length)); mesh.renderOrder = 4; mesh.visible = false;
+  const o = new THREE.Object3D();
+  marks.forEach((p, i) => { o.position.set(p.x, p.y, p.z); o.scale.set(1 + hashI(i, 2, 7) * 0.6, 1, 1.4); o.rotation.set(0, p.yaw, 0); o.updateMatrix(); mesh.setMatrixAt(i, o.matrix); });
+  if (TUT) scene.add(mesh);
+  return { marks, mesh, mat, on: false, glowT: 0 };
+})();
+function updateScent(dt) {
+  if (!scent.on) return;
+  if (D.act === 'ground' || D.act === 'air') scent.glowT = 6; else scent.glowT = Math.max(0, scent.glowT - dt);
+  const g = smooth(0, 1.5, scent.glowT);
+  scent.mesh.visible = g > 0.01; scent.mat.opacity = 0.7 * g * (0.85 + 0.15 * Math.sin(D.time * 4));
+}
+
 // ---- the step table: text, marker and pass test live together (TD5) ----
 // {key} tokens are resolved against the controls table at display time, for the device in use (TD6).
 const TSTEPS = [
@@ -2909,7 +2985,16 @@ const TSTEPS = [
   { name: 'Hunt', say: 'Hungry now. A young Exaeretodon is grazing past the pond. Hold {sprint} to run it down, then press {bite} when your snout is on it.', sub: () => prey.state === 'flee' ? 'It’s running. Keep sprinting; it tires before you do.' : 'Sneak up slowly or charge it.', at: () => (prey.alive && Math.hypot(prey.x - D.pos.x, prey.z - D.pos.z) > 8 ? [prey.x, prey.z] : null), enter: () => spawnPrey(), pass: () => prey.spawned && !prey.alive },
   { name: 'Eat', say: 'Got it. Stand over the kill and hold {drink} to eat.', sub: () => `Hunger ${Math.round(tut.hunger * 100)}%`, at: () => [prey.x, prey.z], pass: () => tut.hunger >= 0.999 },
   { name: 'Rest', say: () => (tut.restOk || tut.tired ? 'The chase wore you out. Hold {rest} to lie down, and stay down until your stamina is full.' : 'Resting restores stamina. Sprint with {sprint} until it drops, then hold {rest} to lie down.'), sub: () => `Stamina ${Math.round(D.stamina * 100)}%`, pass: () => (tut.restOk || tut.tired) && D.resting && D.stamina >= 0.995 },
-  { name: 'Done', say: 'That’s your first day. You can walk, roar, drink, hunt and rest.', sub: () => `Open the menu with {menu} to restart, or pick Map to head out to the valley.` },
+  { name: 'Jump', say: 'A fallen log blocks the way. Run at it and press {jump} to leap over.', at: () => [LOG2.x, LOG2.z + 2.5], enter: () => { tut.logSide = Math.sign(D.pos.z - LOG2.z) || 1; },
+    pass: () => Math.abs(D.pos.x - LOG2.x) < LOG2.len / 2 + 1 && Math.sign(D.pos.z - LOG2.z) === -tut.logSide && Math.abs(D.pos.z - LOG2.z) > 1.2 },
+  { name: 'Smell', say: 'Hold {drink} away from water to smell the air. It turns its nose into the wind. Something’s out there.', sub: () => `${Math.min(2, tut.airT).toFixed(1)} of 2 s`,
+    enter: () => { tut.airT = 0; spawnSleeper(); }, pass: () => tut.airT >= 2 },
+  { name: 'Track', say: 'Find where the scent marks start and hold {drink} with your nose down to follow them. They glow while you sniff and for a few seconds after.', sub: () => `${Math.round(Math.hypot(D.pos.x - BED[0], D.pos.z - BED[1]))} m to go`,
+    // The trail only exists from here on: laid earlier, a B press by the log would sniff the ground and never the air (Brain: an outranked verb starves its step).
+    enter: () => { scent.on = true; },
+    at: () => (Math.hypot(D.pos.x - SCENT_PATH[0][0], D.pos.z - SCENT_PATH[0][1]) > 6 && pathD(SCENT_PATH, D.pos.x, D.pos.z) > 4 ? SCENT_PATH[0] : null), pass: () => Math.hypot(D.pos.x - BED[0], D.pos.z - BED[1]) < 10 },
+  { name: 'Sneak', say: 'It’s asleep. Walk up slowly, because sprinting, jumping or roaring will wake it. Press {bite} when your snout is on it.', sub: () => (prey.woke ? 'It woke up! Run it down.' : 'Don’t linger right over it, either.'), pass: () => prey.id === 2 && !prey.alive },
+  { name: 'Done', say: 'That’s your first day. You can walk, roar, drink, hunt, rest, jump, sniff and track.', sub: () => `Open the menu with {menu} to restart, or pick Map to head out to the valley.` },
 ];
 const TOKENS = { move: 'Move', camera: 'Camera', sprint: 'Sprint', jump: 'Jump', drink: 'Drink / sniff', bite: 'Bite', roar: 'Roar', rest: 'Rest', menu: 'Menu' };
 function keyName(tok) { const row = KEYS[input.device].find(([a]) => a === TOKENS[tok]); return row ? row[1] : tok; }
@@ -2922,9 +3007,11 @@ function tutStep(dt) {
   if (D.gulps > tut.gulps) { tut.thirst = Math.min(1, tut.thirst + 0.2 * (D.gulps - tut.gulps)); tut.gulps = D.gulps; }
   if (D.bites > tut.bites) { tut.hunger = Math.min(1, tut.hunger + 0.1 * (D.bites - tut.bites)); tut.bites = D.bites; }
   const s = TSTEPS[tut.step];
-  if (s.name === 'Rest' && D.resting && D.restFrom < 0.9) tut.restOk = true;
+  if (s.name === 'Rest' && D.resting && D.restFrom < 0.97) tut.restOk = true; // any visible dip counts: the text only says "until it drops"
+  if (s.name === 'Smell' && D.act === 'air') tut.airT += dt;
+  updateScent(dt);
   if (tut.passT >= 0) { tut.passT += dt; if (tut.passT > 1.2) enterStep(tut.step + 1); return; }
-  if (s.pass && s.pass(s)) { tut.passT = 0; sfx.chirp(1); }
+  if (s.pass && s.pass(s)) { tut.passT = 0; sfx.chirp(1, true); }
 }
 function enterStep(i) {
   tut.step = Math.min(i, TSTEPS.length - 1); tut.passT = -1; tut.roars = D.roars || 0; tut.restOk = false;
@@ -2985,7 +3072,7 @@ function frame(now) {
 // Test and debugging hook: lets an automated check drive the demo without a real controller.
 window.__demo = {
   SIM, AI, audio, resetSimForReplay, loadEngine, createAudioLayer, updateAudio, audioWorld, camera,
-  D, cam, input, egg, tut, prey, TSTEPS, enterStep, heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, WATERS, MUDS, MAP, COURSE, COURSE_LEN, pathInfo, course, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
+  D, cam, input, egg, tut, prey, TSTEPS, enterStep, scentInfo: () => ({ on: scent.on, glow: scent.mat.opacity, marks: scent.marks.length }), heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, WATERS, MUDS, MAP, COURSE, COURSE_LEN, pathInfo, course, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
   start: () => startDemo('pad'),
   step(n = 60) { for (let i = 0; i < n; i++) { pollInput(STEP); simStep(STEP); flakes.update(STEP); drips.update(STEP); splash.update(STEP); splat.update(STEP); dust.update(STEP); shells.update(STEP); updateRipples(STEP); updateCamera(STEP); } updatePrints(); },
   teleport(x, z, yaw = D.yaw) { D.pos.set(x, 0, z); D.yaw = yaw; clearMotion(); plantFeetAtNeutral(); cam.yaw = yaw + Math.PI; },
