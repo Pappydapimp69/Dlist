@@ -371,3 +371,9 @@ Nothing from this list is left open.
     -26.5 dBFS RMS). Dirt steps went from a 330 Hz centroid thump to 1440 Hz with grit, and step levels vary
     naturally (2.8 dB spread). The roar was mixed to about 10 dB over a step. The two creature calls are new;
     the old build had no AI.
+  - **Tutorial map on the engine too (merged from the tutorial work):** the hatchling's chirp is an open call
+    from an 8 cm tract (two notes when it roars), its footsteps use a 0.5 kg hatchling mass, egg and meat tearing
+    is a debris crunch at the mouth, and the Exaeretodon's alarm squeak is a two-note call from a 5 cm tract at
+    the prey's position. Sound positions in the tutorial are divided by its 4x world scale. The prey's wandering
+    now draws from the sim RNG instead of Math.random, so tutorial replays match too. The distant rival and
+    Saurosuchus stay out of the tutorial.
