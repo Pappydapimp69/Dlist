@@ -97,16 +97,20 @@
   .course .clock { font-family: var(--f-mono); font-size: 1.15rem; font-variant-numeric: tabular-nums; }
   .course .best { font-size: 0.72rem; color: var(--ink-2); }
   @media (min-width: 1280px) { .course { top: calc(14px + env(safe-area-inset-top, 0px)); } }
-  .tut { position: fixed; top: calc(92px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); width: min(460px, calc(100% - 32px));
-    box-sizing: border-box; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 14px; display: grid; gap: 4px;
-    text-align: center; pointer-events: none; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
-  .tut .sec { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ochre); }
-  .tut .say { margin: 0; font-size: 0.95rem; line-height: 1.4; color: var(--ink); text-wrap: balance; }
+  /* Tutorial instructions sit in the top-left corner, where the title plate goes (hidden in the tutorial), clear of the view. */
+  .tut { position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: calc(16px + env(safe-area-inset-left, 0px)); width: min(440px, calc(58% - 24px));
+    box-sizing: border-box; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 7px 12px; display: grid; gap: 2px;
+    pointer-events: none; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  .tut .sec { font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ochre); }
+  .tut .say { margin: 0; font-size: 0.86rem; line-height: 1.35; color: var(--ink); text-wrap: pretty; }
   .tut .say b { color: var(--ochre); font-weight: 600; }
-  .tut .sub { margin: 0; font-size: 0.74rem; color: var(--ink-2); }
+  .tut .sub { margin: 0; font-size: 0.72rem; color: var(--ink-2); }
   .tut.pass { border-color: rgba(212, 155, 83, 0.6); }
-  @media (min-width: 1440px) { .tut { top: calc(14px + env(safe-area-inset-top, 0px)); } }
-  @media (max-width: 760px) { .tut { top: auto; bottom: calc(150px + env(safe-area-inset-bottom, 0px)); } } /* phones: clear of the chips, above the readout */
+  body.tutmap .plate { display: none; }
+  body.tutmap .chips { max-width: calc(42% - 24px); }
+  body.tutmap .chip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; box-sizing: border-box; }
+  body.tutmap.touch .readout { top: auto; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); } /* between the stick and the buttons */
+  @media (max-width: 760px) { .tut { width: calc(100% - 32px); } body.tutmap .chips { top: auto; bottom: calc(150px + env(safe-area-inset-bottom, 0px)); max-width: calc(100% - 32px); } } /* portrait: full width on top, chips moved down */
   /* Touch: floating stick on the left, camera drag on the right, Xbox-style face buttons bottom right. */
   #touch { position: fixed; inset: 0; display: none; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   body.touch.playing #touch { display: block; }
@@ -137,6 +141,7 @@
   .tbtn.small { width: 46px; height: 46px; font-size: 1rem; }
   .tbtn[data-b="menu"] { right: 0; top: -58px; }
   .tbtn[data-b="cam"] { right: 56px; top: -58px; }
+  .tbtn[data-b="rest"] { right: 0; top: -130px; border-color: #9a8fc8; } /* hold to lie down; on its own above the stack */
   @media (max-width: 760px) { .keys { display: none; } .binomial { font-size: 1.1rem; } .chips { top: calc(108px + env(safe-area-inset-top, 0px)); } } /* chips sit under the title plate on phones */
 </style>
 
@@ -180,6 +185,7 @@
   <div class="tzone" id="tLook"></div>
   <div class="tstick" id="tStick"><i></i></div>
   <div class="tbtns">
+    <button type="button" class="tbtn" data-b="rest" aria-label="Rest (hold)">Zz<small>Rest</small></button>
     <button type="button" class="tbtn small" data-b="cam" aria-label="Camera behind">&#8634;</button>
     <button type="button" class="tbtn small" data-b="menu" aria-label="Menu">&#9776;</button>
     <button type="button" class="tbtn" data-b="y">Y<small>Roar</small></button>
@@ -1809,7 +1815,7 @@ function pollInput(dt) {
   if (input.device === 'touch') {
     // Camera drag maps straight to an angle (about 0.3 degrees per pixel), whatever the frame rate.
     const k = Math.max(dt, 1 / 240);
-    input.moveF = touch.mf; input.moveR = touch.mr; input.sprint = touch.sprint; input.drink = touch.b;
+    input.moveF = touch.mf; input.moveR = touch.mr; input.sprint = touch.sprint; input.drink = touch.b; input.rest = touch.rest;
     input.lookX = (touch.dx * 0.005) / (2.5 * k); input.lookY = (touch.dy * 0.004) / (1.6 * k);
     touch.dx = touch.dy = 0;
   }
@@ -1866,7 +1872,7 @@ window.addEventListener('pointerdown', (e) => {
 
 /* ---- touch controls ---- */
 // Left side: a floating stick that appears under the thumb; pushed past its ring it sprints. Right side: drag to look.
-const touch = { mf: 0, mr: 0, sprint: 0, b: false, dx: 0, dy: 0, stickId: null, lookId: null, ox: 0, oy: 0, lx: 0, ly: 0 };
+const touch = { mf: 0, mr: 0, sprint: 0, b: false, rest: false, dx: 0, dy: 0, stickId: null, lookId: null, ox: 0, oy: 0, lx: 0, ly: 0 };
 let lastTouch = matchMedia('(pointer: coarse)').matches;
 {
   const stick = document.getElementById('tStick'), knob = stick.firstElementChild, R = 56, move = document.getElementById('tMove'), look = document.getElementById('tLook');
@@ -1895,10 +1901,10 @@ let lastTouch = matchMedia('(pointer: coarse)').matches;
     const k = b.dataset.b;
     b.addEventListener('pointerdown', (e) => {
       e.preventDefault(); b.setPointerCapture(e.pointerId); b.classList.add('down');
-      if (k === 'a') input.jumpKey = true; else if (k === 'b') touch.b = true; else if (k === 'x') input.biteKey = true;
+      if (k === 'a') input.jumpKey = true; else if (k === 'b') touch.b = true; else if (k === 'rest') touch.rest = true; else if (k === 'x') input.biteKey = true;
       else if (k === 'y') input.roarKey = true; else if (k === 'cam') input.recenterKey = true; else if (k === 'menu') openMenu();
     });
-    const up = () => { b.classList.remove('down'); if (k === 'b') touch.b = false; };
+    const up = () => { b.classList.remove('down'); if (k === 'b') touch.b = false; if (k === 'rest') touch.rest = false; };
     for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, up);
   });
   document.getElementById('touch').addEventListener('contextmenu', (e) => e.preventDefault());
@@ -1906,13 +1912,13 @@ let lastTouch = matchMedia('(pointer: coarse)').matches;
 
 const KEYS = {
   pad: [['Move', 'Left stick'], ['Camera', 'Right stick'], ['Sprint', 'Right trigger (hold)'], ['Jump', 'A'], ['Drink / sniff', 'B (hold)'], ['Bite', 'X'], ['Roar', 'Y'], ['Rest', 'Left trigger (hold)'], ['Camera behind', 'Click right stick'], ['Menu', 'Start']],
-  touch: [['Move', 'Left thumb (push to the edge to sprint)'], ['Camera', 'Drag on the right'], ['Jump', 'A'], ['Drink / sniff', 'B (hold)'], ['Bite', 'X'], ['Roar', 'Y'], ['Camera behind', '\u21BA'], ['Menu', '\u2630']],
+  touch: [['Move', 'Left thumb (push to the edge to sprint)'], ['Camera', 'Drag on the right'], ['Sprint', 'the stick pushed to the edge'], ['Jump', 'A'], ['Drink / sniff', 'B (hold)'], ['Bite', 'X'], ['Roar', 'Y'], ['Rest', 'Zz (hold)'], ['Camera behind', '\u21BA'], ['Menu', '\u2630']],
   keys: [['Move', 'W A S D'], ['Camera', 'Drag mouse or Q / E'], ['Sprint', 'Shift (hold)'], ['Jump', 'Space'], ['Drink / sniff', 'G (hold)'], ['Bite', 'F'], ['Roar', 'R'], ['Rest', 'Z (hold)'], ['Camera behind', 'C'], ['Menu', 'Esc']],
 };
 function setDevice(d) {
   if (input.device === d && document.getElementById('keysList').childElementCount) return;
   input.device = d; document.body.classList.toggle('touch', d === 'touch');
-  if (d !== 'touch') touch.mf = touch.mr = touch.sprint = 0, touch.b = false;
+  if (d !== 'touch') touch.mf = touch.mr = touch.sprint = 0, touch.b = touch.rest = false;
   document.getElementById('keysTitle').textContent = d === 'pad' ? 'Controller' : d === 'touch' ? 'Touch' : 'Keyboard and mouse';
   document.getElementById('keysList').innerHTML = KEYS[d].map(([a, b]) => `<div style="display:contents"><dt>${a}</dt><dd>${b}</dd></div>`).join('');
 }
@@ -3041,6 +3047,7 @@ function updateTut() {
 }
 if (TUT) {
   document.getElementById('tutPanel').hidden = false;
+  document.body.classList.add('tutmap');
   for (const id of ['thirstRow', 'hungerRow']) document.getElementById(id).hidden = false;
   for (const id of ['wetRow', 'mudRow']) document.getElementById(id).hidden = true;
   document.querySelector('.meta').textContent = 'Hatchling · minutes old · Ischigualasto, about 231 million years ago';
