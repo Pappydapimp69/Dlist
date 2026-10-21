@@ -45,6 +45,26 @@ Search the demo by the section banners (`/* ===== name ===== */`) and function n
   - Timing scales with body size: `BODY.ts = sqrt(hip / 1.15) × (mass / 350)^0.1`.
   - Heavier bodies hit harder and lie longer: `BODY.mk = cbrt(mass / 350)`.
 
+## Wet and mud on the body (`updateSkinState()`, `// ---- skin state ----`, shader `b_uWet` / `b_uMudCover`)
+
+- **Banded up the body:** 24 horizontal bands (0.085 m on the 1.15 m rig). A band under the waterline is soaked; one
+  under the mud level is coated. Lying down sinks the body into whatever it is in.
+- **Timers:** wet dries in 8 s; mud crusts after 8 s, then after 30 s of walking on the crust flakes off over 7 s;
+  standing in water washes mud off in about 1.2 s. Landing in water or mud throws it higher up the body.
+- **What it changes:** grip (see Stability: wet stone ×0.5, wet dirt ×0.75, wet mud ×0.45, dry crust ×0.8), drips,
+  flakes, splashes, mud splats, and tracks from wet or muddy feet (they fade, and in the demo they carry scent).
+- **Mud pit:** a carved hollow under `MUD_Y`; mud depth slows the legs, up to half speed at 0.85 m.
+- **Upstarts:** ported to the sim (`sim/coat.ts`, bands as fractions of the hip) and drives the same skin shader
+  (`render/coatView.ts`). Tracks are render-only there so far; their scent is not ported.
+
+## Ported to Upstarts (2026-10-21)
+
+Ground (rocks, slabs, ledge, logs, mud pit), wet and mud, stability (slip, stumble, trip), falls and ledge jumps
+with scramble are in Upstarts' sim (`sim/ground.ts`, `sim/coat.ts`, `sim/balance.ts`, `sim/dino.ts` footing). Rocks
+there are analytic shapes the renderer meshes, not triangle soup, so feet are the sim's call. Not ported yet:
+body-part collision (hips, chest, head, tail heights), foothold scoring on rough ground, the slipping foot sliding
+in the animation, NPCs stumbling.
+
 ## Jumps and ledges (`// ---- jumping ----`)
 
 - **Takeoff:** a crouch first (0.22 to 0.3 s), then the takeoff.
