@@ -190,6 +190,7 @@
 <section class="readout" aria-live="off">
   <div class="row" id="thirstRow" hidden><span class="lab">Thirst</span><span class="bar"><i id="thirstBar"></i></span><span class="val" id="thirstVal"></span></div>
   <div class="row" id="hungerRow" hidden><span class="lab">Hunger</span><span class="bar mud"><i id="hungerBar"></i></span><span class="val" id="hungerVal"></span></div>
+  <div class="row" id="growRow" hidden><span class="lab">Growth</span><span class="bar stam"><i id="growBar"></i></span><span class="val" id="growVal"></span></div>
   <div class="row" id="wetRow"><span class="lab">Water</span><span class="bar"><i id="wetBar"></i></span><span class="val" id="wetVal">Dry</span></div>
   <div class="row" id="mudRow"><span class="lab">Mud</span><span class="bar mud"><i id="mudBar"></i></span><span class="val" id="mudVal">None</span></div>
   <div class="row"><span class="lab">Stamina</span><span class="bar stam"><i id="stamBar"></i></span><span class="val" id="stamVal">Fresh</span></div>
@@ -300,6 +301,8 @@ const TRAIL = [[0, 34], [6, 16], [-2, -4], [-20, -22]]; // nest, first marker, p
 // Stage 2 (docs/TUTORIAL.md §8): a fallen log to jump, then an authored scent trail upwind to a sleeping prey in a thicket.
 const LOG2 = { x: 8, z: -30, len: 16, rad: 0.45 };
 const BED = [-8, -42];
+// Where the Saurosuchus is heard from: east, past the hills, beyond the map edge. Stage 4 brings it in from here (TD20).
+const PRED_FROM = { x: 90, z: -15 };
 const SCENT_PATH = [[8, -32.5], [5, -35], [3, -38.5], [-0.5, -39.5], [-3.5, -42], [-6.5, -42.5]];
 function pathD(path, x, z) {
   let best = Infinity;
@@ -663,6 +666,16 @@ function addWind(mat, strength, key) {
   };
   mat.customProgramCacheKey = () => 'wind-' + key;
 }
+// Tutorial growth shrinks the plants rather than growing the rig (TD19): every scatter keeps its list so it can be re-posed at a new scale.
+const SHRINKERS = [];
+function setWorldScale(f) {
+  const m = M4(), q = new THREE.Quaternion(), sc = V();
+  for (const { im, list } of SHRINKERS) {
+    list.forEach((it, i) => { q.setFromEuler(new THREE.Euler(it.tx || 0, it.ry || 0, it.tz || 0)); sc.set(it.s * f, (it.sy || it.s) * f, it.s * f); m.compose(V(it.x, it.y, it.z), q, sc); im.setMatrixAt(i, m); });
+    im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere();
+  }
+  for (const o of obstacles) if (o.grow != null) o.r = o.grow * f + 0.1;
+}
 function scatter(geo, mat, list, { shadow = true } = {}) {
   const im = new THREE.InstancedMesh(geo, mat, list.length);
   const m = M4(), q = new THREE.Quaternion(), s = V();
@@ -713,7 +726,7 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
       (tr() < 0.55 ? la : lb).push({ x, y: heightAt(x, z) - 0.03, z, s: lerp(0.9, 1.4, tr()) * lerp(2.6, 3.6, tr()), ry: tr() * 6.28 }); n++;
     }
   }
-  scatter(fernA, fernMat, la); scatter(fernB, fernMat, lb);
+  SHRINKERS.push({ im: scatter(fernA, fernMat, la), list: la }, { im: scatter(fernB, fernMat, lb), list: lb });
 
   // Horsetails along the pond shore and the mud pit edge.
   const stemC = new THREE.Color('#56692f'), nodeC = new THREE.Color('#2e3a1b'), coneC = new THREE.Color('#4f4a2c');
@@ -738,7 +751,7 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
     if (Math.hypot(x - SPAWN.x, z - SPAWN.z) < 5) continue;
     hl.push({ x, y: h - 0.05, z, s: lerp(0.75, 1.3, R()) * (TUT ? 2.6 : 1), ry: R() * 6.28 });
   }
-  scatter(horsetailGeo, hMat, hl);
+  SHRINKERS.push({ im: scatter(horsetailGeo, hMat, hl), list: hl });
 
   // Conifers on the outer ring.
   const trunkC = new THREE.Color('#47332a');
@@ -760,9 +773,9 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
     if (cl.some((o) => Math.hypot(o.x - x, o.z - z) < 5 * Math.sqrt(WS))) continue;
     const s = lerp(0.8, 1.35, R()) * (TUT ? 2.4 : 1);
     cl.push({ x, y: heightAt(x, z) - 0.2, z, s, ry: R() * 6.28 });
-    obstacles.push({ x, z, r: 0.42 * s + 0.1 });
+    obstacles.push({ x, z, r: 0.42 * s + 0.1, grow: 0.42 * s });
   }
-  scatter(coniferGeo, conMat, cl);
+  SHRINKERS.push({ im: scatter(coniferGeo, conMat, cl), list: cl });
 
   // Dicroidium: the signature seed fern of the Triassic southern continents.
   const dParts = []; const dr = rng(15);
@@ -788,12 +801,12 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
     if (dl.some((o) => Math.hypot(o.x - x, o.z - z) < 4 * Math.sqrt(WS))) continue;
     const s = lerp(0.85, 1.3, R()) * (TUT ? 2.8 : 1);
     dl.push({ x, y: heightAt(x, z) - 0.1, z, s, ry: R() * 6.28 });
-    obstacles.push({ x, z, r: 0.2 * s + 0.1 });
+    obstacles.push({ x, z, r: 0.2 * s + 0.1, grow: 0.2 * s });
   }
-  scatter(trunkGeo, conMat, dl);
+  SHRINKERS.push({ im: scatter(trunkGeo, conMat, dl), list: dl });
   const crownMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, side: THREE.DoubleSide, envMapIntensity: 0.5 });
   addWind(crownMat, 0.012, 'crown');
-  scatter(crown, crownMat, dl);
+  SHRINKERS.push({ im: scatter(crown, crownMat, dl), list: dl });
 
   // Rocks: red sandstone and grey mudstone.
   const rockGeo = (() => { const g = new THREE.IcosahedronGeometry(1, 1); const p = g.attributes.position;
@@ -1574,7 +1587,8 @@ function emit(ev) {
 }
 // The tutorial world is built 4x oversize around a hatchling: sound uses its real mass, speed and distances.
 const HATCH_MASS = 0.5; // kg, a game estimate for a fresh Herrerasaurus hatchling
-const SOUND_MASS = TUT ? HATCH_MASS : CREATURE.mass;
+const JUV_MASS = 8; // kg, a game estimate for the tutorial's juvenile
+const SOUND_MASS = () => (TUT ? lerp(HATCH_MASS, JUV_MASS, tut.size) : CREATURE.mass); // grows with it (TD19)
 // dB at 1 m: 62 for an adult walking at 3.4 m/s, +10 dB per tenfold mass, +4.5 dB per doubling of impact speed.
 const STEP_DB = (mass, speed, gain) => 62 + 10 * Math.log10(mass / 350) + 15 * Math.log10(Math.max(speed, 0.3) / 3.4) + 20 * Math.log10(Math.max(gain, 0.05));
 function surfaceName(x, z) {
@@ -1588,9 +1602,9 @@ function footstep(p, gain) {
   // Noise ratings on top of the physics (stealth-game style, game estimates): sprint footfalls slam (+10 dB),
   // a jump landing puts the whole body down at once (+14 dB).
   const noise = D.landV ? 14 : D.speed > 5 && input.sprint > 0.25 ? 10 : 0;
-  emit({ kind: 'step', who: 'player', x: p.x, y: groundAt(p.x, p.z), z: p.z, mass: SOUND_MASS, speed, surface, claws: true, gain, level: STEP_DB(SOUND_MASS, speed, gain) + noise });
+  emit({ kind: 'step', who: 'player', x: p.x, y: groundAt(p.x, p.z), z: p.z, mass: SOUND_MASS(), speed, surface, claws: true, gain, level: STEP_DB(SOUND_MASS(), speed, gain) + noise });
 }
-function bodySound(kind, level, extra) { const s = surfaceName(D.pos.x, D.pos.z); emit({ kind, who: 'player', x: D.pos.x, y: groundAt(D.pos.x, D.pos.z), z: D.pos.z, mass: SOUND_MASS, surface: s, level, ...extra }); }
+function bodySound(kind, level, extra) { const s = surfaceName(D.pos.x, D.pos.z); emit({ kind, who: 'player', x: D.pos.x, y: groundAt(D.pos.x, D.pos.z), z: D.pos.z, mass: SOUND_MASS(), surface: s, level, ...extra }); }
 function mouthSound(kind, level, extra) { const m = mouthAt(); emit({ kind, who: 'player', x: m.x, y: m.y, z: m.z, level, ...extra }); }
 const sfx = {
   snap: () => mouthSound('bite', 88),
@@ -1640,7 +1654,10 @@ const SIM_SEED = 0x51a1;
 let simRng = rng(SIM_SEED);
 const HEAR_DB = 38;
 const heardLevel = (ev, x, z) => { const d = Math.hypot(ev.x - x, ev.z - z) / WS; return ev.level - 20 * Math.log10(Math.max(0.5, d)) - 0.005 * d; }; // real metres (the tutorial is 4x)
-const AI = TUT ? [] : [ // the tutorial nest is kept quiet
+// The tutorial nest is kept quiet until Growth; then a Saurosuchus calls from PRED_FROM, past the hills, so Stage 4 isn't a surprise (TD20).
+const AI = TUT ? [
+  { id: 'saurosuchus', name: 'a Saurosuchus', creature: 'large', mode: 'closed', level: 100, r: Math.hypot(PRED_FROM.x, PRED_FROM.z), ang: Math.atan2(PRED_FROM.x, PRED_FROM.z), w: 0, gap: [30, 40], dur: [1.8, 2.4], next: Infinity, quiet: 0, answer: -1 },
+] : [
   { id: 'rival', name: 'a rival Herrerasaurus', creature: 'herrerasaurus', mode: 'open', level: 106, r: 50, ang: 2.4, w: 0.012, gap: [22, 40], dur: [1.3, 1.8], next: 8, quiet: 0, answer: -1 },
   { id: 'saurosuchus', name: 'a Saurosuchus', creature: 'large', mode: 'closed', level: 100, r: 56, ang: -0.9, w: -0.008, gap: [30, 55], dur: [1.8, 2.4], next: 19, quiet: 0, answer: -1 },
 ];
@@ -1654,6 +1671,7 @@ function resetSimForReplay() {
   Object.assign(SIM, { tick: [], queue: [], hash: 0x811c9dc5, count: 0, heard: null });
 }
 function aiCall(a) {
+  if (TUT && a.id === 'saurosuchus') onPredatorHeard(a);
   emit({ kind: 'call', who: a.id, mode: a.mode, duration: lerp(a.dur[0], a.dur[1], simRng()), roughness: a.mode === 'open' ? 0.5 : 0.05, amp: 0.9, x: a.x, y: a.y, z: a.z, level: a.level });
   a.next = D.time + lerp(a.gap[0], a.gap[1], simRng());
 }
@@ -1662,7 +1680,8 @@ function aiStep(dt) {
   if (prey && prey.spawned) prey.heardDb = -99; // loudest player sound the prey heard last step
   for (const ev of SIM.tick) {
     if (ev.ui) continue;
-    if (prey && prey.spawned && ev.who === 'player') prey.heardDb = Math.max(prey.heardDb, heardLevel(ev, prey.x, prey.z));
+    // Sniffs don't count: the Track lesson tells you to sniff your way up to a sleeping prey.
+    if (prey && prey.spawned && ev.who === 'player' && ev.kind !== 'sniff') prey.heardDb = Math.max(prey.heardDb, heardLevel(ev, prey.x, prey.z));
     for (const a of AI) {
       if (ev.who === a.id || heardLevel(ev, a.x, a.z) < HEAR_DB) continue;
       if (a.id === 'rival' && ev.kind === 'call' && ev.who === 'player' && CALLS[ev.style]?.challenge && a.answer < 0) a.answer = D.time + 0.9 + 0.7 * simRng(); // answers a challenge
@@ -1693,6 +1712,7 @@ function createAudioLayer(engine) {
     nose: engine.createSource('voice', { tract: 0.15, sac: 0.1, level: 54, seed: 15 }), // nasal passage: short tube, high resonances
     ai: Object.fromEntries(AI.map((a, i) => [a.id, engine.createSource('voice', { creature: a.creature, level: a.level, priority: 10, seed: 21 + i })])),
   };
+  if (TUT) S.voiceJ = engine.createSource('voice', { tract: 0.14, sac: 0.07, priority: 20, level: 80, seed: 18 }); // the juvenile's longer tract (TD19)
   if (TUT) S.prey = engine.createSource('voice', { tract: 0.05, sac: 0.03, level: 70, priority: 8, seed: 17 }); // a small cynodont
   if (MAP === 'course') engine.createSource('water', { preset: 'stream', level: 62, seed: 31, position: { x: WATERS[0].x, y: WATERS[0].z, z: WATER_Y } });
   const at = (src, ev) => src.setPosition(ev.x / WS, ev.z / WS, ev.y / WS);
@@ -1704,8 +1724,9 @@ function createAudioLayer(engine) {
       switch (ev.kind) {
         case 'step': at(S.feet, ev); S.feet.step({ mass: ev.mass, speed: ev.speed, surface: ev.surface, claws: ev.claws, gain: ev.gain * vary(1.5) }); break;
         case 'call': {
-          const src = ev.who === 'player' ? S.voice : ev.who === 'prey' ? S.prey : S.ai[ev.who]; if (!src) break; at(src, ev);
-          const cap = 0.3 * 343 / (4 * S.tract), f0 = ev.f0abs ?? (ev.f0k && ev.who === 'player' ? cap * ev.f0k : ev.pitch ? 420 * ev.pitch : undefined);
+          const juv = ev.who === 'player' && S.voiceJ && tut.size > 0.5;
+          const src = ev.who === 'player' ? (juv ? S.voiceJ : S.voice) : ev.who === 'prey' ? S.prey : S.ai[ev.who]; if (!src) break; at(src, ev);
+          const cap = 0.3 * 343 / (4 * (juv ? 0.14 : S.tract)), f0 = ev.f0abs ?? (ev.f0k && ev.who === 'player' ? cap * ev.f0k : ev.pitch ? 420 * ev.pitch : undefined);
           callOn(src, ev, { mode: ev.mode, duration: ev.duration * (0.96 + 0.08 * audioRng()), roughness: ev.roughness, amp: ev.amp, breath: ev.breath, jitter: ev.jitter,
             ...(f0 ? { f0, f0End: ev.f0abs ?? (ev.f0Endk ? cap * ev.f0Endk : f0 * 0.75) } : {}) });
           break;
@@ -1734,7 +1755,7 @@ function createAudioLayer(engine) {
       const k = 1 / WS;
       engine.setListener({ x: camPos.x * k, y: camPos.z * k, z: camPos.y * k, yaw: Math.atan2(camFwd.x, camFwd.z) });
       for (const a of w.ai) S.ai[a.id].setPosition(a.x * k, a.z * k, a.y * k);
-      const m = w.mouth; for (const s of [S.voice, S.jaw, S.mouth, S.nose, S.crunch]) s.setPosition(m.x * k, m.z * k, m.y * k);
+      const m = w.mouth; for (const s of [S.voice, S.voiceJ, S.jaw, S.mouth, S.nose, S.crunch].filter(Boolean)) s.setPosition(m.x * k, m.z * k, m.y * k);
       S.feet.setPosition(w.feet.x * k, w.feet.z * k, w.feet.y * k);
       if (S.prey && w.prey) S.prey.setPosition(w.prey.x * k, w.prey.z * k, w.prey.y * k);
       for (let i = later.length - 1; i >= 0; i--) if (engine.ctx.currentTime >= later[i].at) { later[i].run(); later.splice(i, 1); }
@@ -2660,6 +2681,7 @@ function simStep(dt) {
   const snout = dino.B.head.localToWorld(tmp.v.set(0, -0.09, 0.55));
   let hdT = 0, huT = 0, tiltT = 0, hyawT = 0, dipTo = null, scoop = 0, nose = 0, gulp = -1;
   const relW = wrapAngle(D.waterYaw - D.yaw);
+  if (D.act === 'none' && (D.lookT || 0) > 0) { D.lookT -= dt; hyawT = clamp(wrapAngle(D.lookYaw - D.yaw), -1.25, 1.25); huT = 0.45; } // a sound it heard
   if (D.act === 'alert') { hyawT = clamp(relW, -1.25, 1.25); huT = 0.35; }
   else if (D.act === 'turn') { hyawT = clamp(relW * 0.8, -1.2, 1.2); huT = 0.15; }
   else if (D.act === 'shuffle') hdT = 0.35;
@@ -2923,7 +2945,7 @@ function updateCourse() {
 
 /* ============================== tutorial ============================== */
 // A passive observer over the real game: each step watches ordinary events, pinned to its own entity (docs/TUTORIAL.md TD4).
-const tut = { step: 0, thirst: 0.3, hunger: 0.2, gulps: 0, bites: 0, roars: 0, entered: 0, passT: -1, restOk: false, text: '', dev: '' };
+const tut = { size: 0, growth: 0, heardT: -1, step: 0, thirst: 0.3, hunger: 0.2, gulps: 0, bites: 0, roars: 0, entered: 0, passT: -1, restOk: false, text: '', dev: '' };
 
 // ---- prey: a young Exaeretodon (plant-eating cynodont). It doesn't exist until the Hunt step starts (TD8). ----
 const prey = (() => {
@@ -2959,10 +2981,10 @@ function preySpot(minFromPlayer) {
   }
   return [HUNT.x, HUNT.z];
 }
-function spawnPrey() {
+function spawnPrey(id = 1) {
   const [x, z] = preySpot(16);
   Object.assign(prey, { alive: true, spawned: true, x, z, yaw: Math.atan2(D.pos.x - x, D.pos.z - z) + Math.PI, speed: 0, state: 'graze', fatigue: 0, calmT: 0, stuckT: 0, lastX: x, lastZ: z });
-  prey.g.visible = true; prey.g.rotation.set(0, prey.yaw, 0);
+  prey.id = id; prey.g.visible = true; prey.g.rotation.set(0, prey.yaw, 0); prey.g.scale.set(1, 1, 1);
   if (!prey.obstacle) { prey.obstacle = { x, z, r: 0.5 }; obstacles.push(prey.obstacle); }
 }
 // It keeps 3 m off the water too, so a kill never lands where it can only be reached by wading in too deep.
@@ -3087,7 +3109,7 @@ const TSTEPS = [
   { name: 'Walk', say: 'Push {move} to walk and turn the camera with {camera}. Step over the nest rim and head for the light.', at: () => TRAIL[1], pass: (s) => Math.hypot(D.pos.x - s.at()[0], D.pos.z - s.at()[1]) < 3 },
   { name: 'Roar', say: 'Press {roar} to roar. From a hatchling it comes out as a squeak, but it tells the others where you are.', pass: () => D.roars > tut.roars },
   { name: 'Drink', say: 'You’re thirsty. Walk down to the pond and hold {drink} at the water’s edge.', sub: () => `Thirst ${Math.round(tut.thirst * 100)}%`, at: () => pondEdge, pass: () => tut.thirst >= 0.999 },
-  { name: 'Hunt', say: 'Hungry now. A young Exaeretodon is grazing past the pond. Hold {sprint} to run it down, then press {bite} when your snout is on it.', sub: () => prey.state === 'flee' ? 'It’s running. Keep sprinting; it tires before you do.' : 'Sneak up slowly or charge it.', at: () => (prey.alive && Math.hypot(prey.x - D.pos.x, prey.z - D.pos.z) > 8 ? [prey.x, prey.z] : null), enter: () => spawnPrey(), pass: () => prey.spawned && !prey.alive },
+  { name: 'Hunt', say: 'Hungry now. A young Exaeretodon is grazing past the pond. Hold {sprint} to run it down, then press {bite} when your snout is on it.', sub: () => prey.state === 'flee' ? 'It’s running. Keep sprinting; it tires before you do.' : 'Sneak up slowly or charge it.', at: () => (prey.alive && Math.hypot(prey.x - D.pos.x, prey.z - D.pos.z) > 8 ? [prey.x, prey.z] : null), enter: () => spawnPrey(1), pass: () => prey.spawned && !prey.alive },
   { name: 'Eat', say: 'Got it. Stand over the kill and hold {drink} to eat.', sub: () => `Hunger ${Math.round(tut.hunger * 100)}%`, at: () => [prey.x, prey.z], pass: () => tut.hunger >= 0.999 },
   { name: 'Rest', say: () => (tut.restOk || tut.tired ? 'The chase wore you out. Hold {rest} to lie down, and stay down until your stamina is full.' : 'Resting restores stamina. Sprint with {sprint} until it drops, then hold {rest} to lie down.'), sub: () => `Stamina ${Math.round(D.stamina * 100)}%`, pass: () => (tut.restOk || tut.tired) && D.resting && D.stamina >= 0.995 },
   { name: 'Jump', say: 'A fallen log blocks the way. Run at it and press {jump} to leap over.', at: () => [LOG2.x, LOG2.z + 2.5], enter: () => { tut.logSide = Math.sign(D.pos.z - LOG2.z) || 1; },
@@ -3099,7 +3121,11 @@ const TSTEPS = [
     enter: () => { scent.on = true; },
     at: () => (Math.hypot(D.pos.x - SCENT_PATH[0][0], D.pos.z - SCENT_PATH[0][1]) > 6 && pathD(SCENT_PATH, D.pos.x, D.pos.z) > 4 ? SCENT_PATH[0] : null), pass: () => Math.hypot(D.pos.x - BED[0], D.pos.z - BED[1]) < 10 },
   { name: 'Sneak', say: 'It’s asleep. Walk up slowly, because sprinting, jumping or roaring will wake it. Press {bite} when your snout is on it.', sub: () => (prey.woke ? 'It woke up! Run it down.' : 'Don’t linger right over it, either.'), pass: () => prey.id === 2 && !prey.alive },
-  { name: 'Done', say: 'That’s your first day. You can walk, roar, drink, hunt, rest, jump, sniff and track.', sub: () => `Open the menu with {menu} to restart, or pick Map to head out to the valley.` },
+  { name: 'Grow', say: 'You grow while you’re fed and watered. Keep Hunger and Thirst above half: drink at the pond, eat your kill.',
+    sub: () => (tut.heardT >= 0 && D.time - tut.heardT < 7 ? 'That deep boom came from the east, past the hills. Something big lives out there.' : growStall() || `Growing, ${Math.round(tut.growth * 100)}%`),
+    enter: () => { document.getElementById('growRow').hidden = false; const a = AI.find((x) => x.id === 'saurosuchus'); if (a.next === Infinity) a.next = D.time + 6; }, pass: () => tut.growth >= 1 },
+  { name: 'Juvenile', say: 'You’re a juvenile now. The world looks a little smaller.', enter: () => { tut.shrinkT = 0; tut.growth = 1; }, pass: () => tut.shrinkT > 3.2 },
+  { name: 'Done', say: 'That’s your first day. You can walk, roar, drink, hunt, rest, jump, sniff, track and grow. Mind the thing that booms in the east.', sub: () => `Open the menu with {menu} to restart, or pick Map to head out to the valley.` },
 ];
 const TOKENS = { move: 'Move', camera: 'Camera', sprint: 'Sprint', jump: 'Jump', drink: 'Drink / sniff', bite: 'Bite', roar: 'Roar', rest: 'Rest', menu: 'Menu' };
 function keyName(tok) { const row = KEYS[input.device].find(([a]) => a === TOKENS[tok]); return row ? row[1] : tok; }
@@ -3114,9 +3140,30 @@ function tutStep(dt) {
   const s = TSTEPS[tut.step];
   if (s.name === 'Rest' && D.resting && D.restFrom < 0.97) tut.restOk = true; // any visible dip counts: the text only says "until it drops"
   if (s.name === 'Smell' && D.act === 'air') tut.airT += dt;
+  if (s.name === 'Grow' && tut.passT < 0) {
+    // Growing burns food and water (TD17); it only advances while both are above half.
+    tut.thirst = Math.max(0, tut.thirst - 0.008 * dt); tut.hunger = Math.max(0, tut.hunger - 0.006 * dt); // about one drink and one meal
+    if (tut.thirst > 0.5 && tut.hunger > 0.5) tut.growth = Math.min(1, tut.growth + dt / 90);
+    // Out of meat: a new grazer on the hunting ground.
+    if (!prey.spawned || (!prey.alive && prey.meat <= 0)) spawnPrey(3);
+  }
+  if (s.name === 'Juvenile') {
+    tut.shrinkT += dt; const k = smooth(0, 3, tut.shrinkT);
+    tut.size = k; setWorldScale(lerp(1, 0.72, k)); dino.B.head.scale.setScalar(lerp(1.3, 1.12, k));
+  }
   updateScent(dt);
   if (tut.passT >= 0) { tut.passT += dt; if (tut.passT > 1.2) enterStep(tut.step + 1); return; }
   if (s.pass && s.pass(s)) { tut.passT = 0; sfx.chirp(1, true); }
+}
+// The Saurosuchus called (TD20): the hatchling turns its head to it and the panel says what it was. Text and head turn carry it with sound off.
+function onPredatorHeard(a) {
+  tut.heardT = D.time; rumble(1600, 0.35, 0.05);
+  D.lookYaw = Math.atan2(a.x - D.pos.x, a.z - D.pos.z); D.lookT = 2.6;
+}
+// Name the cause actually holding growth back (TD18).
+function growStall() {
+  const th = tut.thirst <= 0.5, hu = tut.hunger <= 0.5;
+  return th && hu ? 'Growth stalled: you’re hungry and thirsty.' : th ? 'Growth stalled: you’re thirsty. Go and drink.' : hu ? 'Growth stalled: you’re hungry. Eat.' : '';
 }
 function enterStep(i) {
   tut.step = Math.min(i, TSTEPS.length - 1); tut.passT = -1; tut.roars = D.roars || 0; tut.restOk = false;
@@ -3141,6 +3188,8 @@ function updateTut() {
   }
   document.getElementById('thirstBar').style.width = (tut.thirst * 100).toFixed(0) + '%';
   document.getElementById('thirstVal').textContent = tut.thirst >= 0.999 ? 'Quenched' : tut.thirst < 0.5 ? `Thirsty, ${Math.round(tut.thirst * 100)}%` : `${Math.round(tut.thirst * 100)}%`;
+  document.getElementById('growBar').style.width = (tut.growth * 100).toFixed(0) + '%';
+  document.getElementById('growVal').textContent = tut.size >= 1 ? 'Juvenile' : tut.growth >= 1 ? 'Grown' : growStall() ? `Stalled, ${Math.round(tut.growth * 100)}%` : `${Math.round(tut.growth * 100)}%`;
   document.getElementById('hungerBar').style.width = (tut.hunger * 100).toFixed(0) + '%';
   document.getElementById('hungerVal').textContent = tut.hunger >= 0.999 ? 'Full' : tut.hunger < 0.5 ? `Hungry, ${Math.round(tut.hunger * 100)}%` : `${Math.round(tut.hunger * 100)}%`;
 }
@@ -3178,7 +3227,7 @@ function frame(now) {
 // Test and debugging hook: lets an automated check drive the demo without a real controller.
 window.__demo = {
   SIM, AI, audio, resetSimForReplay, loadEngine, createAudioLayer, updateAudio, audioWorld, camera,
-  D, cam, input, egg, tut, prey, TSTEPS, enterStep, scentInfo: () => ({ on: scent.on, glow: scent.mat.opacity, marks: scent.marks.length }), heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, WATERS, MUDS, MAP, COURSE, COURSE_LEN, pathInfo, course, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
+  D, cam, input, egg, tut, prey, TSTEPS, enterStep, SHRINKERS, scentInfo: () => ({ on: scent.on, glow: scent.mat.opacity, marks: scent.marks.length }), heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, WATERS, MUDS, MAP, COURSE, COURSE_LEN, pathInfo, course, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
   start: () => startDemo('pad'),
   step(n = 60) { for (let i = 0; i < n; i++) { pollInput(STEP); simStep(STEP); flakes.update(STEP); drips.update(STEP); splash.update(STEP); splat.update(STEP); dust.update(STEP); shells.update(STEP); updateRipples(STEP); updateCamera(STEP); } updatePrints(); },
   teleport(x, z, yaw = D.yaw) { D.pos.set(x, 0, z); D.yaw = yaw; clearMotion(); plantFeetAtNeutral(); cam.yaw = yaw + Math.PI; },

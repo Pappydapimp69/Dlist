@@ -141,7 +141,54 @@ sniff (Brain: assert every bound verb is explained).
 | S3 | Done. 18 scent marks glow while sniffing and fade over 6 s after. Prey #2 sleeps lying down; noise wakes it. |
 | S4 | Done. Bot: Stage 1 into Jump 3/3, Stage 2 Jump through Done. **Also fixed:** a kill under the body couldn't be eaten (reach was measured only ahead of the snout, though the text says "stand over the kill"), and the Rest threshold dropped from 90% to 97% since the text only says "until it drops". |
 
-## 9. Risks
+## 9. Stage 3 — growth (with the predator heard, not seen)
+
+Appended after Sneak. Teaches the core loop (eat and drink to grow) and plants the
+sound of *Saurosuchus* so Stage 4 (danger) doesn't open with a surprise.
+
+### Decisions
+
+| # | Decision | Why |
+|---|---|---|
+| TD17 | **Growth fills only while Hunger and Thirst are both above 50%.** Both drain during the step (thirst faster), so the player has to cycle the pond and the kill. | Growing is the reward for the loop the earlier steps taught one verb at a time. |
+| TD18 | **A stalled growth bar names its cause**: thirsty, hungry, or both. | Copy must assert the cause actually in effect (Brain: gate copy on the predicate). (ZaneGPT.) |
+| TD19 | **"Growing up" shrinks the world**: tutorial plants scale to 72% over 3 s, tree collision radii with them; head bone 1.3x to 1.12x; the call deepens (vocal tract 8 to 14 cm); footsteps get heavier. | The rig can't be rescaled (TD1), so growth is the world shrinking. Shrinking colliders can only free the player, never trap them. |
+| TD20 | **Distant *Saurosuchus* bellows during Growth**, every 30–40 s, from a fixed direction (east, past the hills; `PRED_FROM`). The hatchling turns its head to it. The panel says something big lives out there. | Plants the next stage's threat (a deliberate Chekhov setup that pays off in Stage 4). Text and head turn carry it when sound is off. |
+| TD21 | **The bellow is a closed-mouth call** with f0 ≈ 70 Hz locked to the throat resonance (Brain dlist E16, scaled from a dove), slow infrasonic swell, **plus audible 150–400 Hz texture**; terrain-occlusion low-pass (Brain dlist E21); equal-power pan (dlist E26); controller rumble. | Phone and laptop speakers can't play 70 Hz. Without the upper texture, most players would hear nothing. (ZaneGPT.) |
+
+**Accuracy:** no *Saurosuchus* call is known. A crocodilian-style closed-mouth
+bellow is the extant-bracket guess and is labelled as one.
+
+### Steps
+
+| # | Step | Passes when |
+|---|---|---|
+| 12 | Grow: keep Hunger and Thirst above half; the bar fills over 90 s of fed-and-watered time; thirst drains 0.8%/s and hunger 0.6%/s, so it takes about one drink trip and one meal. Bellows start here. | Growth 100% |
+| 13 | Juvenile: the world shrinks around you over 3 s. | Shrink finished |
+| 14 | Done | — |
+
+Food: the second kill (Stage 2) is there to eat; if no meat is left, a new
+grazer spawns on the hunting ground.
+
+### Milestones
+
+| # | Milestone |
+|---|---|
+| G1 | Growth bar, drains, stall reasons, food respawn |
+| G2 | Juvenile: world shrink, head, voice, footsteps |
+| G3 | Saurosuchus bellow, head turn, panel line |
+| G4 | Bot walkthrough, screenshots, regression, deploy |
+
+### Build log
+
+| Milestone | Result |
+|---|---|
+| G1 | Done. **Found in testing:** the first drain rates (1.6%/s, 1.2%/s, 60 s) took a bot ~12 round trips; rebalanced to one drink and one meal. |
+| G2 | Done. Plants and tree colliders scale to 72%, head 1.12x, call and footsteps deepen. |
+| G3 | Done. Bellows every 30–40 s from `PRED_FROM`; head turns to them; panel line for 7 s after each. After merging the new sim-driven sound engine, the bellow is that engine's *Saurosuchus* voice (closed mouth, `large` creature), silent until Grow; footstep mass grows 0.5 to 8 kg; the juvenile gets a 14 cm-tract voice. |
+| G4 | Done. Bot: Jump through Done including Grow and Juvenile. Screenshots before and after the shrink. |
+
+## 10. Risks
 
 | Risk | Mitigation |
 |---|---|
