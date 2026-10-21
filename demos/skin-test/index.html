@@ -175,6 +175,7 @@
   <span class="best" id="courseBest">Run through the first gate to start the clock</span>
 </section>
 
+<div id="fade" hidden style="position:fixed;inset:0;background:#000;opacity:0;transition:opacity 600ms;display:grid;place-items:center;z-index:5;pointer-events:none"><p style="color:#efe6d6;font:italic 500 2rem Newsreader,Georgia,serif;margin:0">Caught.</p></div>
 <section class="tut" id="tutPanel" hidden aria-live="polite">
   <span class="sec" id="tutSec">Step 1</span>
   <p class="say" id="tutSay"></p>
@@ -668,7 +669,9 @@ function addWind(mat, strength, key) {
 }
 // Tutorial growth shrinks the plants rather than growing the rig (TD19): every scatter keeps its list so it can be re-posed at a new scale.
 const SHRINKERS = [];
+let worldScaleNow = 1;
 function setWorldScale(f) {
+  worldScaleNow = f;
   const m = M4(), q = new THREE.Quaternion(), sc = V();
   for (const { im, list } of SHRINKERS) {
     list.forEach((it, i) => { q.setFromEuler(new THREE.Euler(it.tx || 0, it.ry || 0, it.tz || 0)); sc.set(it.s * f, (it.sy || it.s) * f, it.s * f); m.compose(V(it.x, it.y, it.z), q, sc); im.setMatrixAt(i, m); });
@@ -1679,10 +1682,12 @@ function aiCall(a) {
 // Runs at the start of each sim step: hear the last step's events, then act.
 function aiStep(dt) {
   if (prey && prey.spawned) prey.heardDb = -99; // loudest player sound the prey heard last step
+  if (pred && pred.on) pred.heardDb = -99;
   for (const ev of SIM.tick) {
     if (ev.ui) continue;
     // Sniffs don't count: the Track lesson tells you to sniff your way up to a sleeping prey.
     if (prey && prey.spawned && ev.who === 'player' && ev.kind !== 'sniff') prey.heardDb = Math.max(prey.heardDb, heardLevel(ev, prey.x, prey.z));
+    if (pred && pred.on && ev.who === 'player') pred.heardDb = Math.max(pred.heardDb ?? -99, heardLevel(ev, pred.x, pred.z));
     for (const a of AI) {
       if (ev.who === a.id || heardLevel(ev, a.x, a.z) < HEAR_DB) continue;
       if (a.id === 'rival' && ev.kind === 'call' && ev.who === 'player' && CALLS[ev.style]?.challenge && a.answer < 0) a.answer = D.time + 0.9 + 0.7 * simRng(); // answers a challenge
@@ -1718,6 +1723,7 @@ function createAudioLayer(engine) {
     nose: engine.createSource('voice', { tract: 0.06, sac: 0.05, level: 54, seed: 15 }), // nostrils and nasal passage: short tube, resonances from 1.4 kHz up
     ai: Object.fromEntries(AI.map((a, i) => [a.id, engine.createSource('voice', { creature: a.creature, level: a.level, priority: 10, seed: 21 + i })])),
   };
+  if (TUT) S.predFeet = engine.createSource('footsteps', { priority: 9, seed: 19 }); // Saurosuchus feet
   if (TUT) S.voiceJ = engine.createSource('voice', { tract: 0.14, sac: 0.07, priority: 20, level: 80, seed: 18 }); // the juvenile's longer tract (TD19)
   if (TUT) S.prey = engine.createSource('voice', { tract: 0.05, sac: 0.03, level: 70, priority: 8, seed: 17 }); // a small cynodont
   if (MAP === 'course') engine.createSource('water', { preset: 'stream', level: 62, seed: 31, position: { x: WATERS[0].x, y: WATERS[0].z, z: WATER_Y } });
@@ -1729,7 +1735,7 @@ function createAudioLayer(engine) {
     S,
     play(ev) {
       switch (ev.kind) {
-        case 'step': at(S.feet, ev); S.feet.step({ mass: ev.mass, speed: ev.speed, surface: ev.surface, claws: ev.claws, gain: ev.gain * vary(1.5) }); break;
+        case 'step': { const f = ev.who === 'saurosuchus' ? S.predFeet : S.feet; at(f, ev); f.step({ mass: ev.mass, speed: ev.speed, surface: ev.surface, claws: ev.claws, gain: ev.gain * vary(1.5) }); break; }
         case 'call': {
           const juv = ev.who === 'player' && S.voiceJ && tut.size > 0.5;
           const src = ev.who === 'player' ? (juv ? S.voiceJ : S.voice) : ev.who === 'prey' ? S.prey : S.ai[ev.who]; if (!src) break; at(src, ev);
@@ -1770,6 +1776,7 @@ function createAudioLayer(engine) {
       const k = 1 / WS;
       engine.setListener({ x: camPos.x * k, y: camPos.z * k, z: camPos.y * k, yaw: Math.atan2(camFwd.x, camFwd.z) });
       for (const a of w.ai) S.ai[a.id].setPosition(a.x * k, a.z * k, a.y * k);
+      if (S.predFeet && w.pred) S.predFeet.setPosition(w.pred.x * k, w.pred.z * k, w.pred.y * k);
       const m = w.mouth; for (const s of [S.voice, S.voiceJ, S.jaw, S.mouth, S.nose, S.crunch, S.throat].filter(Boolean)) s.setPosition(m.x * k, m.z * k, m.y * k);
       S.feet.setPosition(w.feet.x * k, w.feet.z * k, w.feet.y * k);
       if (S.prey && w.prey) S.prey.setPosition(w.prey.x * k, w.prey.z * k, w.prey.y * k);
@@ -1780,7 +1787,8 @@ function createAudioLayer(engine) {
 }
 function audioWorld() {
   return { ai: AI.map((a) => ({ id: a.id, x: a.x, y: a.y, z: a.z })), mouth: mouthAt(), feet: { x: D.pos.x, y: groundAt(D.pos.x, D.pos.z), z: D.pos.z },
-    prey: prey && prey.spawned ? { x: prey.x, y: groundAt(prey.x, prey.z) + 0.3, z: prey.z } : null };
+    prey: prey && prey.spawned ? { x: prey.x, y: groundAt(prey.x, prey.z) + 0.3, z: prey.z } : null,
+    pred: pred && pred.on ? { x: pred.x, y: groundAt(pred.x, pred.z), z: pred.z } : null };
 }
 // Started from a user gesture: the AudioContext is made and resumed right here (Safari and iOS insist),
 // then the engine loads its worklet into it.
@@ -3100,6 +3108,115 @@ const marker = (() => {
 })();
 const pondEdge = (() => { const [ax, az] = TRAIL[1], dx = ax - POND.x, dz = az - POND.z, d = Math.hypot(dx, dz); return [POND.x + dx / d * (POND.r + 0.6), POND.z + dz / d * (POND.r + 0.6)]; })();
 
+// ---- Stage 4: Saurosuchus (docs/TUTORIAL.md §10). A big upright quadruped built from simple parts, in real metres, scaled to the juvenile's world. ----
+const PRED_PATH = [[72, -19], [40, -19], [10, -19], [-20, -18], [-58, -16]]; // open ground ~6 m outside the thicket (TD24)
+const SAFE = [-20, -8]; // where a caught player is put back (TD26)
+const pred = (() => {
+  if (!TUT) return null;
+  const g = new THREE.Group(), hide = new THREE.MeshStandardMaterial({ color: new THREE.Color('#4a4136'), roughness: 0.9, flatShading: true });
+  const belly = new THREE.MeshStandardMaterial({ color: new THREE.Color('#7d6d57'), roughness: 0.9, flatShading: true });
+  const ball = new THREE.IcosahedronGeometry(1, 1);
+  const add = (geo, mat, p, s, parent = g, r = null) => { const m = new THREE.Mesh(geo, mat); m.position.set(...p); m.scale.set(...s); if (r) m.rotation.set(...r); m.castShadow = true; parent.add(m); return m; };
+  add(ball, hide, [0, 1.2, 0], [0.5, 0.52, 1.55]);                // deep trunk
+  add(ball, belly, [0, 1.0, 0.1], [0.42, 0.38, 1.3]);
+  const neck = new THREE.Group(); neck.position.set(0, 1.35, 1.35); g.add(neck);
+  add(ball, hide, [0, 0.05, 0.45], [0.34, 0.38, 0.62], neck);
+  const head = new THREE.Group(); head.position.set(0, 0.1, 0.9); neck.add(head);
+  add(ball, hide, [0, 0.04, 0.3], [0.2, 0.27, 0.62], head);                       // tall, narrow skull
+  add(ball, hide, [0, -0.02, 0.72], [0.13, 0.18, 0.32], head);                     // deep snout
+  const jaw = new THREE.Group(); jaw.position.set(0, -0.16, 0.05); head.add(jaw);
+  add(ball, belly, [0, -0.04, 0.42], [0.15, 0.09, 0.62], jaw);
+  const tail = add(new THREE.ConeGeometry(0.36, 2.8, 8), hide, [0, 1.0, -2.8], [1, 1, 1], g, [-Math.PI / 2 - 0.08, 0, 0]);
+  const legs = [];
+  for (const [x, z, len] of [[0.42, 0.95, 1.05], [-0.42, 0.95, 1.05], [0.46, -0.95, 1.1], [-0.46, -0.95, 1.1]]) { // upright, columnar limbs
+    const pv = new THREE.Group(); pv.position.set(x, 1.05, z); g.add(pv);
+    add(new THREE.CylinderGeometry(0.2, 0.13, len, 7), hide, [0, -len / 2, 0], [1, 1, 1], pv);
+    add(new THREE.BoxGeometry(0.22, 0.08, 0.32), hide, [0, -len, 0.06], [1, 1, 1], pv);
+    legs.push(pv);
+  }
+  g.visible = false; scene.add(g);
+  return { g, head, jaw, neck, tail, legs, on: false, state: 'off', x: 0, z: 0, yaw: 0, speed: 0, seg: 0, phase: 0, chaseT: 0, seeT: 0, stepAcc: 0, spotted: false, nearest: 1e9, obstacle: null };
+})();
+const PRED_K = () => 4 * (worldScaleNow || 1); // real metres to sim metres at the current growth
+function predHead() { const k = PRED_K(); return [pred.x + Math.sin(pred.yaw) * 2.3 * k, pred.z + Math.cos(pred.yaw) * 2.3 * k]; }
+function predStart(state) {
+  Object.assign(pred, { on: true, state, seg: 0, x: PRED_PATH[0][0], z: PRED_PATH[0][1], yaw: -Math.PI / 2, speed: 0, chaseT: 0, seeT: 0, spotted: false, nearest: 1e9, hidT: 0 });
+  pred.g.visible = true;
+  if (!pred.obstacle) { pred.obstacle = { x: pred.x, z: pred.z, r: 2.4 }; obstacles.push(pred.obstacle); }
+  const a = AI.find((x) => x.id === 'saurosuchus'); a.next = D.time + 1; a.quiet = 0; // a call, much closer now
+}
+function predCharge() { pred.state = 'charge'; pred.chaseT = 0; const a = AI.find((x) => x.id === 'saurosuchus'); a.next = D.time; a.quiet = 0; rumble(500, 0.6, 0.7); }
+// Fern cover where the player is: any fern whose (current-size) crown covers the spot.
+function inCover(x, z) {
+  const f = worldScaleNow || 1;
+  for (const { list } of SHRINKERS.slice(0, 2)) for (const it of list) { const r = 1.1 * it.s * f; if ((it.x - x) ** 2 + (it.z - z) ** 2 < r * r) return true; }
+  return false;
+}
+// Senses (TD23): smell inside 4 m always; sight in a ±70° cone, 35 m in the open, 14 m into ferns, none onto a juvenile lying in ferns;
+// a loud sound (sim events) gives you away within 25 m.
+function predSees(dt) {
+  const [hx, hz] = predHead(), dx = D.pos.x - hx, dz = D.pos.z - hz, d = Math.hypot(dx, dz);
+  pred.nearest = Math.min(pred.nearest, d);
+  if (d < 4) return true;
+  if ((pred.heardDb ?? -99) >= 50 && d < 25) return true;
+  const cover = inCover(D.pos.x, D.pos.z), lying = D.rest > 0.8;
+  if (cover && lying) { if (d < 30) pred.hidT += dt; return false; }
+  const range = cover ? 14 : 35, cone = Math.abs(wrapAngle(Math.atan2(dx, dz) - pred.yaw)) < 1.22;
+  pred.seeT = cone && d < range ? pred.seeT + dt : 0;
+  return pred.seeT > 0.5;
+}
+function updatePred(dt) {
+  if (!pred || !pred.on) return;
+  const k = PRED_K(), [hx, hz] = predHead(), gap = Math.hypot(D.pos.x - hx, D.pos.z - hz);
+  let want = pred.yaw, v = 0, turn = 0.9;
+  if (pred.state === 'approach') {
+    const [tx, tz] = PRED_PATH[pred.seg + 1];
+    if (Math.hypot(tx - pred.x, tz - pred.z) < 3) { pred.seg++; if (pred.seg >= PRED_PATH.length - 1) { pred.state = 'gone'; pred.g.visible = false; } }
+    want = Math.atan2(tx - pred.x, tz - pred.z); v = 1.1 * k; // ~1.1 m/s walk
+    if (pred.state === 'approach' && predSees(dt)) { pred.spotted = true; predCharge(); }
+  } else if (pred.state === 'stalk') {
+    want = Math.atan2(D.pos.x - pred.x, D.pos.z - pred.z); v = 0.4 * k; pred.chaseT += dt;
+    // It charges once you stand, or anyway after a moment; never while the screen is still black after a catch.
+    if (D.time > (tut.fadeUntil || 0) && (pred.chaseT > 2.5 || (D.rest < 0.3 && pred.chaseT > 0.8))) predCharge();
+  } else if (pred.state === 'charge') {
+    // A short burst (TD25): ~2.4 m/s real (7 sim m/s here), about 8 s, then it gives up.
+    pred.chaseT += dt; want = Math.atan2(D.pos.x - pred.x, D.pos.z - pred.z); v = 7.0; turn = 1.6;
+    if (gap < 2.6) { caught(); return; }
+    if (pred.chaseT > 8 || gap > 40) { pred.state = 'giveup'; pred.chaseT = 0; }
+  } else if (pred.state === 'giveup') {
+    want = Math.atan2(PRED_FROM.x - pred.x, PRED_FROM.z - pred.z); v = 0.9 * k; pred.chaseT += dt;
+    if (pred.chaseT > 12) { pred.state = 'gone'; pred.g.visible = false; }
+  }
+  pred.yaw += clamp(wrapAngle(want - pred.yaw), -turn * dt, turn * dt);
+  pred.speed = damp(pred.speed, v, pred.state === 'charge' ? 1.6 : 1.2, dt);
+  pred.x += Math.sin(pred.yaw) * pred.speed * dt; pred.z += Math.cos(pred.yaw) * pred.speed * dt;
+  // Gait: diagonal pairs; one footfall event per quarter cycle, heavy (~500 kg, a game estimate).
+  const cyc = 1.9 / (1 + pred.speed / k * 0.6), prev = pred.phase; pred.phase = (pred.phase + dt / cyc) % 1;
+  if (pred.g.visible && Math.floor(prev * 4) !== Math.floor(pred.phase * 4) && pred.speed > 0.3) {
+    const sp = pred.speed / k;
+    emit({ kind: 'step', who: 'saurosuchus', x: pred.x, y: groundAt(pred.x, pred.z), z: pred.z, mass: 500, speed: sp, surface: 'packedDirt', claws: true, gain: 1, level: STEP_DB(500, sp, 1) });
+    if (pred.state === 'charge') rumble(80, 0.15, 0.35);
+  }
+  const ph = pred.phase * Math.PI * 2, sw = Math.min(0.55, 0.12 + pred.speed / k * 0.12);
+  pred.legs.forEach((l, i) => { l.rotation.x = Math.sin(ph + (i === 0 || i === 3 ? 0 : Math.PI)) * sw; });
+  pred.neck.rotation.set(pred.state === 'charge' ? 0.12 : 0.05 * Math.sin(D.time * 0.7), 0, 0);
+  pred.jaw.rotation.x = pred.state === 'charge' ? 0.35 + 0.1 * Math.sin(D.time * 9) : 0;
+  pred.tail.rotation.y = 0.12 * Math.sin(ph * 0.5);
+  pred.g.scale.setScalar(k);
+  pred.g.position.set(pred.x, groundAt(pred.x, pred.z) + Math.abs(Math.sin(ph * 2)) * 0.03 * k, pred.z);
+  pred.g.rotation.set(0, pred.yaw, 0);
+  if (pred.obstacle) { pred.obstacle.x = pred.x; pred.obstacle.z = pred.z; pred.obstacle.r = pred.g.visible ? 0.75 * k : 0; }
+  const a = AI.find((x) => x.id === 'saurosuchus'); a.r = Math.hypot(hx, hz); a.ang = Math.atan2(hx, hz); a.x = hx; a.z = hz; a.y = groundAt(hx, hz) + 1.2 * k; // its calls come from its head
+}
+// Caught (TD26): fade out, put the player at the fixed safe spot, restart the step; progress is kept.
+function caught() {
+  const el = document.getElementById('fade'); el.hidden = false; el.style.opacity = '1'; tut.caughtN = (tut.caughtN || 0) + 1;
+  rumble(600, 1, 1); pred.state = 'gone'; pred.g.visible = false; tut.fadeUntil = D.time + 2.4;
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => { el.hidden = true; }, 700); }, 1400);
+  D.pos.set(SAFE[0], 0, SAFE[1]); D.yaw = Math.PI / 2; clearMotion(); plantFeetAtNeutral(); cam.yaw = D.yaw + Math.PI; D.resting = false;
+  enterStep(tut.step);
+}
+
 // ---- Stage 2 scent trail: an authored path of marks (TD12) that glow while sniffing and linger after (TD13) ----
 const scent = (() => {
   const marks = [];
@@ -3167,7 +3284,24 @@ const TSTEPS = [
     sub: () => (tut.heardT >= 0 && D.time - tut.heardT < 7 ? 'That deep boom came from the east, past the hills. Something big lives out there.' : growStall() || `Growing, ${Math.round(tut.growth * 100)}%`),
     enter: () => { document.getElementById('growRow').hidden = false; const a = AI.find((x) => x.id === 'saurosuchus'); if (a.next === Infinity) a.next = D.time + 6; }, pass: () => tut.growth >= 1 },
   { name: 'Juvenile', say: 'You’re a juvenile now. The world looks a little smaller.', enter: () => { tut.shrinkT = 0; tut.growth = 1; }, pass: () => tut.shrinkT > 3.2 },
-  { name: 'Done', say: 'That’s your first day. You can walk, roar, drink, hunt, rest, jump, sniff, track and grow. Mind the thing that booms in the east.', sub: () => `Open the menu with {menu} to restart, or pick Map to head out to the valley.` },
+  { name: 'Hide', say: 'The booming thing is coming: a Saurosuchus, far bigger than you. Get into the fern thicket and hold {rest} to lie still until it has gone by.',
+    sub: () => (pred.state === 'charge' ? 'It saw you! Sprint away!' : pred.spotted ? 'It lost you. Get back into cover; it’s coming round again.' : tut.hidOk ? 'Stay down…' : inCover(D.pos.x, D.pos.z) ? (D.rest > 0.8 ? 'Hidden. Stay down.' : 'You’re in the ferns. Now lie down.') : 'Find the ferns.'),
+    at: () => (inCover(D.pos.x, D.pos.z) ? null : [BED[0] + 9, BED[1] + 8]),
+    enter: () => { predStart('approach'); tut.hidOk = false; },
+    pass: () => {
+      if (pred.state === 'gone' && pred.spotted) { predStart('approach'); return false; } // spotted: it went off after the chase; it comes round again
+      if (pred.state === 'gone' && !pred.spotted && pred.hidT < 3) { predStart('approach'); return false; } // it never got close to a hidden you: again
+      return pred.state === 'gone' && !pred.spotted;
+    } },
+  { name: 'Escape', say: 'It caught your scent on the wind. Get up and sprint away from it, now. It’s fast, but only for a few seconds.',
+    sub: () => (pred.state === 'charge' ? `It’s charging! ${Math.round(Math.hypot(D.pos.x - predHead()[0], D.pos.z - predHead()[1]))} m behind.` : pred.state === 'giveup' ? 'It’s given up.' : 'Here it comes…'),
+    enter: () => {
+      // It comes back round about 22 m off, upwind of you, and charges once you stand (TD25).
+      const a = Math.atan2(PRED_FROM.x - D.pos.x, PRED_FROM.z - D.pos.z), k = PRED_K();
+      predStart('stalk'); pred.x = D.pos.x + Math.sin(a) * (22 + 2.3 * k); pred.z = D.pos.z + Math.cos(a) * (22 + 2.3 * k); pred.yaw = a + Math.PI; pred.chaseT = 0;
+    },
+    pass: () => pred.state === 'giveup' },
+  { name: 'Done', say: 'That’s your first day. You can walk, roar, drink, hunt, rest, jump, sniff, track and grow, and you know when to hide and when to run.', sub: () => `Open the menu with {menu} to restart, or pick Map to head out to the valley.` },
 ];
 const TOKENS = { move: 'Move', camera: 'Camera', sprint: 'Sprint', jump: 'Jump', drink: 'Drink / sniff', bite: 'Bite', roar: 'Roar', rest: 'Rest', menu: 'Menu' };
 function keyName(tok) { const row = KEYS[input.device].find(([a]) => a === TOKENS[tok]); return row ? row[1] : tok; }
@@ -3194,6 +3328,7 @@ function tutStep(dt) {
     tut.size = k; setWorldScale(lerp(1, 0.72, k)); dino.B.head.scale.setScalar(lerp(1.3, 1.12, k));
   }
   updateScent(dt);
+  updatePred(dt);
   if (tut.passT >= 0) { tut.passT += dt; if (tut.passT > 1.2) enterStep(tut.step + 1); return; }
   if (s.pass && s.pass(s)) tut.passT = 0; // the panel border marks it; no jingle
 }
@@ -3269,7 +3404,7 @@ function frame(now) {
 // Test and debugging hook: lets an automated check drive the demo without a real controller.
 window.__demo = {
   SIM, AI, audio, resetSimForReplay, loadEngine, createAudioLayer, updateAudio, audioWorld, camera,
-  D, cam, input, egg, tut, prey, TSTEPS, enterStep, SHRINKERS, scent, scentNear, scentInfo: () => ({ on: scent.on, glow: scent.mat.opacity, marks: scent.marks.length }), heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, WATERS, MUDS, MAP, COURSE, COURSE_LEN, pathInfo, course, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
+  D, cam, input, egg, tut, prey, TSTEPS, enterStep, SHRINKERS, scent, scentNear, pred, inCover, predHead, scentInfo: () => ({ on: scent.on, glow: scent.mat.opacity, marks: scent.marks.length }), heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, WATERS, MUDS, MAP, COURSE, COURSE_LEN, pathInfo, course, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
   start: () => startDemo('pad'),
   step(n = 60) { for (let i = 0; i < n; i++) { pollInput(STEP); simStep(STEP); flakes.update(STEP); drips.update(STEP); splash.update(STEP); splat.update(STEP); dust.update(STEP); shells.update(STEP); updateRipples(STEP); updateCamera(STEP); } updatePrints(); },
   teleport(x, z, yaw = D.yaw) { D.pos.set(x, 0, z); D.yaw = yaw; clearMotion(); plantFeetAtNeutral(); cam.yaw = yaw + Math.PI; },
