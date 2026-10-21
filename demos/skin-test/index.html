@@ -80,6 +80,13 @@
   .menu li.on { background: rgba(212, 155, 83, 0.14); border-color: rgba(212, 155, 83, 0.5); }
   .menu li.on .state { color: var(--ochre); }
   .hint { margin: 0; color: var(--ink-3); font-size: 0.78rem; }
+  .course { position: fixed; top: calc(92px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 14px; display: grid; gap: 2px;
+    text-align: center; pointer-events: none; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); max-width: calc(100% - 32px); }
+  .course .sec { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ochre); }
+  .course .clock { font-family: var(--f-mono); font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+  .course .best { font-size: 0.72rem; color: var(--ink-2); }
+  @media (min-width: 1280px) { .course { top: calc(14px + env(safe-area-inset-top, 0px)); } }
   @media (max-width: 760px) { .keys { display: none; } .binomial { font-size: 1.1rem; } .chips { top: calc(108px + env(safe-area-inset-top, 0px)); } } /* chips sit under the title plate on phones */
 </style>
 
@@ -90,6 +97,12 @@
   <p class="binomial">Herrerasaurus ischigualastensis</p>
   <p class="meta">Adult · about 5.2 m nose to tail · Ischigualasto, about 231 million years ago</p>
 </header>
+
+<section class="course" id="coursePanel" hidden>
+  <span class="sec" id="courseSec">Start gate</span>
+  <span class="clock" id="courseClock">0:00.0</span>
+  <span class="best" id="courseBest">Run through the first gate to start the clock</span>
+</section>
 
 <div class="chips">
   <span class="chip warn" id="padChip">No controller yet. Press any button on it.</span>
@@ -113,7 +126,7 @@
     <p class="eyebrow">Dlist tech demo · skin test</p>
     <h1>Herrerasaurus</h1>
     <p class="lede">Wade into the pond to get wet. Wet skin and fuzz dry in 8 seconds. Walk through the mud pit to get muddy. The mud dries into a crust after 8 seconds, then flakes off once you've walked for 30 seconds. The pond washes mud off.</p>
-    <p class="lede">Low rocks are footholds; tall ones are walls. Take them too fast and it stumbles. Once it's tired, below half stamina, it can trip and go down. Press A to jump. Hold B near the water to drink, or away from it to sniff the air, or the ground where its own wet or muddy tracks are.</p>
+    <p class="lede">Low rocks are footholds; tall ones are walls. Take them too fast and it stumbles. Once it's tired, below half stamina, it can trip and go down. Press A to jump. Hold B near the water to drink, or away from it to sniff the air, or the ground where its own wet or muddy tracks are. Try the obstacle course from the Start menu.</p>
     <p class="cta" id="introCta">Press any button on your Xbox controller to start</p>
     <button type="button" id="kbStart">No controller? Start with keyboard and mouse</button>
   </div>
@@ -166,13 +179,33 @@ function rng(seed) {
 }
 
 /* ============================== world layout ============================== */
-const POND = { x: 15, z: -9, r: 11 };
+// Two maps share one engine: the valley (#valley, default) and the obstacle course (#course).
+const MAP = (location.hash || '').replace('#', '') === 'course' ? 'course' : 'valley';
 const WATER_Y = 0;
-const MUD = { x: -14, z: 4, r: 6.5 };
 const MUD_Y = 0.36;
 const WORLD_R = 56;
-const SPAWN = { x: 0, z: 15, yaw: Math.PI };
 const TOO_DEEP = 1.12;
+// The course runs gate to gate along this path; each leg is one hazard section.
+const COURSE = [[-37, 29], [-17, 29], [0, 17], [8.5, 0], [0, -17], [-19, -27], [-36, -19]];
+const SECTIONS = ['Rocks and pebbles', 'Fallen logs', 'Stream crossing', 'Mud pit', 'Boulder slalom', 'Log bridge over the pond'];
+const COURSE_LEN = COURSE.slice(1).reduce((a, p, i) => a + Math.hypot(p[0] - COURSE[i][0], p[1] - COURSE[i][1]), 0);
+const PI_ = { d: 0, s: 0, seg: 0, t: 0 };
+function pathInfo(x, z) {
+  let best = Infinity, acc = 0;
+  for (let i = 0; i < COURSE.length - 1; i++) {
+    const [ax, az] = COURSE[i], [bx, bz] = COURSE[i + 1], ex = bx - ax, ez = bz - az, L = Math.hypot(ex, ez);
+    const t = clamp(((x - ax) * ex + (z - az) * ez) / (L * L), 0, 1), d = Math.hypot(x - ax - ex * t, z - az - ez * t);
+    if (d < best) { best = d; PI_.d = d; PI_.s = acc + t * L; PI_.seg = i; PI_.t = t; }
+    acc += L;
+  }
+  return PI_;
+}
+const WATERS = MAP === 'course'
+  ? [{ x: 8.5, z: 0, r: 5.5, depth: 0.75, flat: 5 }, { x: -27.5, z: -23, r: 5, depth: 0.6, flat: 5 }]
+  : [{ x: 15, z: -9, r: 11, depth: 1.7, flat: 11 }];
+const MUDS = MAP === 'course' ? [{ x: 4.2, z: -8.5, r: 4.5, depth: 0.6, flat: 5 }] : [{ x: -14, z: 4, r: 6.5, depth: 0.85, flat: 8 }];
+const POND = WATERS[0], MUD = MUDS[0];
+const SPAWN = MAP === 'course' ? { x: -42, z: 29, yaw: Math.PI / 2 } : { x: 0, z: 15, yaw: Math.PI };
 // One creature for now. Rock tiers, jumps, snout reach and momentum all scale from these.
 const CREATURE = { hip: 1.15, leg: 1.18, mass: 350, reach: 2.8, snout: 1.8 }; // reach: water it notices; snout: how far ahead the lowered snout dips
 const TIER = { pebble: 0.08 * CREATURE.hip, step: 0.55 * CREATURE.hip }; // step-ups to about knee height; above that, a wall
@@ -181,36 +214,55 @@ const WIND_FROM = Math.atan2(-0.8, -0.55); // heading the wind blows from
 const WIND_DIR = V(0.8, 0, 0.55).normalize(); // downwind
 
 function heightAt(x, z) {
-  let h = 0.42 + (fbm(x * 0.03, z * 0.03, 1) - 0.5) * 1.6 + (fbm(x * 0.11, z * 0.11, 5) - 0.5) * 0.35;
+  let h;
   const r = Math.hypot(x, z);
-  h += smooth(36, 72, r) * (7 + 5 * fbm(x * 0.05, z * 0.05, 9));
-  const dp = Math.hypot(x - POND.x, z - POND.z);
-  h = lerp(h, 0.36 + (h - 0.36) * 0.2, 1 - smooth(POND.r + 2, POND.r + 11, dp));
-  h = lerp(h, -1.7, 1 - smooth(POND.r * 0.2, POND.r + 1.5, dp));
-  const dm = Math.hypot(x - MUD.x, z - MUD.z);
-  h = lerp(h, 0.42 + (h - 0.42) * 0.2, 1 - smooth(MUD.r + 1, MUD.r + 8, dm));
-  h = lerp(h, MUD_Y - 0.85, 1 - smooth(MUD.r * 0.15, MUD.r + 0.6, dm));
+  if (MAP === 'course') {
+    h = 0.42 + (fbm(x * 0.05, z * 0.05, 1) - 0.5) * 0.5 + (fbm(x * 0.13, z * 0.13, 5) - 0.5) * 0.15;
+    h += smooth(46, 72, r) * (6 + 4 * fbm(x * 0.05, z * 0.05, 9));
+    h = lerp(h, 0.42, 1 - smooth(2.5, 6, pathInfo(x, z).d)); // the course itself is graded flat
+  } else {
+    h = 0.42 + (fbm(x * 0.03, z * 0.03, 1) - 0.5) * 1.6 + (fbm(x * 0.11, z * 0.11, 5) - 0.5) * 0.35;
+    h += smooth(36, 72, r) * (7 + 5 * fbm(x * 0.05, z * 0.05, 9));
+  }
+  for (const w of WATERS) {
+    const d = Math.hypot(x - w.x, z - w.z);
+    h = lerp(h, 0.36 + (h - 0.36) * 0.2, 1 - smooth(w.r + 2, w.r + w.flat, d));
+    h = lerp(h, WATER_Y - w.depth, 1 - smooth(w.r * 0.2, w.r + 1.5, d));
+  }
+  for (const m of MUDS) {
+    const d = Math.hypot(x - m.x, z - m.z);
+    h = lerp(h, 0.42 + (h - 0.42) * 0.2, 1 - smooth(m.r + 1, m.r + m.flat, d));
+    h = lerp(h, MUD_Y - m.depth, 1 - smooth(m.r * 0.15, m.r + 0.6, d));
+  }
   return h;
 }
-const inPond = (x, z) => Math.hypot(x - POND.x, z - POND.z) < POND.r + 2;
-const inMudPit = (x, z) => Math.hypot(x - MUD.x, z - MUD.z) < MUD.r + 1.2;
-function waterDepthAt(x, z) { return inPond(x, z) ? Math.max(0, WATER_Y - heightAt(x, z)) : 0; }
-function mudDepthAt(x, z) { return inMudPit(x, z) ? Math.max(0, MUD_Y - heightAt(x, z)) : 0; }
+const inPond = (x, z) => WATERS.some((w) => Math.hypot(x - w.x, z - w.z) < w.r + 2);
+const inMudPit = (x, z) => MUDS.some((m) => Math.hypot(x - m.x, z - m.z) < m.r + 1.2);
+// Depths are measured from the real footing, so a rock or log standing out of the water is dry.
+function waterDepthAt(x, z) { return inPond(x, z) ? Math.max(0, WATER_Y - groundAt(x, z)) : 0; }
+function mudDepthAt(x, z) { return inMudPit(x, z) ? Math.max(0, MUD_Y - groundAt(x, z)) : 0; }
 function surfaceAt(x, z) {
-  const g = heightAt(x, z);
-  if (inPond(x, z) && g < WATER_Y) return { y: WATER_Y, ground: g, kind: 'water' };
-  if (inMudPit(x, z) && g < MUD_Y) return { y: MUD_Y, ground: g, kind: 'mud' };
-  const r = groundAt(x, z);
-  return { y: r, ground: r, kind: 'ground' };
+  const g = groundAt(x, z);
+  if (g < WATER_Y && inPond(x, z)) return { y: WATER_Y, ground: g, kind: 'water' };
+  if (g < MUD_Y && inMudPit(x, z)) return { y: MUD_Y, ground: g, kind: 'mud' };
+  return { y: g, ground: g, kind: 'ground' };
 }
-// Rocks are ground too: each keeps its upward facets for exact foot height, plus a dome summary
-// (centre, footprint radius, top height, top slope) for the tier and stability logic.
+// Rocks and logs are ground too. A rock keeps its upward facets for exact foot height, plus a dome summary
+// (centre, footprint radius, top height, top slope) for the tier and stability logic. A log is an analytic
+// cylinder lying on the ground: its rounded top is footing, and it rolls a foot that lands off its crown.
 const ROCKS = [];
 const GI = { y: 0, rock: -1, edge: 0, ny: 1 };
 function groundInfo(x, z) {
   let y = heightAt(x, z), rock = -1, edge = 0, ny = 1;
   for (const k of ROCKS) {
     const dx = x - k.x, dz = z - k.z; if (dx * dx + dz * dz > k.r2) continue;
+    if (k.log) {
+      const u = dx * k.ax + dz * k.az, w = -dx * k.az + dz * k.ax;
+      if (Math.abs(u) > k.len / 2 || Math.abs(w) >= k.rad) continue;
+      const ry = k.cy + Math.sqrt(k.rad * k.rad - w * w);
+      if (ry > y) { y = ry; rock = k.id; edge = Math.abs(w) / k.rad; ny = Math.sqrt(1 - (w / k.rad) ** 2); }
+      continue;
+    }
     const t = k.tri;
     for (let i = 0; i < t.length; i += 9) {
       const ax = t[i], az = t[i + 2], bx = t[i + 3], bz = t[i + 5], cx = t[i + 6], cz = t[i + 8];
@@ -334,11 +386,13 @@ const T_SIZE = 180, T_SEG = 240;
     c.lerp(cGrey, smooth(0.5, 0.7, fbm(x * 0.02 + 4, z * 0.02, 33)) * smooth(28, 50, r) * 0.8);
     c.lerp(cMoss, smooth(0.52, 0.68, fbm(x * 0.14, z * 0.14, 44)) * (1 - smooth(0.12, 0.3, slope)) * 0.85);
     c.lerp(cRock, smooth(0.22, 0.45, slope));
-    const dp = Math.hypot(x - POND.x, z - POND.z);
-    if (dp < POND.r + 5) c.lerp(cBank, (1 - smooth(0.0, 0.45, h - WATER_Y)) * (1 - smooth(POND.r, POND.r + 5, dp)));
-    if (h < WATER_Y && dp < POND.r + 2) c.lerp(cUnder, smooth(0, -0.4, h));
-    const dm = Math.hypot(x - MUD.x, z - MUD.z);
-    c.lerp(cMudBank, 1 - smooth(MUD.r - 0.5, MUD.r + 2.6, dm));
+    for (const w of WATERS) {
+      const dp = Math.hypot(x - w.x, z - w.z);
+      if (dp < w.r + 5) c.lerp(cBank, (1 - smooth(0.0, 0.45, h - WATER_Y)) * (1 - smooth(w.r, w.r + 5, dp)));
+      if (h < WATER_Y && dp < w.r + 2) c.lerp(cUnder, smooth(0, -0.4, h));
+    }
+    for (const m of MUDS) c.lerp(cMudBank, 1 - smooth(m.r - 0.5, m.r + 2.6, Math.hypot(x - m.x, z - m.z)));
+    if (MAP === 'course') c.lerp(cPale, (1 - smooth(1.8, 3.2, pathInfo(x, z).d)) * 0.45); // a worn track marks the course
     col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
@@ -366,16 +420,20 @@ waterMat.onBeforeCompile = (sh) => {
 };
 waterMat.customProgramCacheKey = () => 'water-v1';
 {
-  const g = new THREE.CircleGeometry(POND.r + 2, 96); g.rotateX(-Math.PI / 2);
-  const w = new THREE.Mesh(g, waterMat); w.position.set(POND.x, WATER_Y, POND.z); w.receiveShadow = true; w.renderOrder = 2;
-  scene.add(w);
-  const mg = new THREE.CircleGeometry(MUD.r + 1.2, 80); mg.rotateX(-Math.PI / 2);
-  const mp = mg.attributes.position;
-  for (let i = 0; i < mp.count; i++) mp.setY(i, (vnoise(mp.getX(i) * 1.3, mp.getZ(i) * 1.3, 61) - 0.5) * 0.03);
-  mg.computeVertexNormals();
+  for (const W of WATERS) {
+    const g = new THREE.CircleGeometry(W.r + 2, 96); g.rotateX(-Math.PI / 2);
+    const w = new THREE.Mesh(g, waterMat); w.position.set(W.x, WATER_Y, W.z); w.receiveShadow = true; w.renderOrder = 2;
+    scene.add(w);
+  }
   const mm = new THREE.MeshStandardMaterial({ color: new THREE.Color('#3a291b'), roughness: 0.32, metalness: 0, bumpMap: mudBumpTex, bumpScale: 2.5, envMapIntensity: 0.9 });
-  const mud = new THREE.Mesh(mg, mm); mud.position.set(MUD.x, MUD_Y, MUD.z); mud.receiveShadow = true;
-  scene.add(mud);
+  for (const M of MUDS) {
+    const mg = new THREE.CircleGeometry(M.r + 1.2, 80); mg.rotateX(-Math.PI / 2);
+    const mp = mg.attributes.position;
+    for (let i = 0; i < mp.count; i++) mp.setY(i, (vnoise(mp.getX(i) * 1.3, mp.getZ(i) * 1.3, 61) - 0.5) * 0.03);
+    mg.computeVertexNormals();
+    const mud = new THREE.Mesh(mg, mm); mud.position.set(M.x, MUD_Y, M.z); mud.receiveShadow = true;
+    scene.add(mud);
+  }
 }
 
 /* ============================== plants & rocks ============================== */
@@ -469,9 +527,10 @@ function scatter(geo, mat, list, { shadow = true } = {}) {
   return im;
 }
 function clearOf(x, z, pad) {
-  if (Math.hypot(x - POND.x, z - POND.z) < POND.r + pad) return false;
-  if (Math.hypot(x - MUD.x, z - MUD.z) < MUD.r + pad) return false;
+  if (WATERS.some((w) => Math.hypot(x - w.x, z - w.z) < w.r + pad)) return false;
+  if (MUDS.some((m) => Math.hypot(x - m.x, z - m.z) < m.r + pad)) return false;
   if (Math.hypot(x - SPAWN.x, z - SPAWN.z) < 6) return false;
+  if (MAP === 'course' && pathInfo(x, z).d < pad + 2.5) return false;
   return true;
 }
 function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp(rMin * rMin, rMax * rMax, R())); return [Math.cos(a) * r, Math.sin(a) * r]; }
@@ -486,7 +545,7 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
   for (let i = 0; i < 900 && la.length + lb.length < 560; i++) {
     const [x, z] = ringPoint(3, 54);
     const h = heightAt(x, z);
-    if (h < WATER_Y + 0.12 || Math.hypot(x - MUD.x, z - MUD.z) < MUD.r + 0.8 || Math.hypot(x - SPAWN.x, z - SPAWN.z) < 3) continue;
+    if (h < WATER_Y + 0.12 || MUDS.some((m) => Math.hypot(x - m.x, z - m.z) < m.r + 0.8) || Math.hypot(x - SPAWN.x, z - SPAWN.z) < 3 || (MAP === 'course' && pathInfo(x, z).d < 3.2)) continue;
     const clump = fbm(x * 0.09, z * 0.09, 71);
     if (R() > smooth(0.35, 0.6, clump) + 0.12) continue;
     (R() < 0.55 ? la : lb).push({ x, y: h - 0.03, z, s: lerp(0.65, 1.45, R()), ry: R() * 6.28 });
@@ -508,8 +567,9 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
   const hl = [];
   for (let i = 0; i < 400 && hl.length < 85; i++) {
     let x, z;
-    if (R() < 0.72) { const a = R() * 6.28, d = lerp(POND.r - 2.6, POND.r + 3.2, R()); x = POND.x + Math.cos(a) * d; z = POND.z + Math.sin(a) * d; }
-    else { const a = R() * 6.28, d = lerp(MUD.r + 0.6, MUD.r + 2.8, R()); x = MUD.x + Math.cos(a) * d; z = MUD.z + Math.sin(a) * d; }
+    if (R() < 0.72) { const W = WATERS[(R() * WATERS.length) | 0], a = R() * 6.28, d = lerp(W.r - 2.6, W.r + 3.2, R()); x = W.x + Math.cos(a) * d; z = W.z + Math.sin(a) * d; }
+    else { const M = MUDS[(R() * MUDS.length) | 0], a = R() * 6.28, d = lerp(M.r + 0.6, M.r + 2.8, R()); x = M.x + Math.cos(a) * d; z = M.z + Math.sin(a) * d; }
+    if (MAP === 'course' && pathInfo(x, z).d < 3) continue;
     const h = heightAt(x, z);
     if (h < WATER_Y - 0.3) continue;
     if (Math.hypot(x - SPAWN.x, z - SPAWN.z) < 5) continue;
@@ -577,17 +637,39 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
     for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i); const k = 0.75 + 0.5 * vnoise(x * 1.7 + 3, z * 1.7 + y, 91); p.setXYZ(i, x * k, y * k * 0.7, z * k); }
     g.computeVertexNormals(); return g; })();
   const rl = [];
-  for (let i = 0; i < 300 && rl.length < 42; i++) {
+  for (let i = 0; i < 300 && rl.length < (MAP === 'course' ? 24 : 42); i++) {
     const [x, z] = ringPoint(8, 56);
     if (!clearOf(x, z, 2)) continue;
     const big = R() < 0.25, s = big ? lerp(2.2, 3.2, R()) : lerp(0.2, 0.75, R()), sy = big ? s * lerp(1.4, 1.8, R()) : s; // a few real boulders, taller than the animal's hips
     rl.push({ x, y: heightAt(x, z) - sy * 0.25, z, s, sy, ry: R() * 6.28 });
   }
-  // Low sandstone slabs ahead of the start point, so step-ups are easy to find.
   const gr = rng(77);
-  for (const [x, z, s, sy] of [[-1.6, 7.6, 0.95, 0.42], [1.9, 5.4, 0.8, 0.5], [3.9, 8.8, 1.05, 0.34], [-4.4, 10.6, 0.75, 0.3], [0.8, 10.4, 0.55, 0.26], [-3.8, 4.4, 1.1, 0.62]])
-    rl.push({ x, y: heightAt(x, z) - sy * 0.28, z, s, sy, ry: gr() * 6.28, flat: true });
-  for (const it of rl) { const k = it.flat ? 0.12 : 0.3; it.tx = (gr() - 0.5) * k; it.tz = (gr() - 0.5) * k; } // tilted tops
+  // Course hazards are placed by section along the path: at(seg, t, offset) gives a point beside the path.
+  const at = (i, t, off = 0) => { const [ax, az] = COURSE[i], [bx, bz] = COURSE[i + 1], L = Math.hypot(bx - ax, bz - az), dx = (bx - ax) / L, dz = (bz - az) / L; return { x: ax + (bx - ax) * t - dz * off, z: az + (bz - az) * t + dx * off, yaw: Math.atan2(dx, dz) }; };
+  const courseLogs = [];
+  if (MAP === 'valley') {
+    // Low sandstone slabs ahead of the start point, so step-ups are easy to find.
+    for (const [x, z, s, sy] of [[-1.6, 7.6, 0.95, 0.42], [1.9, 5.4, 0.8, 0.5], [3.9, 8.8, 1.05, 0.34], [-4.4, 10.6, 0.75, 0.3], [0.8, 10.4, 0.55, 0.26], [-3.8, 4.4, 1.1, 0.62]])
+      rl.push({ x, y: heightAt(x, z) - sy * 0.28, z, s, sy, ry: gr() * 6.28, flat: true });
+  } else {
+    const cr2 = rng(91), rock = (p, s, sy, flat, tilt) => rl.push({ x: p.x, y: heightAt(p.x, p.z) - sy * (flat ? 0.28 : 0.25), z: p.z, s, sy, ry: cr2() * 6.28, flat, tilt });
+    // 1: rocks and pebbles, a scatter of pebbles with step-up rocks and low slabs through it.
+    for (let k = 0; k < 28; k++) { const sz = lerp(0.14, 0.3, cr2()); rock(at(0, lerp(0.08, 0.92, cr2()), lerp(-2.4, 2.4, cr2())), sz, sz, false); }
+    for (const [t, o, sz] of [[0.2, -0.8, 0.6], [0.3, 1.1, 0.72], [0.44, -0.2, 0.8], [0.55, 1.6, 0.66], [0.66, -1.3, 0.78], [0.78, 0.4, 0.7], [0.88, -0.6, 0.62]]) rock(at(0, t, o), sz, sz, false);
+    for (const [t, o, sz, sy] of [[0.36, 0.6, 1.1, 0.5], [0.6, -0.4, 1.0, 0.6], [0.83, 1.2, 1.2, 0.42]]) rock(at(0, t, o), sz, sy, true);
+    // 2: fallen logs across the path, getting thicker; one is too big to step over and has to be jumped.
+    for (const [t, rad, skew] of [[0.12, 0.14, 0], [0.27, 0.18, 0.18], [0.42, 0.22, 0], [0.57, 0.27, -0.16], [0.73, 0.45, 0], [0.89, 0.3, 0.22]]) { const p = at(1, t); courseLogs.push({ x: p.x, z: p.z, yaw: p.yaw + Math.PI / 2 + skew, len: 5.2, rad, sink: 0.25 }); }
+    // 3: stream crossing, with stepping stones on one side.
+    for (const [t, o] of [[0.58, -1.6], [0.68, -1.8], [0.78, -1.6], [0.86, -1.4]]) rock(at(2, t, o), 0.62, 1.7, true);
+    // 4: the mud pit, with a log half sunk at its far edge.
+    { const p = at(3, 0.72); courseLogs.push({ x: p.x, z: p.z, yaw: p.yaw + Math.PI / 2, len: 5, rad: 0.2, sink: 0.45 }); }
+    // 5: boulder slalom with tilted slabs between the boulders.
+    for (const [t, o] of [[0.18, 1.7], [0.34, -1.7], [0.5, 1.7], [0.66, -1.7], [0.82, 1.7]]) rock(at(4, t, o), 1.5, 2.3, false);
+    for (const [t, o] of [[0.26, -0.6], [0.58, 0.6], [0.74, 0.7]]) rock(at(4, t, o), 1.0, 0.55, true, 0.28);
+    // 6: a log bridge over the pond. Fall off and you're in the water.
+    { const W = WATERS[1], p = at(5, 0.5); courseLogs.push({ x: W.x, z: W.z, yaw: p.yaw, len: 12, rad: 0.36, cy: WATER_Y + 0.04, bridge: true }); }
+  }
+  for (const it of rl) { const k = it.tilt ?? (it.flat ? 0.12 : 0.3); it.tx = (gr() - 0.5) * k; it.tz = (gr() - 0.5) * k; } // tilted tops
   const rp = rockGeo.attributes.position, rm = M4(), rq = new THREE.Quaternion();
   rl.forEach((it, id) => {
     rm.compose(V(it.x, it.y, it.z), rq.setFromEuler(new THREE.Euler(it.tx, it.ry, it.tz)), V(it.s, it.sy || it.s, it.s));
@@ -608,16 +690,31 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
   const rockMat = new THREE.MeshStandardMaterial({ color: new THREE.Color('#6b5547'), roughness: 0.92, flatShading: true, envMapIntensity: 0.4 });
   scatter(rockGeo, rockMat, rl);
 
-  // A few fallen logs.
-  const logGeo = mergeColored([{ geo: new THREE.CylinderGeometry(0.24, 0.3, 5.5, 9), color: new THREE.Color('#3e2c21'), matrix: M4().makeRotationZ(Math.PI / 2) }]);
-  const ll = [];
-  for (let i = 0; i < 100 && ll.length < 4; i++) {
+  // Fallen logs: hazards with height, just like rocks. A thin one is stepped over, a thick one has to be jumped.
+  const ll = courseLogs.slice();
+  for (let i = 0; i < 100 && ll.length < courseLogs.length + 4; i++) {
     const [x, z] = ringPoint(14, 40);
     if (!clearOf(x, z, 4)) continue;
-    ll.push({ x, y: heightAt(x, z) + 0.12, z, s: 1, ry: R() * 6.28 });
-    obstacles.push({ x, z, r: 0.5 });
+    ll.push({ x, z, yaw: R() * 6.28, len: 5.5, rad: 0.27, lift: 0.12 });
   }
-  scatter(logGeo, conMat, ll);
+  const logGeo = mergeColored([{ geo: new THREE.CylinderGeometry(1, 1.08, 1, 12), color: (x, y, z) => new THREE.Color('#3e2c21').lerp(new THREE.Color('#5a4330'), 0.5 + 0.5 * Math.sin(Math.atan2(z, y) * 7 + x * 9)), matrix: M4().makeRotationZ(Math.PI / 2) }]);
+  const logIM = new THREE.InstancedMesh(logGeo, conMat, Math.max(1, ll.length)); logIM.count = ll.length; logIM.castShadow = logIM.receiveShadow = true;
+  ll.forEach((L, i) => {
+    const g0 = heightAt(L.x, L.z), cy = L.cy ?? (L.lift != null ? g0 + L.lift : g0 + L.rad * (1 - L.sink));
+    logIM.setMatrixAt(i, M4().compose(V(L.x, cy, L.z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, L.yaw, 0)), V(L.len, L.rad, L.rad)));
+    const ax = Math.cos(L.yaw), az = -Math.sin(L.yaw), top = cy + L.rad, h = top - g0, id = ROCKS.length;
+    const tier = L.bridge ? 1 : h < TIER.pebble ? 0 : h < TIER.step ? 1 : 2;
+    ROCKS.push({ id, log: true, x: L.x, z: L.z, ax, az, len: L.len, rad: L.rad, cy, r: L.len / 2 + L.rad, r2: (L.len / 2 + L.rad) ** 2, top, h, tier, slope: 0 });
+    if (tier === 2) obstacles.push({ seg: [L.x - ax * L.len / 2, L.z - az * L.len / 2, L.x + ax * L.len / 2, L.z + az * L.len / 2], r: L.rad * 0.95, rock: id });
+  });
+  scene.add(logIM);
+  // Course gates: a pair of marker posts at each section start and at the finish.
+  if (MAP === 'course') {
+    const postGeo = mergeColored([{ geo: new THREE.CylinderGeometry(0.1, 0.13, 1.7, 8), color: (x, y) => new THREE.Color(y > 0.45 && y < 0.75 ? '#c9822f' : '#4a3626'), matrix: M4().makeTranslation(0, 0.85, 0) }]);
+    const posts = [];
+    COURSE.forEach((p, i) => { const j = Math.min(i, COURSE.length - 2), q = at(j, i === COURSE.length - 1 ? 1 : 0); for (const o of [-3.4, 3.4]) { const a = at(j, i === COURSE.length - 1 ? 1 : 0, o); posts.push({ x: a.x, y: heightAt(a.x, a.z) - 0.1, z: a.z, s: 1, sy: i === COURSE.length - 1 ? 1.5 : 1, ry: 0 }); obstacles.push({ x: a.x, z: a.z, r: 0.2 }); } void q; });
+    scatter(postGeo, conMat, posts);
+  }
 }
 
 /* ============================== Herrerasaurus ============================== */
@@ -1421,6 +1518,8 @@ const MENU = [
   { label: 'Invert camera up and down', state: () => (settings.invertY ? 'On' : 'Off'), act: () => { settings.invertY = !settings.invertY; } },
   { label: 'Skin readout', state: () => (settings.readout ? 'Shown' : 'Hidden'), act: () => { settings.readout = !settings.readout; document.querySelector('.readout').hidden = !settings.readout; } },
   { label: 'Reset Herrerasaurus', state: () => '', act: () => { resetDino(); closeMenu(); } },
+  ...(MAP === 'course' ? [{ label: 'Restart course', state: () => '', act: () => { resetDino(); course.state = 'ready'; closeMenu(); } }] : []),
+  { label: 'Map', state: () => (MAP === 'course' ? 'Obstacle course' : 'Valley'), act: () => { location.hash = MAP === 'course' ? 'valley' : 'course'; location.reload(); } },
 ];
 function renderMenu() {
   document.getElementById('menuList').innerHTML = MENU.map((m, i) => `<li role="menuitem" tabindex="-1" data-i="${i}" class="${i === menuIdx ? 'on' : ''}"><span>${m.label}</span><span class="state">${m.state()}</span></li>`).join('');
@@ -1789,7 +1888,9 @@ function simStep(dt) {
     if (o.rock != null && feetLevel > ROCKS[o.rock].top - 0.12) continue; // up on it, or jumping over it
     for (const [off, rad] of [[0, 0.45], [1.0, 0.42], [1.9, 0.24], [-1.0, 0.3]]) {
       const px = D.pos.x + fwd.x * off, pz = D.pos.z + fwd.z * off;
-      const dx = px - o.x, dz = pz - o.z; const d = Math.hypot(dx, dz); const min = o.r + rad;
+      let ox = o.x, oz = o.z;
+      if (o.seg) { const [ax, az, bx, bz] = o.seg, ex = bx - ax, ez = bz - az, t = clamp(((px - ax) * ex + (pz - az) * ez) / (ex * ex + ez * ez), 0, 1); ox = ax + ex * t; oz = az + ez * t; }
+      const dx = px - ox, dz = pz - oz; const d = Math.hypot(dx, dz); const min = o.r + rad;
       if (d < min && d > 1e-4) { D.pos.x += (dx / d) * (min - d); D.pos.z += (dz / d) * (min - d); }
     }
   }
@@ -2076,6 +2177,8 @@ function simStep(dt) {
   }
   dino.rig.updateMatrixWorld(true);
 
+  courseStep();
+
   // ---- ripples while wading ----
   D.rippleT -= dt;
   if (D.waterDepth > 0.25 && D.rippleT <= 0) {
@@ -2146,6 +2249,41 @@ function updateHud(dt) {
     : D.jump ? (D.jump.ph === 'crouch' ? 'Crouching to jump' : 'Airborne') : actTxt || (D.speed < 0.15 ? 'Standing' : `${gait}, ${D.speed.toFixed(1)} m/s`);
 }
 
+/* ============================== obstacle course ============================== */
+const course = { state: 'ready', t0: 0, time: 0, best: null, el: null };
+if (MAP === 'course') {
+  document.getElementById('coursePanel').hidden = false;
+  try { const b = parseFloat(localStorage.getItem('dlist.course.best')); if (b > 0) course.best = b; } catch (e) { /* storage blocked: no best time */ }
+  document.querySelector('.eyebrow').textContent = 'Dlist tech demo · obstacle course';
+  document.querySelector('.card h1').textContent = 'Obstacle course';
+  const ledes = document.querySelectorAll('.lede');
+  ledes[0].textContent = 'Run the marked track from gate to gate: rocks and pebbles, fallen logs, a stream, a mud pit, a boulder slalom and a log bridge over a pond. The clock starts at the first gate.';
+  ledes[1].textContent = 'Thin logs are stepped over; the big one has to be jumped with A. Take hazards too fast and it slips or stumbles; tired, it can trip. Switch maps from the Start menu.';
+}
+const fmtT = (t) => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`;
+function courseStep() {
+  if (MAP !== 'course') return;
+  const pi = pathInfo(D.pos.x, D.pos.z), on = pi.d < 7; course.on = on; course.seg = pi.seg;
+  if (course.state !== 'running' && on && pi.s < 0.3) course.state = 'ready';
+  if (course.state === 'ready' && on && pi.s > 0.5 && pi.seg === 0) { course.state = 'running'; course.t0 = D.time; }
+  if (course.state === 'running') {
+    course.time = D.time - course.t0;
+    if (on && pi.s > COURSE_LEN - 0.8) {
+      course.state = 'done';
+      if (!course.best || course.time < course.best) { course.best = course.time; try { localStorage.setItem('dlist.course.best', String(course.time)); } catch (e) { /* not saved */ } }
+    }
+  }
+}
+function updateCourse() {
+  if (MAP !== 'course') return;
+  const on = course.on, pi = { seg: course.seg || 0 };
+  const sec = document.getElementById('courseSec'), clk = document.getElementById('courseClock'), best = document.getElementById('courseBest');
+  sec.textContent = course.state === 'done' ? 'Finished' : course.state === 'ready' ? 'Start gate' : on ? `Section ${pi.seg + 1} of ${SECTIONS.length} · ${SECTIONS[pi.seg]}` : 'Off the track';
+  clk.textContent = fmtT(course.state === 'ready' ? 0 : course.time);
+  best.textContent = course.state === 'done' ? (course.best === course.time ? `New best: ${fmtT(course.time)}` : `Best ${fmtT(course.best)}`) + ' · walk back to the start gate to run again'
+    : course.best ? `Best ${fmtT(course.best)}` : course.state === 'ready' ? 'Run through the first gate to start the clock' : 'No best time yet';
+}
+
 /* ============================== main loop ============================== */
 function resize() { renderer.setSize(window.innerWidth, window.innerHeight, false); camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); }
 window.addEventListener('resize', resize);
@@ -2163,11 +2301,12 @@ function frame(now) {
   }
   updateCamera(dt);
   updateHud(dt);
+  updateCourse();
   renderer.render(scene, camera);
 }
 // Test and debugging hook: lets an automated check drive the demo without a real controller.
 window.__demo = {
-  D, cam, input, heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
+  D, cam, input, heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, WATERS, MUDS, MAP, COURSE, COURSE_LEN, pathInfo, course, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
   start: () => startDemo('pad'),
   step(n = 60) { for (let i = 0; i < n; i++) { pollInput(STEP); simStep(STEP); flakes.update(STEP); drips.update(STEP); splash.update(STEP); splat.update(STEP); dust.update(STEP); updateRipples(STEP); updateCamera(STEP); } updatePrints(); },
   teleport(x, z, yaw = D.yaw) { D.pos.set(x, 0, z); D.yaw = yaw; clearMotion(); plantFeetAtNeutral(); cam.yaw = yaw + Math.PI; },

@@ -286,3 +286,17 @@ Nothing from this list is left open.
   stumble. The step-up limit rose to 55% of hip height (about 0.63 m, knee height). The old walls (0.59–0.67 m)
   were knee-high, so the big rocks were rebuilt as tall boulders, 1.3–2.3 m high and 2.2–3.3 m across. Those
   are the only walls.
+- **Logs are hazards, and a second map: Obstacle course (`#course`).** Logs are now analytic cylinders in the
+  ground model: their rounded tops are footing that rolls a foot landing off the crown. Thin logs are
+  step-overs, and logs above knee height are walls (capsule collisions) that have to be jumped. The
+  valley's 4 logs are now 0.39 m step-overs.
+  The course is a 137 m track with gate posts, in six sections:
+  1. Rocks and pebbles, with step-up rocks and low slabs.
+  2. Fallen logs from 0.25 m up to a 0.79 m one that must be jumped.
+  3. A stream crossing with stepping stones.
+  4. A mud pit with a half-sunk log.
+  5. A boulder slalom with tilted slabs.
+  6. A 12 m log bridge over a pond.
+  It has a timer, a section readout and a best time (kept in the browser). Switch maps from the Start menu.
+  An automated run at a full walk finished in 39.8 s, jumped the big log, slipped and stumbled a few times,
+  and came out wet and muddy.
