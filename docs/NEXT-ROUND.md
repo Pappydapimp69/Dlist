@@ -383,3 +383,6 @@ Nothing from this list is left open.
     sprint footfalls +10 dB, jump landings +14 dB. Measured: a walk never wakes it, a sprint does within about
     3.5 m, a standing jump within 3 m, and a roar always does. A full walk straight up to it and a bite caught
     it asleep. The tutorial's step-passed chirp is marked as UI, so the world doesn't hear it.
+- **Touch sprint made visible:** sprint on touch was already "push the stick past its ring", but nothing showed
+  the edge. A dashed ochre ring now always marks the sprint boundary (about 1.25× the stick's travel) with a
+  "Sprint" label under it, and it turns solid while sprinting. Emulated phone check: sprint reached 7.1 m/s.
