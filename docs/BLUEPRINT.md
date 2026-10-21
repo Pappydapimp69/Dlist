@@ -404,7 +404,7 @@ time on art (M5).**
 5. Day length: 30 min, 60 min, or something else?
 6. Camera: third-person only, or a first-person option too?
 7. Nesting and family play (*The Isle*-style): in scope later, or never?
-8. Real name for the game.
+8. ~~Real name for the game.~~ Decided: **Upstarts** (D9).
 
 ---
 
@@ -420,6 +420,7 @@ time on art (M5).**
 | D6 | No physics engine in game logic. Custom movement controller. | LOCKED |
 | D7 | Solo play runs the sim in a Web Worker | PROPOSED |
 | D8 | Fully procedural sound engine. No recorded or designed audio. | LOCKED |
+| D9 | Game name: **Upstarts**. The full game lives in its own repo, `upstarts`. Dlist stays the shareable demo and tutorial. | LOCKED |
 
 ---
 
