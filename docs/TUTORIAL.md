@@ -189,7 +189,52 @@ grazer spawns on the hunting ground.
 | G3 | Done. Bellows every 30–40 s from `PRED_FROM`; head turns to them; panel line for 7 s after each. After merging the new sim-driven sound engine, the bellow is that engine's *Saurosuchus* voice (closed mouth, `large` creature), silent until Grow; footstep mass grows 0.5 to 8 kg; the juvenile gets a 14 cm-tract voice. |
 | G4 | Done. Bot: Jump through Done including Grow and Juvenile. Screenshots before and after the shrink. |
 
-## 10. Risks
+## 10. Stage 4 — danger (Saurosuchus)
+
+Appended after Juvenile. Pays off Stage 3's bellows: the animal from the east arrives.
+
+### Decisions
+
+| # | Decision | Why |
+|---|---|---|
+| TD22 | ***Saurosuchus* is a big quadruped** built like the prey (low-poly parts): ~6.5 m real, so ~19 m in the juvenile's world. Erect legs (rauisuchian). | The scale contrast is the lesson. |
+| TD23 | **Hidden = lying down (Rest) in fern cover, more than 4 m away.** Standing in ferns cuts its sight range; in the open it sees ~35 m in a ±70° cone; a loud sound (sim sound events) draws it. Within 4 m it smells you whatever you do. | Visibility is a continuous check; noise is a discrete event (Brain: split events from fields). Lying still isn't invisibility. (ZaneGPT.) |
+| TD24 | **It walks a long approach (~30 s) on open ground**, passing ~6 m outside the thicket. | Time to reach cover; a 19 m animal can't weave between trees. (ZaneGPT.) |
+| TD25 | **Escape: charge at 7.0 m/s from ~20 m, ~8 s of sprint, then it gives up.** A fresh juvenile sprints 7.4. | Catch radius (Brain dlist E11): with the prey faster, R ≈ predator speed × reaction time, so sprinting at once escapes and dawdling doesn't. The lesson is "run now". (ZaneGPT.) |
+| TD26 | **Caught: the screen fades, you're put back at a fixed safe spot, the step restarts; progress is kept.** | Brain: a checkpoint keeps progress but resolves position on its own (a fixed safe spot). |
+
+**Accuracy:** *Saurosuchus* speed, endurance and senses are unknown; these are game
+guesses. Its upright, quadrupedal build follows the fossils.
+
+### Steps
+
+| # | Step | Passes when |
+|---|---|---|
+| 14 | Hide: it's coming; get into the thicket and hold {rest} to lie still | It walks past without spotting you |
+| 15 | Escape: it caught your scent; sprint away | It gives up the chase |
+| 16 | Done | — |
+
+Spotted during Hide: it charges (the escape lesson early), then Hide restarts.
+
+### Milestones
+
+| # | Milestone |
+|---|---|
+| D1 | Saurosuchus model, walk animation, patrol path, heavy footsteps and calls from its position |
+| D2 | Senses: cover, sight cone, hearing, smell range |
+| D3 | Charge, give-up, catch, fade and safe-spot retry |
+| D4 | Hide and Escape steps; bot walkthrough; screenshots; deploy |
+
+### Build log
+
+| Milestone | Result |
+|---|---|
+| D1 | Done. Upright quadruped from simple parts at real size (×4×0.72 in the juvenile's world); 500 kg footsteps on their own sound source; its calls follow its head. |
+| D2 | Done. Cover = any fern crown over you; lying in cover hides you beyond 4 m; sight 35 m open / 14 m in ferns in a ±70° cone; heard ≥ 50 dB within 25 m. |
+| D3 | Done. **Found in testing:** after a catch it re-charged while the screen was still black (3 catches in 12 s standing still); now it waits out the fade. |
+| D4 | Done. Bot: lay hidden 17 s as it passed 11.6 m away; escape held a 5–7 m gap until it gave up; standing still gets caught and put back at the safe spot. |
+
+## 11. Risks
 
 | Risk | Mitigation |
 |---|---|
