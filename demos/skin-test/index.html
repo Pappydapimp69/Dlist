@@ -126,7 +126,7 @@
     width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; border: 1.5px solid rgba(239, 230, 214, 0.35);
     background: rgba(17, 13, 10, 0.25); pointer-events: none; opacity: 0.5; }
   .tstick.live { opacity: 1; }
-  /* Call wheel: hold the right stick (or R, or hold Y on touch) and point at a call. */
+  /* Call wheel: click the right stick (or hold R, or hold Y on touch), then point at a call. */
   .wheel { position: fixed; left: 50%; top: 50%; width: 300px; height: 300px; margin: -150px 0 0 -150px; border-radius: 50%; pointer-events: none;
     background: radial-gradient(circle, rgba(17, 13, 10, 0.78) 0 34%, rgba(17, 13, 10, 0.55) 35% 100%); border: 1px solid var(--line);
     backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
@@ -238,7 +238,7 @@
         <span class="mdesc">A timed track from gate to gate: rocks and pebbles, fallen logs, a stream, a mud pit, a boulder slalom and a log bridge over a pond. The big log has to be jumped.</span>
       </button>
     </div>
-    <p class="lede small">A jumps (onto rocks too) · hold B to drink near water or sniff away from it · X bites · Y roars (hold the right stick for other calls) · right trigger sprints · hold the left trigger to lie down and rest. Too fast over rocks and logs and it slips or stumbles; sprinting on tired legs, it can trip.</p>
+    <p class="lede small">A jumps (onto rocks too) · hold B to drink near water or sniff away from it · X bites · Y roars (click the right stick for other calls) · right trigger sprints · hold the left trigger to lie down and rest. Too fast over rocks and logs and it slips or stumbles; sprinting on tired legs, it can trip.</p>
     <p class="cta" id="introCta">D-pad or left stick to choose · A to enter</p>
     <button type="button" id="kbStart">No controller? Enter with keyboard and mouse</button>
   </div>
@@ -1828,7 +1828,7 @@ function rumble(dur, weak, strong) {
   if (!settings.rumble) return; const p = activePad(); const a = p && p.vibrationActuator;
   if (a && a.playEffect) a.playEffect('dual-rumble', { startDelay: 0, duration: dur, weakMagnitude: weak, strongMagnitude: strong }).catch(() => {});
 }
-const edges = { a: false, b: false, x: false, y: false, start: false, rs: false, up: false, down: false };
+const edges = { a: false, b: false, x: false, y: false, start: false, rs: false, ls: false, up: false, down: false };
 let stickMenuHold = 0;
 
 function pollInput(dt) {
@@ -1857,10 +1857,14 @@ function pollInput(dt) {
     const now = swallowMask ? raw.map((v, i) => v && !swallowMask[i]) : raw;
     const btn = (i) => !!now[i];
     const edge = (i) => now[i] && !padPrev[i];
-    edges.a = edge(0); edges.b = edge(1); edges.x = edge(2); edges.y = edge(3); edges.start = edge(9); edges.rs = false;
-    // Right stick: a tap puts the camera behind; held, it opens the call wheel (point at a call, let go to call it).
-    if (btn(11)) { wheel.holdT += dt; if (!wheel.open && wheel.holdT > 0.2 && started && !paused) openWheel('pad'); }
-    else if (wheel.holdT > 0) { if (wheel.open) closeWheel(true); else edges.rs = true; wheel.holdT = 0; }
+    edges.a = edge(0); edges.b = edge(1); edges.x = edge(2); edges.y = edge(3); edges.start = edge(9); edges.rs = edge(11); edges.ls = edge(10);
+    // Call wheel: click the right stick to open it, tilt the stick to a call, click again (or A) to call it, B to close.
+    // While it is open those buttons belong to the wheel, not to jump or drink. Camera behind moves to the left stick click.
+    if (started && !paused) {
+      if (wheel.open && wheel.dev === 'pad') { if (edges.rs || edges.a) closeWheel(true); else if (edges.b) closeWheel(false); edges.a = edges.b = edges.rs = false; wheel.padHold = true; }
+      else if (edges.rs) { openWheel('pad'); edges.rs = false; }
+    }
+    if (wheel.padHold && !btn(0) && !btn(1)) wheel.padHold = false; // A or B pressed to close the wheel must not jump or drink
     edges.up = edge(12); edges.down = edge(13);
     const [lx, ly] = radial(p.axes[0] || 0, p.axes[1] || 0);
     const [rx, ry] = radial(p.axes[2] || 0, p.axes[3] || 0, 0.14);
@@ -1870,7 +1874,7 @@ function pollInput(dt) {
       input.moveF = -ly; input.moveR = lx; input.lookX = rx; input.lookY = ry;
       if (wheel.open && wheel.dev === 'pad') { pickWheel(rx, ry, 0.5); input.lookX = input.lookY = 0; } // the stick points at a call, not the camera
       input.sprint = p.buttons[7] ? p.buttons[7].value : 0;
-      input.drink = btn(1);
+      input.drink = btn(1) && !wheel.open && !wheel.padHold;
       input.rest = (p.buttons[6] ? p.buttons[6].value : 0) > 0.5; // left trigger, read as analog like the sprint trigger
     }
     if (paused) {
@@ -1910,7 +1914,7 @@ function pollInput(dt) {
   if (edges.a) input.jump = true;
   if (edges.x) input.bite = true;
   if (edges.y) input.roar = true;
-  if (edges.rs) input.recenter = true;
+  if (edges.ls) input.recenter = true;
   if (edges.start) openMenu();
   if (window.__demo && window.__demo.override) Object.assign(input, window.__demo.override);
 }
@@ -2000,7 +2004,7 @@ let lastTouch = matchMedia('(pointer: coarse)').matches;
 }
 
 const KEYS = {
-  pad: [['Move', 'Left stick'], ['Camera', 'Right stick'], ['Sprint', 'Right trigger (hold)'], ['Jump', 'A'], ['Drink / sniff', 'B (hold)'], ['Bite', 'X'], ['Roar', 'Y'], ['Calls', 'Hold right stick, point, let go'], ['Rest', 'Left trigger (hold)'], ['Camera behind', 'Tap right stick'], ['Menu', 'Start']],
+  pad: [['Move', 'Left stick'], ['Camera', 'Right stick'], ['Sprint', 'Right trigger (hold)'], ['Jump', 'A'], ['Drink / sniff', 'B (hold)'], ['Bite', 'X'], ['Roar', 'Y'], ['Calls', 'Click right stick, tilt to one, click again or A'], ['Rest', 'Left trigger (hold)'], ['Camera behind', 'Click left stick'], ['Menu', 'Start']],
   touch: [['Move', 'Left thumb (past the dashed ring sprints)'], ['Camera', 'Drag on the right'], ['Sprint', 'stick pushed past the dashed ring'], ['Jump', 'A'], ['Drink / sniff', 'B (hold)'], ['Bite', 'X'], ['Roar', 'Y'], ['Calls', 'Hold Y, slide to one, lift'], ['Rest', 'Zz (hold)'], ['Camera behind', '\u21BA'], ['Menu', '\u2630']],
   keys: [['Move', 'W A S D'], ['Camera', 'Drag mouse or Q / E'], ['Sprint', 'Shift (hold)'], ['Jump', 'Space'], ['Drink / sniff', 'G (hold)'], ['Bite', 'F'], ['Roar', 'R'], ['Calls', 'Hold R, or keys 1 to 6'], ['Rest', 'Z (hold)'], ['Camera behind', 'C'], ['Menu', 'Esc']],
 };
@@ -2045,7 +2049,7 @@ document.getElementById('kbStart').addEventListener('click', () => { initAudio()
 document.getElementById('intro').addEventListener('click', () => { if (picker.ready) startDemo(tapDev()); }); // after a map switch, a tap or click starts it
 
 /* ============================== call wheel ============================== */
-const wheel = { open: false, pick: null, dev: '', holdT: 0, rDown: null, yDown: false, timer: 0, tx: 0, ty: 0 };
+const wheel = { open: false, pick: null, dev: '', padHold: false, rDown: null, yDown: false, timer: 0, tx: 0, ty: 0 };
 {
   const el = document.getElementById('callWheel');
   WHEEL.forEach((st, i) => {

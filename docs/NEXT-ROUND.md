@@ -401,3 +401,8 @@ Nothing from this list is left open.
   - Pitch is set relative to the vocal tract, so the same call scales from adult to hatchling.
   - The rival answers challenge calls (roars, bellow, growl) but not a boom, hiss or chuff.
   - The jaw and roar animation follow each call's length and mouth opening.
+- **Controller call wheel is click, not hold:** click the right stick to open the wheel, tilt the right stick to a
+  call, then click it again (or press A) to call it; B closes it without calling. While it's open, A and B belong
+  to the wheel, so the A that confirms doesn't jump and the B that cancels doesn't drink. Camera behind moved to
+  the left stick click. Tested with an emulated controller: opened, picked bellow (up-right) and boom (down),
+  confirmed with a second click and with A, cancelled with B, Y still roars, left stick click recentres.
