@@ -179,8 +179,22 @@ function rng(seed) {
 }
 
 /* ============================== world layout ============================== */
-// Two maps share one engine: the valley (#valley, default) and the obstacle course (#course).
-const MAP = (location.hash || '').replace('#', '') === 'course' ? 'course' : 'valley';
+// Three maps share one engine: the valley (#valley, default), the obstacle course (#course) and the tutorial (#tutorial).
+const MAP = (() => { const h = (location.hash || '').replace('#', ''); return h === 'course' || h === 'tutorial' ? h : 'valley'; })();
+const TUT = MAP === 'tutorial';
+// The tutorial world is built about 4x oversize so the adult-sized rig reads as a hatchling (docs/TUTORIAL.md TD1).
+const WS = TUT ? 4 : 1;
+const NEST = { x: 0, z: 34, r: 4.6, rim: 0.42 };
+const TRAIL = [[0, 34], [6, 16], [-2, -4], [-20, -22]]; // nest, first marker, pond, hunting ground
+function trailD(x, z) {
+  let best = Infinity;
+  for (let i = 0; i < TRAIL.length - 1; i++) {
+    const [ax, az] = TRAIL[i], [bx, bz] = TRAIL[i + 1], ex = bx - ax, ez = bz - az;
+    const t = clamp(((x - ax) * ex + (z - az) * ez) / (ex * ex + ez * ez), 0, 1);
+    best = Math.min(best, Math.hypot(x - ax - ex * t, z - az - ez * t));
+  }
+  return best;
+}
 const WATER_Y = 0;
 const MUD_Y = 0.36;
 const WORLD_R = 56;
@@ -202,10 +216,10 @@ function pathInfo(x, z) {
 }
 const WATERS = MAP === 'course'
   ? [{ x: 8.5, z: 0, r: 5.5, depth: 0.75, flat: 5 }, { x: -27.5, z: -23, r: 5, depth: 0.6, flat: 5 }]
-  : [{ x: 15, z: -9, r: 11, depth: 1.7, flat: 11 }];
-const MUDS = MAP === 'course' ? [{ x: 4.2, z: -8.5, r: 4.5, depth: 0.6, flat: 5 }] : [{ x: -14, z: 4, r: 6.5, depth: 0.85, flat: 8 }];
+  : TUT ? [{ x: -2, z: -4, r: 8, depth: 1.3, flat: 8 }] : [{ x: 15, z: -9, r: 11, depth: 1.7, flat: 11 }];
+const MUDS = MAP === 'course' ? [{ x: 4.2, z: -8.5, r: 4.5, depth: 0.6, flat: 5 }] : TUT ? [{ x: 28, z: -26, r: 3.5, depth: 0.5, flat: 5 }] : [{ x: -14, z: 4, r: 6.5, depth: 0.85, flat: 8 }];
 const POND = WATERS[0], MUD = MUDS[0];
-const SPAWN = MAP === 'course' ? { x: -42, z: 29, yaw: Math.PI / 2 } : { x: 0, z: 15, yaw: Math.PI };
+const SPAWN = MAP === 'course' ? { x: -42, z: 29, yaw: Math.PI / 2 } : TUT ? { x: NEST.x, z: NEST.z, yaw: Math.PI * 0.9 } : { x: 0, z: 15, yaw: Math.PI };
 // One creature for now. Rock tiers, jumps, snout reach and momentum all scale from these.
 const CREATURE = { hip: 1.15, leg: 1.18, mass: 350, reach: 2.8, snout: 1.8 }; // reach: water it notices; snout: how far ahead the lowered snout dips
 const TIER = { pebble: 0.08 * CREATURE.hip, step: 0.55 * CREATURE.hip }; // step-ups to about knee height; above that, a wall
@@ -220,6 +234,13 @@ function heightAt(x, z) {
     h = 0.42 + (fbm(x * 0.05, z * 0.05, 1) - 0.5) * 0.5 + (fbm(x * 0.13, z * 0.13, 5) - 0.5) * 0.15;
     h += smooth(46, 72, r) * (6 + 4 * fbm(x * 0.05, z * 0.05, 9));
     h = lerp(h, 0.42, 1 - smooth(2.5, 6, pathInfo(x, z).d)); // the course itself is graded flat
+  } else if (TUT) {
+    h = 0.42 + (fbm(x * 0.03, z * 0.03, 1) - 0.5) * 1.0 + (fbm(x * 0.11, z * 0.11, 5) - 0.5) * 0.2;
+    h += smooth(40, 72, r) * (7 + 5 * fbm(x * 0.05, z * 0.05, 9));
+    // The nest: a scraped hollow inside a raised rim about knee high.
+    const dn = Math.hypot(x - NEST.x, z - NEST.z);
+    h = lerp(h, 0.42, 1 - smooth(NEST.r + 1, NEST.r + 4, dn));
+    h += NEST.rim * Math.exp(-(((dn - NEST.r) / 0.9) ** 2)) - 0.12 * (1 - smooth(0, NEST.r - 0.6, dn));
   } else {
     h = 0.42 + (fbm(x * 0.03, z * 0.03, 1) - 0.5) * 1.6 + (fbm(x * 0.11, z * 0.11, 5) - 0.5) * 0.35;
     h += smooth(36, 72, r) * (7 + 5 * fbm(x * 0.05, z * 0.05, 9));
@@ -531,6 +552,7 @@ function clearOf(x, z, pad) {
   if (MUDS.some((m) => Math.hypot(x - m.x, z - m.z) < m.r + pad)) return false;
   if (Math.hypot(x - SPAWN.x, z - SPAWN.z) < 6) return false;
   if (MAP === 'course' && pathInfo(x, z).d < pad + 2.5) return false;
+  if (TUT && (trailD(x, z) < pad + 2.5 || Math.hypot(x - NEST.x, z - NEST.z) < NEST.r + pad + 1)) return false;
   return true;
 }
 function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp(rMin * rMin, rMax * rMax, R())); return [Math.cos(a) * r, Math.sin(a) * r]; }
@@ -546,9 +568,11 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
     const [x, z] = ringPoint(3, 54);
     const h = heightAt(x, z);
     if (h < WATER_Y + 0.12 || MUDS.some((m) => Math.hypot(x - m.x, z - m.z) < m.r + 0.8) || Math.hypot(x - SPAWN.x, z - SPAWN.z) < 3 || (MAP === 'course' && pathInfo(x, z).d < 3.2)) continue;
+    if (TUT && (trailD(x, z) < 3.4 || Math.hypot(x - NEST.x, z - NEST.z) < NEST.r + 0.4 || WATERS.some((w) => Math.hypot(x - w.x, z - w.z) < w.r + 2.5))) continue;
     const clump = fbm(x * 0.09, z * 0.09, 71);
     if (R() > smooth(0.35, 0.6, clump) + 0.12) continue;
-    (R() < 0.55 ? la : lb).push({ x, y: h - 0.03, z, s: lerp(0.65, 1.45, R()), ry: R() * 6.28 });
+    const fs = lerp(0.65, 1.45, R()) * (TUT ? lerp(2.2, 3.4, R()) : 1); // tutorial ferns stand over a hatchling's head
+    (R() < 0.55 ? la : lb).push({ x, y: h - 0.03, z, s: fs, ry: R() * 6.28 });
   }
   scatter(fernA, fernMat, la); scatter(fernB, fernMat, lb);
 
@@ -573,7 +597,7 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
     const h = heightAt(x, z);
     if (h < WATER_Y - 0.3) continue;
     if (Math.hypot(x - SPAWN.x, z - SPAWN.z) < 5) continue;
-    hl.push({ x, y: h - 0.05, z, s: lerp(0.75, 1.3, R()), ry: R() * 6.28 });
+    hl.push({ x, y: h - 0.05, z, s: lerp(0.75, 1.3, R()) * (TUT ? 2.6 : 1), ry: R() * 6.28 });
   }
   scatter(horsetailGeo, hMat, hl);
 
@@ -594,8 +618,8 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
   for (let i = 0; i < 400 && cl.length < 34; i++) {
     const [x, z] = ringPoint(cl.length < 6 ? 20 : 30, 58);
     if (!clearOf(x, z, 6)) continue;
-    if (cl.some((o) => Math.hypot(o.x - x, o.z - z) < 5)) continue;
-    const s = lerp(0.8, 1.35, R());
+    if (cl.some((o) => Math.hypot(o.x - x, o.z - z) < 5 * Math.sqrt(WS))) continue;
+    const s = lerp(0.8, 1.35, R()) * (TUT ? 2.4 : 1);
     cl.push({ x, y: heightAt(x, z) - 0.2, z, s, ry: R() * 6.28 });
     obstacles.push({ x, z, r: 0.42 * s + 0.1 });
   }
@@ -622,8 +646,8 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
   for (let i = 0; i < 500 && dl.length < 20; i++) {
     const [x, z] = ringPoint(12, 44);
     if (!clearOf(x, z, 3.5)) continue;
-    if (dl.some((o) => Math.hypot(o.x - x, o.z - z) < 4)) continue;
-    const s = lerp(0.85, 1.3, R());
+    if (dl.some((o) => Math.hypot(o.x - x, o.z - z) < 4 * Math.sqrt(WS))) continue;
+    const s = lerp(0.85, 1.3, R()) * (TUT ? 2.8 : 1);
     dl.push({ x, y: heightAt(x, z) - 0.1, z, s, ry: R() * 6.28 });
     obstacles.push({ x, z, r: 0.2 * s + 0.1 });
   }
@@ -637,7 +661,7 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
     for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i); const k = 0.75 + 0.5 * vnoise(x * 1.7 + 3, z * 1.7 + y, 91); p.setXYZ(i, x * k, y * k * 0.7, z * k); }
     g.computeVertexNormals(); return g; })();
   const rl = [];
-  for (let i = 0; i < 300 && rl.length < (MAP === 'course' ? 24 : 42); i++) {
+  for (let i = 0; i < 300 && rl.length < (MAP === 'course' ? 24 : TUT ? 26 : 42); i++) {
     const [x, z] = ringPoint(8, 56);
     if (!clearOf(x, z, 2)) continue;
     const big = R() < 0.25, s = big ? lerp(2.2, 3.2, R()) : lerp(0.2, 0.75, R()), sy = big ? s * lerp(1.4, 1.8, R()) : s; // a few real boulders, taller than the animal's hips
@@ -647,7 +671,11 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
   // Course hazards are placed by section along the path: at(seg, t, offset) gives a point beside the path.
   const at = (i, t, off = 0) => { const [ax, az] = COURSE[i], [bx, bz] = COURSE[i + 1], L = Math.hypot(bx - ax, bz - az), dx = (bx - ax) / L, dz = (bz - az) / L; return { x: ax + (bx - ax) * t - dz * off, z: az + (bz - az) * t + dx * off, yaw: Math.atan2(dx, dz) }; };
   const courseLogs = [];
-  if (MAP === 'valley') {
+  if (TUT) {
+    // A couple of low slabs beside the first stretch of trail: somewhere to try a step-up.
+    for (const [x, z, s, sy] of [[3.6, 27, 0.9, 0.36], [-2.6, 22, 0.75, 0.3]])
+      rl.push({ x, y: heightAt(x, z) - sy * 0.28, z, s, sy, ry: gr() * 6.28, flat: true });
+  } else if (MAP === 'valley') {
     // Low sandstone slabs ahead of the start point, so step-ups are easy to find.
     for (const [x, z, s, sy] of [[-1.6, 7.6, 0.95, 0.42], [1.9, 5.4, 0.8, 0.5], [3.9, 8.8, 1.05, 0.34], [-4.4, 10.6, 0.75, 0.3], [0.8, 10.4, 0.55, 0.26], [-3.8, 4.4, 1.1, 0.62]])
       rl.push({ x, y: heightAt(x, z) - sy * 0.28, z, s, sy, ry: gr() * 6.28, flat: true });
@@ -714,6 +742,20 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
     const posts = [];
     COURSE.forEach((p, i) => { const j = Math.min(i, COURSE.length - 2), q = at(j, i === COURSE.length - 1 ? 1 : 0); for (const o of [-3.4, 3.4]) { const a = at(j, i === COURSE.length - 1 ? 1 : 0, o); posts.push({ x: a.x, y: heightAt(a.x, a.z) - 0.1, z: a.z, s: 1, sy: i === COURSE.length - 1 ? 1.5 : 1, ry: 0 }); obstacles.push({ x: a.x, z: a.z, r: 0.2 }); } void q; });
     scatter(postGeo, conMat, posts);
+  }
+  // Tutorial nest: twigs and dead fronds piled on the rim (visual only; the rim itself is terrain).
+  if (TUT) {
+    const twigGeo = mergeColored([{ geo: new THREE.CylinderGeometry(0.035, 0.05, 1, 5), color: new THREE.Color('#5b4431'), matrix: M4().makeRotationZ(Math.PI / 2) }]);
+    const tr = rng(303), tw = [];
+    for (let k = 0; k < 150; k++) {
+      const a = tr() * Math.PI * 2, d = NEST.r + (tr() - 0.5) * 1.6, x = NEST.x + Math.cos(a) * d, z = NEST.z + Math.sin(a) * d;
+      tw.push({ x, y: heightAt(x, z) + 0.03 + tr() * 0.08, z, s: lerp(0.9, 2.2, tr()), ry: -a + Math.PI / 2 + (tr() - 0.5) * 1.2, tz: (tr() - 0.5) * 0.25, tx: (tr() - 0.5) * 0.3 });
+    }
+    scatter(twigGeo, conMat, tw);
+    const deadFern = fernGeometry(rng(304), 7, 0.8, 1.2, new THREE.Color('#5d4b2c'), new THREE.Color('#8a7444'), 0.15, 0.25, 0.2);
+    const df = [];
+    for (let k = 0; k < 26; k++) { const a = (k / 26) * Math.PI * 2 + tr() * 0.2, d = NEST.r + 0.2, x = NEST.x + Math.cos(a) * d, z = NEST.z + Math.sin(a) * d; df.push({ x, y: heightAt(x, z) - 0.05, z, s: lerp(1, 1.6, tr()), ry: tr() * 6.28 }); }
+    scatter(deadFern, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, side: THREE.DoubleSide }), df);
   }
 }
 
@@ -1519,7 +1561,7 @@ const MENU = [
   { label: 'Skin readout', state: () => (settings.readout ? 'Shown' : 'Hidden'), act: () => { settings.readout = !settings.readout; document.querySelector('.readout').hidden = !settings.readout; } },
   { label: 'Reset Herrerasaurus', state: () => '', act: () => { resetDino(); closeMenu(); } },
   ...(MAP === 'course' ? [{ label: 'Restart course', state: () => '', act: () => { resetDino(); course.state = 'ready'; closeMenu(); } }] : []),
-  { label: 'Map', state: () => (MAP === 'course' ? 'Obstacle course' : 'Valley'), act: () => { location.hash = MAP === 'course' ? 'valley' : 'course'; location.reload(); } },
+  { label: 'Map', state: () => ({ valley: 'Valley', course: 'Obstacle course', tutorial: 'Tutorial' })[MAP], act: () => { location.hash = { valley: 'course', course: 'tutorial', tutorial: 'valley' }[MAP]; location.reload(); } },
 ];
 function renderMenu() {
   document.getElementById('menuList').innerHTML = MENU.map((m, i) => `<li role="menuitem" tabindex="-1" data-i="${i}" class="${i === menuIdx ? 'on' : ''}"><span>${m.label}</span><span class="state">${m.state()}</span></li>`).join('');
