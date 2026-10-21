@@ -137,6 +137,7 @@
   .tbtn.small { width: 46px; height: 46px; font-size: 1rem; }
   .tbtn[data-b="menu"] { right: 0; top: -58px; }
   .tbtn[data-b="cam"] { right: 56px; top: -58px; }
+  .tbtn[data-b="rest"] { right: 0; top: -130px; border-color: #9a8fc8; } /* hold to lie down; on its own above the stack */
   @media (max-width: 760px) { .keys { display: none; } .binomial { font-size: 1.1rem; } .chips { top: calc(108px + env(safe-area-inset-top, 0px)); } } /* chips sit under the title plate on phones */
 </style>
 
@@ -179,6 +180,7 @@
   <div class="tzone" id="tLook"></div>
   <div class="tstick" id="tStick"><i></i></div>
   <div class="tbtns">
+    <button type="button" class="tbtn" data-b="rest" aria-label="Rest (hold)">Zz<small>Rest</small></button>
     <button type="button" class="tbtn small" data-b="cam" aria-label="Camera behind">&#8634;</button>
     <button type="button" class="tbtn small" data-b="menu" aria-label="Menu">&#9776;</button>
     <button type="button" class="tbtn" data-b="y">Y<small>Roar</small></button>
@@ -1706,7 +1708,7 @@ function pollInput(dt) {
   if (input.device === 'touch') {
     // Camera drag maps straight to an angle (about 0.3 degrees per pixel), whatever the frame rate.
     const k = Math.max(dt, 1 / 240);
-    input.moveF = touch.mf; input.moveR = touch.mr; input.sprint = touch.sprint; input.drink = touch.b;
+    input.moveF = touch.mf; input.moveR = touch.mr; input.sprint = touch.sprint; input.drink = touch.b; input.rest = touch.rest;
     input.lookX = (touch.dx * 0.005) / (2.5 * k); input.lookY = (touch.dy * 0.004) / (1.6 * k);
     touch.dx = touch.dy = 0;
   }
@@ -1763,7 +1765,7 @@ window.addEventListener('pointerdown', (e) => {
 
 /* ---- touch controls ---- */
 // Left side: a floating stick that appears under the thumb; pushed past its ring it sprints. Right side: drag to look.
-const touch = { mf: 0, mr: 0, sprint: 0, b: false, dx: 0, dy: 0, stickId: null, lookId: null, ox: 0, oy: 0, lx: 0, ly: 0 };
+const touch = { mf: 0, mr: 0, sprint: 0, b: false, rest: false, dx: 0, dy: 0, stickId: null, lookId: null, ox: 0, oy: 0, lx: 0, ly: 0 };
 let lastTouch = matchMedia('(pointer: coarse)').matches;
 {
   const stick = document.getElementById('tStick'), knob = stick.firstElementChild, R = 56, move = document.getElementById('tMove'), look = document.getElementById('tLook');
@@ -1792,10 +1794,10 @@ let lastTouch = matchMedia('(pointer: coarse)').matches;
     const k = b.dataset.b;
     b.addEventListener('pointerdown', (e) => {
       e.preventDefault(); b.setPointerCapture(e.pointerId); b.classList.add('down');
-      if (k === 'a') input.jumpKey = true; else if (k === 'b') touch.b = true; else if (k === 'x') input.biteKey = true;
+      if (k === 'a') input.jumpKey = true; else if (k === 'b') touch.b = true; else if (k === 'rest') touch.rest = true; else if (k === 'x') input.biteKey = true;
       else if (k === 'y') input.roarKey = true; else if (k === 'cam') input.recenterKey = true; else if (k === 'menu') openMenu();
     });
-    const up = () => { b.classList.remove('down'); if (k === 'b') touch.b = false; };
+    const up = () => { b.classList.remove('down'); if (k === 'b') touch.b = false; if (k === 'rest') touch.rest = false; };
     for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, up);
   });
   document.getElementById('touch').addEventListener('contextmenu', (e) => e.preventDefault());
@@ -1803,13 +1805,13 @@ let lastTouch = matchMedia('(pointer: coarse)').matches;
 
 const KEYS = {
   pad: [['Move', 'Left stick'], ['Camera', 'Right stick'], ['Sprint', 'Right trigger (hold)'], ['Jump', 'A'], ['Drink / sniff', 'B (hold)'], ['Bite', 'X'], ['Roar', 'Y'], ['Rest', 'Left trigger (hold)'], ['Camera behind', 'Click right stick'], ['Menu', 'Start']],
-  touch: [['Move', 'Left thumb (push to the edge to sprint)'], ['Camera', 'Drag on the right'], ['Jump', 'A'], ['Drink / sniff', 'B (hold)'], ['Bite', 'X'], ['Roar', 'Y'], ['Camera behind', '\u21BA'], ['Menu', '\u2630']],
+  touch: [['Move', 'Left thumb (push to the edge to sprint)'], ['Camera', 'Drag on the right'], ['Sprint', 'the stick pushed to the edge'], ['Jump', 'A'], ['Drink / sniff', 'B (hold)'], ['Bite', 'X'], ['Roar', 'Y'], ['Rest', 'Zz (hold)'], ['Camera behind', '\u21BA'], ['Menu', '\u2630']],
   keys: [['Move', 'W A S D'], ['Camera', 'Drag mouse or Q / E'], ['Sprint', 'Shift (hold)'], ['Jump', 'Space'], ['Drink / sniff', 'G (hold)'], ['Bite', 'F'], ['Roar', 'R'], ['Rest', 'Z (hold)'], ['Camera behind', 'C'], ['Menu', 'Esc']],
 };
 function setDevice(d) {
   if (input.device === d && document.getElementById('keysList').childElementCount) return;
   input.device = d; document.body.classList.toggle('touch', d === 'touch');
-  if (d !== 'touch') touch.mf = touch.mr = touch.sprint = 0, touch.b = false;
+  if (d !== 'touch') touch.mf = touch.mr = touch.sprint = 0, touch.b = touch.rest = false;
   document.getElementById('keysTitle').textContent = d === 'pad' ? 'Controller' : d === 'touch' ? 'Touch' : 'Keyboard and mouse';
   document.getElementById('keysList').innerHTML = KEYS[d].map(([a, b]) => `<div style="display:contents"><dt>${a}</dt><dd>${b}</dd></div>`).join('');
 }
