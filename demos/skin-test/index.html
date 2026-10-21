@@ -1280,6 +1280,7 @@ const sfx = {
 const settings = { rumble: true, invertY: false, readout: true };
 const input = { moveF: 0, moveR: 0, lookX: 0, lookY: 0, sprint: 0, drink: false, jump: false, bite: false, roar: false, recenter: false, device: 'pad' };
 let padPrev = []; let padId = null; let started = false; let paused = false; let menuIdx = 0; let swallow = false;
+let swallowMask = null; // buttons held when the game started or the menu closed: each one is ignored until it is released
 const keys = new Set();
 const mouse = { dx: 0, dy: 0, down: false };
 
@@ -1306,11 +1307,14 @@ function pollInput(dt) {
   const chip = document.getElementById('padChip');
   if (p) {
     if (padId !== p.id) { padId = p.id; chip.textContent = 'Controller connected: ' + p.id.replace(/\s*\(.*$/, '').slice(0, 40); chip.className = 'chip ok'; }
-    const btn = (i) => !!(p.buttons[i] && p.buttons[i].pressed);
-    const now = p.buttons.map((b) => b.pressed);
+    const raw = p.buttons.map((b) => b.pressed);
+    if (!started && raw.some(Boolean)) { startDemo('pad'); swallow = true; }
+    // Only the buttons that were down stay swallowed; sticks and triggers keep working (holding RT or LB across the menu must not freeze the controls).
+    if (swallow) { swallow = false; swallowMask = raw.map((v, i) => v && i !== 6 && i !== 7); }
+    if (swallowMask) { for (let i = 0; i < raw.length; i++) if (!raw[i]) swallowMask[i] = false; if (!swallowMask.some(Boolean)) swallowMask = null; }
+    const now = swallowMask ? raw.map((v, i) => v && !swallowMask[i]) : raw;
+    const btn = (i) => !!now[i];
     const edge = (i) => now[i] && !padPrev[i];
-    if (!started && now.some(Boolean)) { startDemo('pad'); swallow = true; }
-    if (swallow) { if (!now.some(Boolean)) swallow = false; padPrev = now; return; }
     edges.a = edge(0); edges.b = edge(1); edges.x = edge(2); edges.y = edge(3); edges.start = edge(9); edges.rs = edge(11);
     edges.up = edge(12); edges.down = edge(13);
     const [lx, ly] = radial(p.axes[0] || 0, p.axes[1] || 0);
@@ -1413,7 +1417,7 @@ function renderMenu() {
 }
 document.getElementById('menuList').addEventListener('click', (e) => { const li = e.target.closest('li'); if (!li) return; menuIdx = +li.dataset.i; activateMenu(); });
 function openMenu() { if (!started) return; paused = true; menuIdx = 0; renderMenu(); document.getElementById('menu').hidden = false; }
-function closeMenu() { paused = false; document.getElementById('menu').hidden = true; swallow = true; }
+function closeMenu() { paused = false; document.getElementById('menu').hidden = true; swallow = true; input.drink = false; } // the B that closed the menu must not start a drink or sniff
 function moveMenu(d) { menuIdx = (menuIdx + d + MENU.length) % MENU.length; renderMenu(); }
 function activateMenu() { MENU[menuIdx].act(); if (paused) renderMenu(); }
 // The Xbox guide button can steal focus; pause instead of looking frozen.
@@ -1447,7 +1451,7 @@ function plantFeetAtNeutral() {
 }
 function clearMotion() {
   D.speed = D.accel = D.yawRate = D.tailYaw = D.tailYawV = D.roll = D.pitchF = D.bodyY = 0; D.tailTurnYaw = D.yaw; D.tailTurnSign = 0;
-  D.jump = null; D.lastJump = null; D.fall = null; D.check = null; D.landT = -1; D.stamina = 1; D.phase = 0; D.cycleT = 1; D.run = 0; D.sprintT = 0; D.biteT = D.roarT = -1;
+  D.jump = null; D.lastJump = null; D.fall = null; D.check = null; D.landT = -1; D.stamina = 1; D.phase = 0; D.cycleT = 1; D.run = 0; D.sprintT = 0; D.biteT = D.roarT = -1; D.snapped = false; D.scentTo = null; D.windTurn = false;
   if (D.act !== 'none') endAct();
   D.hd = D.hu = D.tilt = D.hyaw = D.dip = 0;
 }
