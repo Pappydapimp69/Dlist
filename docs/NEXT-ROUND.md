@@ -8,11 +8,27 @@ Changes queued from playtest feedback. Nothing here is built yet.
      so it should act more like a rudder than a whip.
    - The demo currently bends the tip the most (tail bone weights rise toward the
      tip). Reverse that falloff.
-   - Turn behavior is an OPEN DECISION (Brain tension, red): a path-following,
-     actively steered tail sits inside the turn (~0.73 m at sprint in the sandbox),
-     while a passive, inertia-driven tail lags inside briefly, then settles outside
-     (~1.23 m at sprint). My earlier "swings out briefly, then follows" had the sign
-     backwards. If passive, add a term scaled by speed × yaw rate.
+   - DECIDED: the tail is actively used for balance and sits on the INSIDE of the
+     turn (Brain lesson dlist/E7, tension resolved). In the sandbox, inside beat
+     straight, outside and flick strategies on body roll at every speed (11% lower
+     than straight at a sprint, 40% at a walk). Outside and flick cost 2–4x more leg
+     torque. It must swing in with the body's yaw, not snap: a plain snap failed the
+     sprint slalom test.
+   - Controller:
+     ```
+     aC   = D.speed * Math.abs(D.yawRate)
+     hold = Math.asin(Math.min(Math.sin(0.5), 0.49 * aC))   // rad toward the inside, cap ~29°
+     // on turn start or when the turn direction flips: D.tailTurnYaw = D.yaw
+     th   = turning ? Math.min(hold, Math.abs(wrapAngle(D.yaw - D.tailTurnYaw))) : hold
+     cmd  = -Math.sign(D.yawRate) * th
+     w = 2*Math.PI*3                                         // critically damped, 3 Hz
+     D.tailYawV += (w*w*(cmd - D.tailYaw) - 2*w*D.tailYawV) * dt
+     D.tailYaw  += D.tailYawV * dt
+     ```
+   - Spread `D.tailYaw` mostly at the base: ~0.65 across tail0+tail1, 0.15 tail2,
+     0.10 tail3, 0.10 the rest.
+   - Pair with body lean and foot placement (dlist/E4). The tail alone doesn't
+     carry the roll load.
    - Stiffer rear joints (5x) shift bending to the base: the two base joints go from
      27% to 44% of the total bend. Tune damping on the whole tail, not per joint
      (per-joint critical damping still overshot 24%).
