@@ -1610,6 +1610,7 @@ const sfx = {
   snap: () => mouthSound('bite', 88),
   lap: () => mouthSound('lap', 52),
   gulp: () => mouthSound('gulp', 55),
+  drip: () => { const m = mouthAt(); emit({ kind: 'drip', who: 'player', x: m.x, y: WATER_Y, z: m.z, level: 40 }); },
   sniff: (k = 1) => mouthSound('sniff', 48 + 6 * k, { k }),
   // A slip, stumble or trip is the foot skidding over the ground: a scrape, longer and louder the worse it is.
   slide: (level) => bodySound('slide', level === 'slip' ? 68 : level === 'stumble' ? 72 : 75, { speed: D.speed / WS, dur: (level === 'slip' ? 0.22 : level === 'stumble' ? 0.38 : 0.55) * BODY.ts }),
@@ -1707,9 +1708,14 @@ function createAudioLayer(engine) {
     voice: engine.createSource('voice', TUT ? { tract: 0.08, sac: 0.04, priority: 20, level: 72, seed: 11 } : { creature: 'herrerasaurus', priority: 20, level: 108, seed: 11 }),
     crunch: engine.createSource('footsteps', { level: 60, seed: 16 }), // tearing shell or meat at the mouth: debris grains
     feet: engine.createSource('footsteps', { priority: 6, seed: 12 }),
-    jaw: engine.createSource('modal', { modes: [{ freq: 900, gain: 1 }, { freq: 2480, gain: 0.5 }, { freq: 4860, gain: 0.33 }], lossFactor: 0.03, level: 88, priority: 8, seed: 13 }),
+    // Teeth meeting: a hard, heavily damped click (many inharmonic modes, ~10 ms ring), not a ringing block.
+    jaw: engine.createSource('modal', { modes: [1800, 2650, 3300, 4700, 6100, 6900, 9100].map((freq, i) => ({ freq, gain: 1 / (1 + 0.4 * i) })), lossFactor: 0.12, level: 88, priority: 8, seed: 13 }),
     mouth: engine.createSource('water', { preset: 'splash', level: 52, seed: 14 }),
-    nose: engine.createSource('voice', { tract: 0.15, sac: 0.1, level: 54, seed: 15 }), // nasal passage: short tube, high resonances
+    // Drops falling from the jaws back into the pond: single bubbles whose pitch rises as they surface.
+    drips: engine.createSource('water', { preset: { rate: 0, gamma: 1, minRadius: 0.0015, maxRadius: 0.004, rising: 1 }, level: 45, seed: 19 }),
+    // Swallowing: water moving down the throat, big low bubbles, heard through the neck (muffled by occlusion).
+    throat: engine.createSource('water', { preset: { rate: 0, gamma: 1.5, minRadius: 0.004, maxRadius: 0.014, rising: 0.2 }, level: 50, seed: 20 }),
+    nose: engine.createSource('voice', { tract: 0.06, sac: 0.05, level: 54, seed: 15 }), // nostrils and nasal passage: short tube, resonances from 1.4 kHz up
     ai: Object.fromEntries(AI.map((a, i) => [a.id, engine.createSource('voice', { creature: a.creature, level: a.level, priority: 10, seed: 21 + i })])),
   };
   if (TUT) S.voiceJ = engine.createSource('voice', { tract: 0.14, sac: 0.07, priority: 20, level: 80, seed: 18 }); // the juvenile's longer tract (TD19)
@@ -1733,13 +1739,19 @@ function createAudioLayer(engine) {
             ...(f0 ? { f0, f0End: ev.f0abs ?? (ev.f0Endk ? cap * ev.f0Endk * vp : f0 * 0.75) } : {}) });
           break;
         }
-        case 'tear': at(S.crunch, ev); S.crunch.step({ mass: 2, speed: 3, surface: 'sand', claws: false, gain: 0.8 }); break;
-        case 'bite': at(S.jaw, ev); S.jaw.strike(4 * vary(1), 0.75); break;
-        case 'lap': at(S.mouth, ev); S.mouth.splash(8 + Math.round(6 * audioRng()), 0.45); break;
-        // A swallow is wet, not voiced: a few small bubbles and a soft suction, not a tone (a closed-mouth "bloop" read as a cartoon).
-        case 'gulp': at(S.mouth, ev); S.mouth.splash(2 + Math.round(2 * audioRng()), 0.18); at(S.crunch, ev); S.crunch.step({ mass: 0.6, speed: 0.6, surface: 'mud', claws: false, gain: 0.35 }); break;
+        // Tearing meat: wet suction as it pulls, with gristle crackle.
+        case 'tear': at(S.crunch, ev); S.crunch.step({ mass: 3, speed: 2, surface: 'mud', claws: false, gain: 1.2 }); S.crunch.step({ mass: 1, speed: 2, surface: 'packedDirt', claws: false, gain: 0.6, delay: 0.04 }); break;
+        case 'bite': at(S.jaw, ev); S.jaw.strike(12 * vary(1), 0.85); break;
+        // The snout dipping and scooping: a burst of small bubbles where it breaks the surface.
+        case 'lap': at(S.mouth, ev); S.mouth.splash(16 + Math.round(10 * audioRng()), 0.35); break;
+        // Head comes up: water runs off the jaws in a few drops over half a second.
+        case 'drip': { at(S.drips, ev); const n = 3 + Math.round(3 * audioRng());
+          for (let k = 0; k < n; k++) later.push({ at: engine.ctx.currentTime + 0.05 + 0.5 * audioRng(), run: () => S.drips.splash(1, 1.6 + 1.6 * audioRng()) }); break; }
+        // Swallow: two low gulps of water moving down, muffled by the neck.
+        case 'gulp': at(S.throat, ev); S.throat.setOcclusion(0.3); S.throat.splash(4 + Math.round(3 * audioRng()), 1.2);
+          later.push({ at: engine.ctx.currentTime + 0.09, run: () => S.throat.splash(3, 0.8) }); break;
         // A sniff is breath noise through the nasal passage, no voicing: a 4 Hz "pitch" leaves only the aspiration.
-        case 'sniff': at(S.nose, ev); S.nose.call({ mode: 'open', duration: 0.07, f0: 4, f0End: 4, amp: 0.35 * ev.k, breath: 1, roughness: 0, jitter: 0 }); break;
+        case 'sniff': at(S.nose, ev); S.nose.call({ mode: 'open', duration: 0.07, f0: 4, f0End: 4, amp: 1.4 * ev.k, breath: 1, roughness: 0, jitter: 0 }); break;
         // A skid is stick-slip: a dense run of tiny contacts as the foot drags. Grit on dirt, claw scrapes on rock,
         // suction in mud, bubbles in water, slowing and fading as it catches.
         case 'slide': {
@@ -1758,7 +1770,7 @@ function createAudioLayer(engine) {
       const k = 1 / WS;
       engine.setListener({ x: camPos.x * k, y: camPos.z * k, z: camPos.y * k, yaw: Math.atan2(camFwd.x, camFwd.z) });
       for (const a of w.ai) S.ai[a.id].setPosition(a.x * k, a.z * k, a.y * k);
-      const m = w.mouth; for (const s of [S.voice, S.voiceJ, S.jaw, S.mouth, S.nose, S.crunch].filter(Boolean)) s.setPosition(m.x * k, m.z * k, m.y * k);
+      const m = w.mouth; for (const s of [S.voice, S.voiceJ, S.jaw, S.mouth, S.nose, S.crunch, S.throat].filter(Boolean)) s.setPosition(m.x * k, m.z * k, m.y * k);
       S.feet.setPosition(w.feet.x * k, w.feet.z * k, w.feet.y * k);
       if (S.prey && w.prey) S.prey.setPosition(w.prey.x * k, w.prey.z * k, w.prey.y * k);
       for (let i = later.length - 1; i >= 0; i--) if (engine.ctx.currentTime >= later[i].at) { later[i].run(); later.splice(i, 1); }
@@ -2701,6 +2713,7 @@ function simStep(dt) {
     else if (u < 1.8) { hdT = 0.1; tiltT = 1; gulp = (u - 1.05) / 0.75; }
     else { hdT = lerp(0.1, 1, smooth(1.8, 2.3, u)); tiltT = 1 - smooth(1.8, 2.1, u); }
     if (u >= 0.15 && (pu < 0.15 || pu > u)) { const sAt = surfaceAt(snout.x, snout.z); if (sAt.kind === 'water') { sfx.lap(); spawnRipple(snout.x, snout.z, 0.45); D.laps = (D.laps || 0) + 1; D.lapHit = true; } }
+    if (u >= 0.6 && pu < 0.6 && D.lapHit) sfx.drip(); // head clears the water
     if (u >= 1.12 && pu < 1.12) { sfx.gulp(); if (D.lapHit) D.gulps = (D.gulps || 0) + 1; D.lapHit = false; } // only a scoop that reached water counts as a swallow
     D.actU = u;
   } else if (D.act === 'air') {
