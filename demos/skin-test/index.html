@@ -97,16 +97,20 @@
   .course .clock { font-family: var(--f-mono); font-size: 1.15rem; font-variant-numeric: tabular-nums; }
   .course .best { font-size: 0.72rem; color: var(--ink-2); }
   @media (min-width: 1280px) { .course { top: calc(14px + env(safe-area-inset-top, 0px)); } }
-  .tut { position: fixed; top: calc(92px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); width: min(460px, calc(100% - 32px));
-    box-sizing: border-box; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 14px; display: grid; gap: 4px;
-    text-align: center; pointer-events: none; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
-  .tut .sec { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ochre); }
-  .tut .say { margin: 0; font-size: 0.95rem; line-height: 1.4; color: var(--ink); text-wrap: balance; }
+  /* Tutorial instructions sit in the top-left corner, where the title plate goes (hidden in the tutorial), clear of the view. */
+  .tut { position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: calc(16px + env(safe-area-inset-left, 0px)); width: min(440px, calc(58% - 24px));
+    box-sizing: border-box; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 7px 12px; display: grid; gap: 2px;
+    pointer-events: none; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  .tut .sec { font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ochre); }
+  .tut .say { margin: 0; font-size: 0.86rem; line-height: 1.35; color: var(--ink); text-wrap: pretty; }
   .tut .say b { color: var(--ochre); font-weight: 600; }
-  .tut .sub { margin: 0; font-size: 0.74rem; color: var(--ink-2); }
+  .tut .sub { margin: 0; font-size: 0.72rem; color: var(--ink-2); }
   .tut.pass { border-color: rgba(212, 155, 83, 0.6); }
-  @media (min-width: 1440px) { .tut { top: calc(14px + env(safe-area-inset-top, 0px)); } }
-  @media (max-width: 760px) { .tut { top: auto; bottom: calc(150px + env(safe-area-inset-bottom, 0px)); } } /* phones: clear of the chips, above the readout */
+  body.tutmap .plate { display: none; }
+  body.tutmap .chips { max-width: calc(42% - 24px); }
+  body.tutmap .chip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; box-sizing: border-box; }
+  body.tutmap.touch .readout { top: auto; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); } /* between the stick and the buttons */
+  @media (max-width: 760px) { .tut { width: calc(100% - 32px); } body.tutmap .chips { top: auto; bottom: calc(150px + env(safe-area-inset-bottom, 0px)); max-width: calc(100% - 32px); } } /* portrait: full width on top, chips moved down */
   /* Touch: floating stick on the left, camera drag on the right, Xbox-style face buttons bottom right. */
   #touch { position: fixed; inset: 0; display: none; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   body.touch.playing #touch { display: block; }
@@ -2927,6 +2931,7 @@ function updateTut() {
 }
 if (TUT) {
   document.getElementById('tutPanel').hidden = false;
+  document.body.classList.add('tutmap');
   for (const id of ['thirstRow', 'hungerRow']) document.getElementById(id).hidden = false;
   for (const id of ['wetRow', 'mudRow']) document.getElementById(id).hidden = true;
   document.querySelector('.meta').textContent = 'Hatchling · minutes old · Ischigualasto, about 231 million years ago';
