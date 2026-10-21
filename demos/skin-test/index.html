@@ -1540,12 +1540,17 @@ function stability(L, li, g, impact = 0) {
   D.checks++;
   if (score >= 0.4 && !D.fall) startFall(kind, score + 0.1, li, score >= downAt);
 }
+// Three escalating outcomes: a slip (the foot skids and it catches itself), a stumble (a big lurch and
+// scramble), and a trip (it goes down; only below half stamina).
 function startFall(kind, score, li, down) {
-  const k = clamp((score - 0.5) * 2, 0, 1);
-  D.fall = { kind, down, t: 0, dur: down ? lerp(1, 2, clamp(score - 1, 0, 1)) : lerp(0.65, 1.15, k), side: dino.legs[li].sx, sev: clamp(score, 0.5, 1.5), thud: false };
-  D.speed *= down ? 0.45 : lerp(0.94, 0.8, k);
-  D.jump = null; if (D.act !== 'none') endAct();
-  sfx.scuff(); if (!down) sfx.scuff(); rumble(down ? 260 : 180, 0.5, down ? 0.6 : 0.5); cam.jolt = Math.max(cam.jolt, down ? 0.06 : 0.04 + 0.05 * k);
+  const k = clamp((score - 0.5) * 2, 0, 1), level = down ? 'trip' : score < 0.85 ? 'slip' : 'stumble';
+  const dur = level === 'trip' ? lerp(1, 2, clamp(score - 1, 0, 1)) : level === 'slip' ? lerp(0.32, 0.45, k) : lerp(0.65, 1.15, k);
+  D.fall = { kind, level, down, t: 0, dur, side: dino.legs[li].sx, leg: li, sev: clamp(score, 0.5, 1.5), thud: false };
+  D.speed *= level === 'trip' ? 0.45 : level === 'slip' ? 0.97 : lerp(0.94, 0.8, k);
+  D.jump = null; if (D.act !== 'none' && level !== 'slip') endAct();
+  sfx.scuff(); if (level === 'stumble') sfx.scuff();
+  rumble(level === 'trip' ? 260 : level === 'slip' ? 90 : 180, level === 'slip' ? 0.3 : 0.5, level === 'trip' ? 0.6 : level === 'slip' ? 0.15 : 0.5);
+  if (level !== 'slip') cam.jolt = Math.max(cam.jolt, down ? 0.06 : 0.04 + 0.05 * k);
 }
 function footDown(L, li) {
   L.swing = false; L.liftS = 0;
@@ -1740,7 +1745,7 @@ function simStep(dt) {
     if (D.windTurn) { desiredYaw = WIND_FROM; steer = D.speed < 0.3; turnCap = 1.2; }
   }
   if (D.roarT >= 0) target = Math.min(target, 0.5);
-  if (D.fall) { if (D.fall.down) { target = 0; steer = false; } else { target *= 0.5; turnCap = 1; } }
+  if (D.fall) { if (D.fall.down) { target = 0; steer = false; } else if (D.fall.level === 'slip') target *= 0.9; else { target *= 0.5; turnCap = 1; } }
   if (air) turnCap = 0.6;
   const recover = D.landT >= 0 && D.landK > 0.6 && D.landT < 0.25;
   if (recover) turnCap = Math.min(turnCap, 0.8);
@@ -1894,6 +1899,13 @@ function simStep(dt) {
       fallDrop = 0.64 * fe; fallPitch = (F.kind === 'trip' ? 0.24 : 0.08) * fe; fallRoll = (F.kind === 'trip' ? 0.06 : 0.3) * F.side * fe;
       flail = 0.6 * smooth(0, 0.2, F.t) * (1 - smooth(0.2, 0.5, F.t));
       if (F.t > 1.1 + F.dur) D.fall = null;
+    } else if (F.level === 'slip') {
+      // The foot skids out a little, the body dips and twitches, and it carries on.
+      const e = smooth(0, 0.05, F.t) * (1 - smooth(0.1, F.dur, F.t)), L = dino.legs[F.leg];
+      D.stagE = e * 0.3; flail = 0.45 * e;
+      fallDrop = 0.05 * e; fallPitch = 0.04 * e; fallRoll = 0.08 * F.side * e; fallShift = 0.05 * F.side * e;
+      if (F.t < 0.16 && !L.swing) { const sk = 0.9 * dt; L.planted.x += (fwd.x * 0.5 + Math.cos(D.yaw) * L.sx * 0.5) * sk; L.planted.z += (fwd.z * 0.5 - Math.sin(D.yaw) * L.sx * 0.5) * sk; L.footPos.copy(L.planted); }
+      if (F.t > F.dur) D.fall = null;
     } else {
       // A big lurch: knees buckle, the body pitches and rolls toward the bad foot and slides sideways,
       // the head jerks up, arms and tail flail to catch the balance, and the legs scramble with quick steps.
@@ -2130,7 +2142,7 @@ function updateHud(dt) {
   hud.stamVal.textContent = D.stamina > 0.95 ? 'Fresh' : D.stamina > 0.25 ? `${Math.round(D.stamina * 100)}%` : `Tired, ${Math.round(D.stamina * 100)}%`;
   const F = D.fall, actTxt = { alert: 'Noticed water', turn: 'Turning to the water', shuffle: 'Stepping closer', drink: 'Drinking', air: 'Sniffing the air, nose into the wind', ground: 'Sniffing its own trail' }[D.act];
   const gait = Froude(D.speed) < 0.5 ? 'Walk' : D.speed < 5 ? 'Run' : 'Sprint';
-  hud.pace.textContent = F ? (F.down ? (F.kind === 'trip' ? 'Tripped, getting up' : 'Slipped and fell, getting up') : (F.kind === 'trip' ? 'Caught a toe, staggering' : 'Stumbled'))
+  hud.pace.textContent = F ? (F.down ? (F.kind === 'trip' ? 'Tripped, getting up' : 'Fell, getting up') : F.level === 'slip' ? 'Slipped, caught itself' : (F.kind === 'trip' ? 'Caught a toe, stumbled' : 'Stumbled'))
     : D.jump ? (D.jump.ph === 'crouch' ? 'Crouching to jump' : 'Airborne') : actTxt || (D.speed < 0.15 ? 'Standing' : `${gait}, ${D.speed.toFixed(1)} m/s`);
 }
 

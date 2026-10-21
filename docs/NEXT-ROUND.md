@@ -274,3 +274,10 @@ Nothing from this list is left open.
   Recovery capacity scales with stamina. Results now vary with real foot placement and gait phase.
   Full-sprint approaches straight at every step-up rock (129 runs): fresh 60 staggers (slip 36, roll 25,
   trip 0); 10% stamina 69 staggers and 5 falls, with trips appearing (5). A full walk: 6 staggers.
+- **Three escalating outcomes: slip, then stumble, then trip.**
+  - **Slip** (score 0.4–0.75): the foot skids out about 0.14 m, the body dips and twitches, and it carries on
+    in about 0.35 s with a 3% speed loss.
+  - **Stumble** (above 0.75): the big lurch and scramble.
+  - **Trip** (goes down): only below half stamina, still rare.
+  Full-sprint approaches at every step-up rock (129 runs): fresh 38 slips, 22 stumbles, 0 trips;
+  30% stamina 28/39/0; 10% stamina 30/39/5. A full walk when fresh: 5 slips, 1 stumble.
