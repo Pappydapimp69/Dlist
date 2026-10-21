@@ -103,6 +103,7 @@ sniff (Brain: assert every bound verb is explained).
 | TD13 | **Scent marks glow while sniffing and linger ~6 s after letting go.** | Holding B stops movement. Glow-only-while-held would make tracking stop-start. (ZaneGPT.) |
 | TD14 | **The sleeping prey lies upwind** of the trail start (the wind blows from the southwest). | So "smell the air" points the right way. (ZaneGPT.) |
 | TD15 | **Thicket around the prey, with a 6 m clearing at its bed.** | Ferns hide it until you've tracked it close; Stage 1 showed fern-hidden prey is otherwise invisible. |
+| TD12b | **A moving prey lays its own scent**: one mark per 1.3 m travelled, fading over 2 min; the glow shows through foliage within 25 m. | The authored trail only reached the bed. Once the prey moved, sniffing led nowhere (owner playtest). Travel-gated deposit (Brain: pheromone lessons); a sleeper lays none, hence the authored trail to its bed. |
 | TD16 | **The prey wakes on noise events:** a sprint, jump or roar within 12 m, or 3 s standing within 2.5 m. Awake, it flees like the first one. | Discrete noise events, not a continuous field (Brain: split events from fields). Roar waking it ties back to the Roar lesson. |
 
 ### Layout
