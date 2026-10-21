@@ -134,6 +134,13 @@ Changes queued from playtest feedback. Nothing here is built yet.
    - Drinking loop: lower the head, dip the snout and scoop with the jaw, then lift and
      tip the head back to swallow (visible throat gulp), and repeat while held. This
      is bird-style drinking, a reasonable guess for theropods.
-   - No water in range: sniff instead. Head down, nose working along the ground, with
-     small head sweeps. A hook for scent tracking later.
+   - No water in range: sniff instead, in one of two modes.
+     - **Air sniff (default):** the head lifts, the snout turns into the wind, and it
+       takes short sharp sniffs with small head turns. Later this picks up the
+       direction of distant scents (prey, carcasses) carried on the wind.
+     - **Ground sniff (only when standing on a scent trail):** the head drops and the
+       nose works along the trail. Later this follows blood or tracks closely.
+     - No tongue flicking: Herrerasaurus's closest living relatives, crocodiles and
+       birds, don't taste the air that way. Its smelling ability is unknown, but
+       other theropods' brain shapes suggest a good sense of smell.
    - Letting go of B at any point cancels and returns to normal posture.
