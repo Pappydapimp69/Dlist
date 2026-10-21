@@ -281,3 +281,8 @@ Nothing from this list is left open.
   - **Trip** (goes down): only below half stamina, still rare.
   Full-sprint approaches at every step-up rock (129 runs): fresh 38 slips, 22 stumbles, 0 trips;
   30% stamina 28/39/0; 10% stamina 30/39/5. A full walk when fresh: 5 slips, 1 stumble.
+- **Rarer slips, real boulders:** the event threshold rose from 0.4 to 0.55 (slip band 0.55–0.8). Full-sprint
+  slips at every rock fell from 38 to 14 of 117 runs when fresh, and a full walk now gives 2 slips and 1
+  stumble. The step-up limit rose to 55% of hip height (about 0.63 m, knee height). The old walls (0.59–0.67 m)
+  were knee-high, so the big rocks were rebuilt as tall boulders, 1.3–2.3 m high and 2.2–3.3 m across. Those
+  are the only walls.

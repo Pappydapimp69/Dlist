@@ -175,7 +175,7 @@ const SPAWN = { x: 0, z: 15, yaw: Math.PI };
 const TOO_DEEP = 1.12;
 // One creature for now. Rock tiers, jumps, snout reach and momentum all scale from these.
 const CREATURE = { hip: 1.15, leg: 1.18, mass: 350, reach: 2.8, snout: 1.8 }; // reach: water it notices; snout: how far ahead the lowered snout dips
-const TIER = { pebble: 0.08 * CREATURE.hip, step: 0.42 * CREATURE.hip };
+const TIER = { pebble: 0.08 * CREATURE.hip, step: 0.55 * CREATURE.hip }; // step-ups to about knee height; above that, a wall
 const JUMP_K = Math.pow(CREATURE.mass / 350, -1 / 6) * CREATURE.hip / 1.15;
 const WIND_FROM = Math.atan2(-0.8, -0.55); // heading the wind blows from
 const WIND_DIR = V(0.8, 0, 0.55).normalize(); // downwind
@@ -580,8 +580,8 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
   for (let i = 0; i < 300 && rl.length < 42; i++) {
     const [x, z] = ringPoint(8, 56);
     if (!clearOf(x, z, 2)) continue;
-    const s = R() < 0.25 ? lerp(0.9, 1.7, R()) : lerp(0.2, 0.6, R());
-    rl.push({ x, y: heightAt(x, z) - s * 0.25, z, s, ry: R() * 6.28 });
+    const big = R() < 0.25, s = big ? lerp(2.2, 3.2, R()) : lerp(0.2, 0.75, R()), sy = big ? s * lerp(1.4, 1.8, R()) : s; // a few real boulders, taller than the animal's hips
+    rl.push({ x, y: heightAt(x, z) - sy * 0.25, z, s, sy, ry: R() * 6.28 });
   }
   // Low sandstone slabs ahead of the start point, so step-ups are easy to find.
   const gr = rng(77);
@@ -1536,14 +1536,14 @@ function stability(L, li, g, impact = 0) {
   const kind = trip >= Math.max(slip, roll) ? 'trip' : 'stumble';
   // Fresh legs only ever stagger. Below half stamina a bad step can put it down, and it stays rare.
   const downAt = D.stamina >= 0.5 ? Infinity : lerp(2.1, 3.5, smooth(0.1, 0.5, D.stamina));
-  D.check = { rock: rid, leg: li, trip, slip, roll, demand, mu, sup, legT, score, kind, v, downAt, outcome: score >= downAt ? 'down' : score >= 0.4 ? 'stagger' : 'ok' };
+  D.check = { rock: rid, leg: li, trip, slip, roll, demand, mu, sup, legT, score, kind, v, downAt, outcome: score >= downAt ? 'down' : score >= 0.55 ? 'stagger' : 'ok' };
   D.checks++;
-  if (score >= 0.4 && !D.fall) startFall(kind, score + 0.1, li, score >= downAt);
+  if (score >= 0.55 && !D.fall) startFall(kind, score + 0.1, li, score >= downAt);
 }
 // Three escalating outcomes: a slip (the foot skids and it catches itself), a stumble (a big lurch and
 // scramble), and a trip (it goes down; only below half stamina).
 function startFall(kind, score, li, down) {
-  const k = clamp((score - 0.5) * 2, 0, 1), level = down ? 'trip' : score < 0.85 ? 'slip' : 'stumble';
+  const k = clamp((score - 0.5) * 2, 0, 1), level = down ? 'trip' : score < 0.9 ? 'slip' : 'stumble';
   const dur = level === 'trip' ? lerp(1, 2, clamp(score - 1, 0, 1)) : level === 'slip' ? lerp(0.32, 0.45, k) : lerp(0.65, 1.15, k);
   D.fall = { kind, level, down, t: 0, dur, side: dino.legs[li].sx, leg: li, sev: clamp(score, 0.5, 1.5), thud: false };
   D.speed *= level === 'trip' ? 0.45 : level === 'slip' ? 0.97 : lerp(0.94, 0.8, k);
