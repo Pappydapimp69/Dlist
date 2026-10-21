@@ -184,6 +184,7 @@
 </section>
 
 <div class="chips">
+  <span class="chip warn" id="vibeChip" hidden>Tap the screen once to allow vibration</span>
   <span class="chip warn" id="padChip">No controller yet. Press any button on it.</span>
   <span class="chip" id="soundChip">Sound is off. Click or tap anywhere to turn it on.</span>
   <span class="chip" id="heardChip" hidden></span>
@@ -1895,7 +1896,9 @@ function radial(x, y, inner = 0.16, outer = 0.96) {
 // so on a phone with a controller the phone buzzes too by default (it's usually clipped to the pad).
 // Where: 'controller' | 'phone' | 'both'; the menu cycles it and shows what is actually available.
 const haptics = { padOk: null, legacy: false, phone: !!navigator.vibrate };
-function phoneBuzz(dur, k, min) { if (!haptics.phone || k <= min) return; try { navigator.vibrate(Math.round(clamp(dur * 0.35 * k, 6, 60))); } catch (e) { haptics.phone = false; } }
+// navigator.vibrate returns false when the browser blocks it (most often: no tap on the page yet; controller presses don't count).
+function phoneBuzz(dur, k, min) { if (!haptics.phone || k <= min) return; try { haptics.phoneLast = navigator.vibrate(Math.round(clamp(dur * 0.35 * k, 6, 60))); } catch (e) { haptics.phone = false; } }
+const tapped = () => !navigator.userActivation || navigator.userActivation.hasBeenActive;
 function rumble(dur, weak, strong) {
   if (!settings.rumble) return;
   const k = Math.max(weak, strong);
@@ -1921,11 +1924,16 @@ function padHaptic(dur, weak, strong) {
     } catch (e) { haptics.padOk = false; }
   } else if (h && h.pulse) { haptics.legacy = true; try { h.pulse(Math.max(weak, strong), dur); } catch (e) { /* none */ } }
 }
+// What each part can actually do here, so a "nothing happens" report says why.
 function rumbleLabel() {
   if (!settings.rumble) return 'Off';
-  const pad = haptics.padOk === false && !haptics.legacy ? 'controller has none here' : haptics.padOk ? 'controller works' : 'controller untested';
-  const where = { controller: 'Controller', phone: 'Phone', both: 'Controller + phone' }[settings.rumbleWhere];
-  return `${where} (${settings.rumbleWhere === 'phone' ? (haptics.phone ? 'phone works' : 'phone has none') : pad})`;
+  const w = settings.rumbleWhere, p = activePad(), parts = [];
+  if (w !== 'phone') {
+    const has = p && (p.vibrationActuator || (p.hapticActuators && p.hapticActuators.length));
+    parts.push(!p ? 'no controller' : !has ? 'controller: no rumble in this browser' : haptics.padOk === false && !haptics.legacy ? 'controller: refused' : haptics.padOk || haptics.legacy ? 'controller: works' : 'controller: no reply yet');
+  }
+  if (w !== 'controller') parts.push(!haptics.phone ? 'phone: no motor in this browser' : !tapped() ? 'phone: tap the screen once' : haptics.phoneLast === false ? 'phone: blocked by the browser' : 'phone: on');
+  return `${{ controller: 'Controller', phone: 'Phone', both: 'Both' }[w]} · ${parts.join(' · ')}`;
 }
 // One haptic mix for the controller: the dino's own pulses plus a ground-vibration bed. Every heavy footfall nearby
 // adds energy to the bed, so many animals add up into one rumble (a herd stampeding past), and it dies away in about
@@ -1938,6 +1946,9 @@ function groundFeel(ev) {
 }
 function updateHaptics(dt) {
   const now = performance.now();
+  // On a phone with a controller, ask for the one tap the browser needs before it will vibrate.
+  const vc = document.getElementById('vibeChip'), need = settings.rumble && settings.rumbleWhere !== 'controller' && haptics.phone && input.device === 'pad' && !!activePad() && matchMedia('(pointer: coarse)').matches && !tapped();
+  if (vc.hidden === need) vc.hidden = !need;
   HAPTIC.g2 *= Math.exp(-dt / 0.15);
   for (const ev of SIM.queue) if ((ev.kind === 'step' || ev.kind === 'thud') && ev.who !== 'player' && ev.mass && ev.speed) {
     const a = groundFeel(ev); HAPTIC.g2 += a * a;
@@ -3725,7 +3736,7 @@ function frame(now) {
 window.__demo = {
   SIM, AI, audio, resetSimForReplay, loadEngine, createAudioLayer, updateAudio, audioWorld, camera,
   herd, HAPTIC, groundFeel, updateHaptics,
-  D, cam, input, settings, egg, tut, prey, TSTEPS, enterStep, SHRINKERS, scent, scentNear, layCarcassScent, pred, inCover, predHead, scentInfo: () => ({ on: scent.on, glow: scent.mat.opacity, marks: scent.marks.length }), heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, WATERS, MUDS, MAP, COURSE, COURSE_LEN, pathInfo, course, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
+  D, cam, input, settings, rumbleLabel, rumble, egg, tut, prey, TSTEPS, enterStep, SHRINKERS, scent, scentNear, layCarcassScent, pred, inCover, predHead, scentInfo: () => ({ on: scent.on, glow: scent.mat.opacity, marks: scent.marks.length }), heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, WATERS, MUDS, MAP, COURSE, COURSE_LEN, pathInfo, course, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
   start: () => startDemo('pad'),
   step(n = 60) { for (let i = 0; i < n; i++) { pollInput(STEP); simStep(STEP); flakes.update(STEP); drips.update(STEP); splash.update(STEP); splat.update(STEP); blood.update(STEP); dust.update(STEP); shells.update(STEP); updateRipples(STEP); updateCamera(STEP); } updatePrints(); },
   teleport(x, z, yaw = D.yaw) { D.pos.set(x, 0, z); D.yaw = yaw; clearMotion(); plantFeetAtNeutral(); cam.yaw = yaw + Math.PI; },
