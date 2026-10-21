@@ -42,6 +42,7 @@
   .bar i { display: block; height: 100%; width: 0%; background: var(--water); transition: width 120ms linear; }
   .bar.mud i { background: var(--mud); }
   .bar.stam i { background: var(--ochre); }
+  .bar.hp i { background: #b5523b; }
   .val { font-family: var(--f-mono); font-size: 0.74rem; color: var(--ink); font-variant-numeric: tabular-nums; min-width: 0; }
   .row.pace .val { grid-column: 2 / 4; }
 
@@ -193,6 +194,7 @@
   <div class="row" id="growRow" hidden><span class="lab">Growth</span><span class="bar stam"><i id="growBar"></i></span><span class="val" id="growVal"></span></div>
   <div class="row" id="wetRow"><span class="lab">Water</span><span class="bar"><i id="wetBar"></i></span><span class="val" id="wetVal">Dry</span></div>
   <div class="row" id="mudRow"><span class="lab">Mud</span><span class="bar mud"><i id="mudBar"></i></span><span class="val" id="mudVal">None</span></div>
+  <div class="row"><span class="lab">Health</span><span class="bar hp"><i id="hpBar"></i></span><span class="val" id="hpVal">Unhurt</span></div>
   <div class="row"><span class="lab">Stamina</span><span class="bar stam"><i id="stamBar"></i></span><span class="val" id="stamVal">Fresh</span></div>
   <div class="row pace"><span class="lab">Pace</span><span class="val" id="paceVal">Standing</span></div>
 </section>
@@ -1478,6 +1480,9 @@ const splash = new Particles(dropGeo, dropMat, 500, { drag: 0.6, stretch: true, 
 const splat = new Particles(new THREE.SphereGeometry(0.02, 6, 4), new THREE.MeshStandardMaterial({ color: new THREE.Color('#2e2015'), roughness: 0.35 }), 300,
   { drag: 0.6, squash: true, stay: true, onLand: (it, s) => { if (s.kind !== 'ground') return false; it.life = it.age + 5; return true; } });
 
+// Blood: dark drops that splash out of a bite and stay on the ground as marks for a while.
+const blood = new Particles(dropGeo, new THREE.MeshStandardMaterial({ color: new THREE.Color('#4f0d0a'), roughness: 0.3 }), 300,
+  { drag: 0.6, squash: true, stay: true, onLand: (it, s) => { if (s.kind !== 'ground') return false; it.life = it.age + 25; return true; } });
 const dust = new Particles(new THREE.SphereGeometry(0.03, 6, 4), new THREE.MeshStandardMaterial({ color: new THREE.Color('#8f7457'), roughness: 1, transparent: true, opacity: 0.55, depthWrite: false }), 120,
   { drag: 3.2, grav: 0.12, onLand: () => false });
 
@@ -1615,6 +1620,8 @@ const sfx = {
   // A slip, stumble or trip is the foot skidding over the ground: a scrape, longer and louder the worse it is.
   slide: (level) => bodySound('slide', level === 'slip' ? 68 : level === 'stumble' ? 72 : 75, { speed: D.speed / WS, dur: (level === 'slip' ? 0.22 : level === 'stumble' ? 0.38 : 0.55) * BODY.ts }),
   thud: () => bodySound('thud', 84 + 6 * Math.log10(BODY.mk * 10)),
+  // A bite that lands: teeth into flesh, a wet blow at the bite point.
+  hit: (p, share) => emit({ kind: 'hit', who: 'player', x: p.x, y: p.y, z: p.z, level: 76 + 8 * share, share, target: 'prey' }),
   call: (style) => { const c = CALLS[style], k = TUT ? 0.35 : 1; mouthSound('call', c.level - (TUT ? 36 : 0), { style, mode: c.mode, duration: c.duration * k, notes: c.notes || 1, gap: (c.gap || 0.3) * k, f0k: c.f0k, f0Endk: c.f0Endk, f0abs: c.f0abs, roughness: c.roughness ?? 0.3, breath: c.breath ?? 0.15, jitter: c.jitter ?? 0.2, amp: c.amp * (TUT ? 0.45 : 1) }); },
   scramble: () => bodySound('scramble', 68),
   roar: () => sfx.call('roar'),
@@ -1622,6 +1629,7 @@ const sfx = {
   chirp: (notes = 1) => mouthSound('call', 72, { mode: 'open', duration: notes > 1 ? 0.26 : 0.2, notes, gap: 0.3, roughness: 0.25, breath: 0.5, jitter: 1, amp: 1.2 }),
   tear: () => mouthSound('tear', 60),
   // The prey's alarm squeak, from where the prey is.
+  snarl: () => emit({ kind: 'call', who: 'prey', mode: 'open', duration: 0.35, notes: 1, pitch: 0.55, roughness: 0.85, amp: 1, x: prey.x, y: groundAt(prey.x, prey.z) + 0.3, z: prey.z, level: 72 }),
   squeak: (k = 1) => emit({ kind: 'call', who: 'prey', mode: 'open', duration: 0.17, notes: 1, pitch: k, roughness: 0.35, breath: 0.6, jitter: 1, amp: 1, x: prey.x, y: groundAt(prey.x, prey.z) + 0.3, z: prey.z, level: 70 }),
 };
 
@@ -1640,7 +1648,26 @@ const CALLS = {
   parched: { label: 'Parched roar', note: 'thirsty', mode: 'open', duration: 1.3, f0k: 0.8, f0Endk: 0.6, roughness: 0.8, breath: 0.55, amp: 2.6, level: 104, challenge: true },
   hungry: { label: 'Hungry roar', note: 'starving', mode: 'open', duration: 2.0, f0k: 0.6, f0Endk: 0.45, roughness: 0.7, breath: 0.2, amp: 3.2, level: 108, challenge: true },
 };
+CALLS.yelp = { label: 'Yelp', note: 'hurt', mode: 'open', duration: 0.3, f0k: 1.0, f0Endk: 0.7, roughness: 0.6, breath: 0.4, amp: 2.0, level: 92 };
 const WHEEL = ['roar', 'bellow', 'growl', 'boom', 'hiss', 'chuff']; // clockwise from the top
+
+// ---- fights: hit points and damage ----
+// A bite takes a share of the target's hit points that grows with how outclassed it is:
+//   r = (attacker mass / target mass)^(2/3) x bite / hide   (bite force and hide both scale with cross-section)
+//   share = 0.2 r^1.5 x hit quality, capped at 1
+// An even match takes about 5 bites, twice outclassed 2, about three times outclassed one bite.
+// Hit quality: a solid bite 1, a glancing one 0.5, on the neck x1.25, at a run up to x1.25, on a sleeping animal x2.5.
+// Masses are game estimates: the tutorial's young Exaeretodon is a 0.35 kg cynodont.
+const FIGHT = { biteK: 1.3, hideK: 1, preyMass: 0.35, preyBite: 0.7, preyHide: 1 };
+const biteShare = (aMass, aBite, tMass, tHide, quality) => Math.min(1, 0.2 * Math.pow(Math.pow(aMass / tMass, 2 / 3) * aBite / tHide, 1.5) * quality);
+function hurtPlayer(share, fromX, fromZ) {
+  D.hp = Math.max(0.05, D.hp - share); // the demo has no death; Upstarts owns that rule
+  const rx = Math.cos(D.yaw), rz = -Math.sin(D.yaw); // the dino's right
+  D.hurt = { t: 0, side: Math.sign((fromX - D.pos.x) * rx + (fromZ - D.pos.z) * rz) || 1, k: Math.min(1, 0.4 + share * 4) };
+  D.speed *= 0.7; sfx.call('yelp'); bodySound('hit', 76, { target: 'player', share });
+  cam.jolt = Math.max(cam.jolt, 0.05); rumble(180, 0.7, 0.6);
+  D.lastHit = { t: D.time, text: 'It bit back' };
+}
 // Y's roar by condition: stamina first, then thirst, then hunger (thirst and hunger exist in the tutorial so far).
 function roarStyle() {
   if (D.stamina < 0.3) return 'winded';
@@ -1739,6 +1766,9 @@ function createAudioLayer(engine) {
             ...(f0 ? { f0, f0End: ev.f0abs ?? (ev.f0Endk ? cap * ev.f0Endk * vp : f0 * 0.75) } : {}) });
           break;
         }
+        // A bite landing: a wet blow (suction and a soft heavy contact) at the bite point; on the player, at its body.
+        case 'hit': { const src = ev.target === 'player' ? S.feet : S.crunch; at(src, ev);
+          src.step({ mass: 20 + 60 * ev.share, speed: 3, surface: 'mud', claws: false, gain: 0.9 + ev.share }); src.step({ mass: 2, speed: 2, surface: 'packedDirt', claws: false, gain: 0.5, delay: 0.03 }); break; }
         // Tearing meat: wet suction as it pulls, with gristle crackle.
         case 'tear': at(S.crunch, ev); S.crunch.step({ mass: 3, speed: 2, surface: 'mud', claws: false, gain: 1.2 }); S.crunch.step({ mass: 1, speed: 2, surface: 'packedDirt', claws: false, gain: 0.6, delay: 0.04 }); break;
         case 'bite': at(S.jaw, ev); S.jaw.strike(12 * vary(1), 0.85); break;
@@ -2118,7 +2148,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && sta
 /* ============================== dinosaur simulation ============================== */
 const D = {
   pos: V(SPAWN.x, 0, SPAWN.z), yaw: SPAWN.yaw, speed: 0, accel: 0, yawRate: 0, phase: 0, cycleT: 1,
-  biteT: -1, roarT: -1, sprintT: 0, time: 0, rippleT: 0, bodyY: 0, run: 0, roll: 0, pitchF: 0,
+  biteT: -1, roarT: -1, hp: 1, hurt: null, lastHit: null, bite: null, sprintT: 0, time: 0, rippleT: 0, bodyY: 0, run: 0, roll: 0, pitchF: 0,
   tailYaw: 0, tailYawV: 0, tailTurnYaw: SPAWN.yaw, tailTurnSign: 0,
   stamina: 1, jump: null, landT: -1, landK: 0, lastJump: null, fall: null, check: null, checks: 0,
   act: 'none', actT: 0, waterYaw: 0, shuffle: 0, shuffleFrom: V(), dip: 0, hd: 0, hu: 0, tilt: 0, hyaw: 0, scentTo: null, actU: 0,
@@ -2147,7 +2177,7 @@ function clearMotion() {
   D.hd = D.hu = D.tilt = D.hyaw = D.dip = 0; D.rough = 0;
 }
 function resetDino() {
-  D.pos.set(SPAWN.x, 0, SPAWN.z); D.yaw = SPAWN.yaw;
+  D.pos.set(SPAWN.x, 0, SPAWN.z); D.yaw = SPAWN.yaw; D.hp = 1; D.hurt = null;
   for (const a of [D.wet, D.mudCover, D.mudDry, D.mudFlake, D.mudWalk, D.flakeAcc]) a.fill(0);
   prints.length = 0;
   clearMotion(); plantFeetAtNeutral(); cam.yaw = D.yaw + Math.PI;
@@ -2432,7 +2462,8 @@ function simStep(dt) {
   const mF = active && !egged ? input.moveF : 0, mR = active && !egged ? input.moveR : 0;
   const mag = Math.min(1, Math.hypot(mF, mR));
   const downed = !!(D.fall && D.fall.down);
-  if (active && !downed && !egged && (input.bite || input.biteKey) && D.biteT < 0 && D.roarT < 0) { D.biteT = 0; rumble(90, 0.4, 0.5); }
+  if (active && !downed && !egged && (input.bite || input.biteKey) && D.biteT < 0 && D.roarT < 0) { D.biteT = 0; D.bite = { hit: false, hold: 0 }; rumble(90, 0.4, 0.5); }
+  D.hp = Math.min(1, D.hp + (D.rest > 0.8 ? 0.03 : 0.008) * dt); // wounds close slowly, faster lying down
   if (active && !downed && !egged && (input.roar || input.roarKey || input.callStyle) && D.roarT < 0 && D.biteT < 0) {
     const style = input.callStyle || roarStyle(), c = CALLS[style];
     D.roarT = 0; D.call = { style, dur: c.duration * (TUT ? 0.35 : 1), jaw: c.mode === 'closed' ? 0.06 : style === 'hiss' ? 0.45 : style === 'chuff' ? 0.35 : 0.86 };
@@ -2468,6 +2499,7 @@ function simStep(dt) {
     if (D.windTurn) { desiredYaw = WIND_FROM; steer = D.speed < 0.3; turnCap = 1.2; }
   }
   if (D.roarT >= 0) target = Math.min(target, 0.5);
+  if (D.hp < 0.3) target *= lerp(0.6, 1, D.hp / 0.3); // badly hurt, it limps
   if (D.fall) { if (D.fall.down) { target = 0; steer = false; } else if (D.fall.level === 'slip') target *= 0.9; else { target *= 0.5; turnCap = 1; } }
   if (air) turnCap = 0.6;
   const recover = D.landT >= 0 && D.landK > 0.6 && D.landT < 0.25;
@@ -2496,6 +2528,7 @@ function simStep(dt) {
     const prev = D.speed, up = lerp(2.1, 1.2, smooth(5, 7, D.speed)) * (recover ? 0.35 : 1);
     D.speed = D.speed < target ? Math.min(target, D.speed + up * dt) : Math.max(target, D.speed - (downed ? 9 : 4) * dt);
     D.accel = damp(D.accel, (D.speed - prev) / dt, 6, dt);
+    if (D.biteT >= 0.12 && D.biteT < 0.24 && !downed) D.speed = Math.max(D.speed, 3.2); // the strike carries the body forward about half a metre
   } else D.accel = damp(D.accel, 0, 6, dt);
   const sprinting = D.speed > 5 && input.sprint > 0.25;
   // Tutorial: a sprint empties stamina in about 11 s, standing gives back 4%/s, lying down 30%/s (docs/TUTORIAL.md).
@@ -2676,16 +2709,24 @@ function simStep(dt) {
 
   // ---- actions ----
   let jawOpen = 0, lunge = 0, roarE = 0, shake = 0, flex = 0;
+  let biteYaw = 0;
   if (D.biteT >= 0) {
-    const o = (D.biteT += dt);
-    const open = o < 0.16 ? smooth(0, 0.16, o) : o < 0.24 ? 1 - smooth(0.16, 0.24, o) : 0;
-    jawOpen = Math.max(jawOpen, open * 0.62);
-    lunge = o < 0.14 ? -0.35 * smooth(0, 0.14, o) : o < 0.26 ? lerp(-0.35, 1, smooth(0.14, 0.26, o)) : 1 - smooth(0.26, 0.55, o);
+    // Wind up (head draws back, jaws gape), strike (neck and body drive forward, jaws slam at 0.2 s). On a hit the
+    // strike freezes for 70 ms on contact, then it grips and shakes its head; a miss snaps on air and recovers.
+    const Bt = D.bite || (D.bite = { hit: false, hold: 0 });
+    if (Bt.hold > 0) Bt.hold -= dt; else D.biteT += dt;
+    const o = D.biteT, hit = Bt.hit, end = hit ? 0.7 : 0.5;
+    const open = o < 0.15 ? smooth(0, 0.15, o) : o < 0.2 ? 1 - smooth(0.15, 0.2, o) : 0;
+    jawOpen = Math.max(jawOpen, open * 0.8);
+    lunge = o < 0.14 ? -0.6 * smooth(0, 0.14, o) : o < 0.22 ? lerp(-0.6, 1.3, smooth(0.14, 0.22, o)) : 1.3 * (1 - smooth(0.22, hit ? 0.62 : 0.45, o));
+    if (hit && o > 0.24) biteYaw = 0.3 * Math.sin((o - 0.24) * 30) * (1 - smooth(0.3, 0.62, o)); // the tearing shake
     // The mid-jaw joint lets the front of the lower jaw flex: down as it gapes, up as it clamps.
-    flex = o < 0.16 ? 0.13 * smooth(0, 0.16, o) : o < 0.3 ? lerp(0.13, -0.09, smooth(0.16, 0.26, o)) : -0.09 * (1 - smooth(0.3, 0.52, o));
+    flex = o < 0.15 ? 0.15 * smooth(0, 0.15, o) : o < 0.3 ? lerp(0.15, -0.1, smooth(0.15, 0.22, o)) : -0.1 * (1 - smooth(0.3, end - 0.05, o));
     if (o >= 0.2 && !D.snapped) { D.snapped = true; sfx.snap(); rumble(70, 0.5, 0.8); onBiteSnap(dino.B.head.localToWorld(tmp.v.set(0, -0.09, 0.55))); }
-    if (o > 0.56) { D.biteT = -1; D.snapped = false; }
+    if (o > end) { D.biteT = -1; D.snapped = false; }
   }
+  let hurtE = 0, hurtSide = 0;
+  if (D.hurt) { D.hurt.t += dt; hurtE = D.hurt.k * Math.exp(-D.hurt.t * 6) * smooth(0, 0.04, D.hurt.t); hurtSide = D.hurt.side; if (D.hurt.t > 0.8) D.hurt = null; }
   if (D.roarT >= 0) {
     const o = (D.roarT += dt), C = D.call || { dur: 1.6, jaw: 0.86 }, e0 = Math.min(0.35, C.dur * 0.3);
     roarE = smooth(0, e0, o) * (1 - smooth(C.dur - 0.15, C.dur + 0.35, o));
@@ -2770,14 +2811,14 @@ function simStep(dt) {
   const pelvisPitch = -slope * 0.75 + D.pitchF + lerp(-0.03, 0.09, run) + hd * 0.22 + dip * 0.1 + lunge * 0.05 + fallPitch + jc * 0.6 - tuck * 0.04;
   const rest = D.rest || 0, breathe = rest * 0.012 * Math.sin(D.time * 2.2);
   B.pelvis.position.set(0, 1.18 - 0.085 * run + bob - hd * 0.16 - dip * 0.08 + D.bodyY - jc - absorb - fallDrop - rest * 0.6 + breathe, 0); B.pelvis.position.x = fallShift;
-  B.pelvis.rotation.set(pelvisPitch + rest * 0.1, 0.045 * Math.sin(ph) * mf, D.roll + fallRoll + 0.035 * Math.sin(ph) * mf);
+  B.pelvis.rotation.set(pelvisPitch + rest * 0.1, 0.045 * Math.sin(ph) * mf, D.roll + fallRoll + 0.035 * Math.sin(ph) * mf - hurtSide * 0.12 * hurtE);
   B.spine1.rotation.set(0, -0.025 * Math.sin(ph) * mf, 0);
   B.spine2.rotation.set(0, -0.02 * Math.sin(ph) * mf, 0);
   B.chest.rotation.set(0.008 * Math.sin(D.time * 1.6) - rest * 0.04, 0, 0);
   const look = (1 - mf) * 0.14 * Math.sin(D.time * 0.37) * Math.sin(D.time * 0.23 + 1) * (D.act === 'none' ? 1 : 0);
   const fl = flail * Math.sin(D.time * 17 / BODY.ts), fl2 = flail * Math.sin(D.time * 12.5 / BODY.ts + 1);
   // Head counterbalances body roll on uneven footing (toward the high side).
-  const nYaw = D.yawRate * 0.05 + D.hyaw + D.roll * 0.8 + fl * 0.3;
+  const nYaw = D.yawRate * 0.05 + D.hyaw + D.roll * 0.8 + fl * 0.3 + biteYaw - hurtSide * 0.45 * hurtE; // flinches away from the bite
   // Walk: relaxed S-curve neck, head high. Sprint: neck straight out and low, head in line with it.
   B.neck1.rotation.set(lerp(-0.14, 0.32, run) * (1 - hd) + rest * 0.45 + hd * 0.62 + dip * 0.35 - D.hu * 0.22 - D.tilt * 0.04 + lunge * 0.1 - roarE * 0.14 + fallPitch * 0.8 + fl2 * 0.12 + tuck * 0.06 + absorb * 1.1 + jc * 0.6 - (D.fall && D.fall.down ? 0.35 * D.fall.lie : 0), nYaw * 0.25, D.fall && D.fall.down ? 0.55 * D.fall.side * D.fall.lie : 0); // lying: the head tries to stay up
   B.neck2.rotation.set(lerp(0.04, 0.17, run) * (1 - hd) + hd * 0.3 + dip * 0.2 - D.hu * 0.14 - D.tilt * 0.12 + lunge * 0.08 - roarE * 0.22 + fl * 0.1, nYaw * 0.35 + look, D.fall && D.fall.down ? 0.4 * D.fall.side * D.fall.lie : 0);
@@ -2897,7 +2938,7 @@ function updateCamera(dt) {
 
 /* ============================== HUD ============================== */
 const Froude = (v) => v * v / (9.81 * CREATURE.hip);
-const hud = { stamBar: document.getElementById('stamBar'), stamVal: document.getElementById('stamVal'), wetBar: document.getElementById('wetBar'), wetVal: document.getElementById('wetVal'), mudBar: document.getElementById('mudBar'), mudVal: document.getElementById('mudVal'), pace: document.getElementById('paceVal'), t: 0 };
+const hud = { hpBar: document.getElementById('hpBar'), hpVal: document.getElementById('hpVal'), stamBar: document.getElementById('stamBar'), stamVal: document.getElementById('stamVal'), wetBar: document.getElementById('wetBar'), wetVal: document.getElementById('wetVal'), mudBar: document.getElementById('mudBar'), mudVal: document.getElementById('mudVal'), pace: document.getElementById('paceVal'), t: 0 };
 function updateHud(dt) {
   hud.t -= dt; if (hud.t > 0) return; hud.t = 0.1;
   { // what it just heard (from the sim's sound events, so it also works with the sound off)
@@ -2925,10 +2966,13 @@ function updateHud(dt) {
   hud.mudBar.style.width = (pct * 100).toFixed(0) + '%';
   hud.mudVal.textContent = txt;
   hud.stamBar.style.width = (D.stamina * 100).toFixed(0) + '%';
+  hud.hpBar.style.width = (D.hp * 100).toFixed(0) + '%';
+  hud.hpVal.textContent = D.hp > 0.97 ? 'Unhurt' : D.hp > 0.5 ? `Hurt, ${Math.round(D.hp * 100)}%` : `Badly hurt, ${Math.round(D.hp * 100)}%`;
   hud.stamVal.textContent = D.stamina > 0.95 ? 'Fresh' : D.stamina > 0.25 ? `${Math.round(D.stamina * 100)}%` : `Tired, ${Math.round(D.stamina * 100)}%`;
   const F = D.fall, actTxt = { alert: 'Noticed water', turn: 'Turning to the water', shuffle: 'Stepping closer', drink: 'Drinking', eat: 'Eating', air: 'Sniffing the air, nose into the wind', ground: 'Sniffing its own trail' }[D.act];
   const gait = Froude(D.speed) < 0.5 ? 'Walk' : D.speed < 5 ? 'Run' : 'Sprint';
   hud.pace.textContent = F ? (F.down ? (F.kind === 'trip' ? 'Tripped, getting up' : 'Fell, getting up') : F.level === 'slip' ? 'Slipped, caught itself' : (F.kind === 'trip' ? 'Caught a toe, stumbled' : 'Stumbled'))
+    : D.lastHit && D.time - D.lastHit.t < 1.6 ? D.lastHit.text
     : D.roarT >= 0 && D.call ? `${CALLS[D.call.style].label} (${CALLS[D.call.style].note})`
     : D.jump ? (D.jump.ph === 'crouch' ? 'Crouching to jump' : 'Airborne') : D.resting ? 'Lying down, resting' : D.rest > 0.05 ? 'Getting up' : inEgg() ? 'Inside the egg' : actTxt || (D.speed < 0.15 ? 'Standing' : `${gait}, ${D.speed.toFixed(1)} m/s`);
 }
@@ -3003,7 +3047,7 @@ function preySpot(minFromPlayer) {
 }
 function spawnPrey(id = 1) {
   const [x, z] = preySpot(16);
-  Object.assign(prey, { alive: true, spawned: true, x, z, yaw: Math.atan2(D.pos.x - x, D.pos.z - z) + Math.PI, speed: 0, state: 'graze', fatigue: 0, calmT: 0, stuckT: 0, lastX: x, lastZ: z });
+  Object.assign(prey, { alive: true, spawned: true, x, z, yaw: Math.atan2(D.pos.x - x, D.pos.z - z) + Math.PI, speed: 0, state: 'graze', fatigue: 0, calmT: 0, stuckT: 0, lastX: x, lastZ: z, hp: 1, kx: 0, kz: 0, hurtT: 9, counter: null, bleedT: 0 });
   prey.id = id; prey.g.visible = true; prey.g.rotation.set(0, prey.yaw, 0); prey.g.scale.set(1, 1, 1);
   if (!prey.obstacle) { prey.obstacle = { x, z, r: 0.5 }; obstacles.push(prey.obstacle); }
 }
@@ -3029,12 +3073,19 @@ function updatePrey(dt) {
     // Flees when the hatchling is close, or closing fast. Flight speed sits between its walk and its sprint (TD9, Brain: speed parity).
     if (prey.state === 'graze' && (dist < 9 || (dist < 15 && D.speed > 3.5))) { prey.state = 'flee'; sfx.squeak(0.7); }
     if (prey.state === 'flee') {
-      prey.fatigue = Math.min(1, prey.fatigue + dt / 7);
+      prey.fatigue = Math.min(1, prey.fatigue + dt / 7 * (2 - (prey.hp ?? 1))); // and tires sooner
       if (dist > 24) { prey.calmT += dt; if (prey.calmT > 2) { prey.state = 'graze'; prey.calmT = 0; } } else prey.calmT = 0;
     } else prey.fatigue = Math.max(0, prey.fatigue - dt / 12);
     let want = prey.yaw, v = 0;
-    if (prey.state === 'flee') { want = Math.atan2(dx, dz); v = lerp(5.4, 4.0, prey.fatigue); }
+    if (prey.state === 'flee') { want = Math.atan2(dx, dz); v = lerp(5.4, 4.0, prey.fatigue) * (0.55 + 0.45 * (prey.hp ?? 1)); } // wounded, it runs slower
     else { prey.wanderT -= dt; if (prey.wanderT <= 0) { prey.wanderT = 2 + simRng() * 3; prey.wanderYaw = prey.yaw + (simRng() - 0.5) * 2; prey.wanderGo = simRng() < 0.5; /* sim RNG: replays match */ } want = prey.wanderYaw ?? prey.yaw; v = prey.wanderGo ? 0.7 : 0; if (Math.hypot(prey.x - HUNT.x, prey.z - HUNT.z) > 18) want = Math.atan2(HUNT.x - prey.x, HUNT.z - prey.z); }
+    // Turning on you: it whips round, lunges and bites, then goes back to running.
+    const C = prey.counter;
+    if (C) {
+      C.t += dt; want = Math.atan2(-dx, -dz); prey.yaw += wrapAngle(want - prey.yaw) * (1 - Math.exp(-12 * dt)); v = C.t > 0 && C.t < 0.3 ? 2.2 : 0;
+      if (C.t >= 0.18 && !C.done) { C.done = true; sfx.snarl(); if (dist < 2.8 && !D.jump) hurtPlayer(biteShare(FIGHT.preyMass, FIGHT.preyBite, SOUND_MASS(), 1, 1), prey.x, prey.z); }
+      if (C.t > 0.6) prey.counter = null;
+    }
     // Steer around water, trees and the world edge: try the wanted heading, then swing either way until the path ahead is clear.
     if (v > 0) {
       let best = null;
@@ -3048,6 +3099,14 @@ function updatePrey(dt) {
     prey.speed = damp(prey.speed, v, 4, dt);
     const nx = prey.x + Math.sin(prey.yaw) * prey.speed * dt, nz = prey.z + Math.cos(prey.yaw) * prey.speed * dt;
     if (!preyBlocked(nx, nz)) { prey.x = nx; prey.z = nz; layScent(prey.speed * dt); }
+    if (prey.kx || prey.kz) { // knocked back by a bite
+      const kx = prey.x + prey.kx * dt, kz = prey.z + prey.kz * dt; if (!preyBlocked(kx, kz)) { prey.x = kx; prey.z = kz; }
+      const f = Math.exp(-7 * dt); prey.kx *= f; prey.kz *= f; if (Math.abs(prey.kx) + Math.abs(prey.kz) < 0.02) prey.kx = prey.kz = 0;
+    }
+    if ((prey.hp ?? 1) < 1 && prey.speed > 0.3) { // a wound drips as it runs, more the worse it is
+      prey.bleedT = (prey.bleedT || 0) - dt;
+      if (prey.bleedT <= 0) { prey.bleedT = lerp(1.2, 0.25, 1 - prey.hp); blood.spawn(V(prey.x, groundAt(prey.x, prey.z) + 0.4, prey.z), V((simRng() - 0.5) * 0.4, 0, (simRng() - 0.5) * 0.4), { life: 40, size: 1 + simRng() }); }
+    }
     // Lost or wedged: put it back on the hunting ground, out of sight but not far (no soft-lock, TD8).
     prey.stuckT = prey.state === 'flee' && Math.hypot(prey.x - prey.lastX, prey.z - prey.lastZ) < 0.02 ? prey.stuckT + dt : 0;
     prey.lastX = prey.x; prey.lastZ = prey.z;
@@ -3058,6 +3117,10 @@ function updatePrey(dt) {
     prey.head.rotation.x = prey.state === 'graze' && prey.speed < 0.3 ? 0.5 + 0.08 * Math.sin(D.time * 5) : -0.1;
     prey.g.position.set(prey.x, groundAt(prey.x, prey.z) + Math.abs(Math.sin(prey.phase * Math.PI * 2)) * 0.04 * Math.min(1, prey.speed), prey.z);
     prey.g.rotation.set(0, prey.yaw, 0);
+    // Flinch from a bite: a sharp body jerk and the head thrown up, dying out in a fraction of a second.
+    prey.hurtT = (prey.hurtT ?? 9) + dt; const j = Math.exp(-prey.hurtT * 7);
+    prey.g.rotation.z = 0.35 * j * Math.sin(prey.hurtT * 32); prey.head.rotation.x -= 0.5 * j;
+    if (prey.counter && prey.counter.t > 0) prey.head.rotation.x = -0.35 * Math.sin(Math.PI * Math.min(1, prey.counter.t / 0.35)); // the snap
   } else {
     // A carcass: on its side, shrinking as it is eaten.
     const k = 0.35 + 0.65 * prey.meat;
@@ -3070,6 +3133,7 @@ function updatePrey(dt) {
   if (prey.obstacle) { prey.obstacle.x = prey.x; prey.obstacle.z = prey.z; }
 }
 function spawnSleeper() {
+  Object.assign(prey, { hp: 1, kx: 0, kz: 0, hurtT: 9, counter: null, bleedT: 0 });
   Object.assign(prey, { id: 2, alive: true, spawned: true, x: BED[0], z: BED[1], yaw: 0.6, speed: 0, state: 'sleep', fatigue: 0, calmT: 0, stuckT: 0, lastX: BED[0], lastZ: BED[1], woke: false, closeT: 0, roarsHeard: D.roars || 0, meat: 1 });
   prey.g.visible = true; prey.g.scale.set(1, 1, 1);
   if (!prey.obstacle) { prey.obstacle = { x: BED[0], z: BED[1], r: 0.5 }; obstacles.push(prey.obstacle); }
@@ -3079,7 +3143,20 @@ function onBiteSnap(snout) {
   // The snap lands if the snout is on the body (horizontal distance; a hatchling's head is above a low cynodont).
   const ax = Math.sin(prey.yaw), az = Math.cos(prey.yaw), rx = snout.x - prey.x, rz = snout.z - prey.z;
   const along = clamp(rx * ax + rz * az, -0.9, 1.1), d = Math.hypot(rx - ax * along, rz - az * along);
-  if (d < 1.05) { prey.alive = false; prey.meat = 1; sfx.squeak(1.2); rumble(220, 0.6, 0.8); }
+  if (d >= 1.05) return; // snapped on air
+  const ambush = prey.state === 'sleep' ? 2.5 : 1; // a sleeping animal can't brace or twist away: the best bite there is
+  const quality = lerp(1, 0.5, smooth(0.45, 1.05, d)) * (along > 0.6 ? 1.25 : 1) * (1 + 0.25 * smooth(2, 7, D.speed)) * ambush;
+  const share = biteShare(SOUND_MASS(), FIGHT.biteK, FIGHT.preyMass, FIGHT.preyHide, quality);
+  prey.hp = Math.max(0, (prey.hp ?? 1) - share);
+  D.bite.hit = true; D.bite.hold = 0.07; // hit-stop on contact
+  const fx = Math.sin(D.yaw), fz = Math.cos(D.yaw);
+  prey.kx = fx * (2 + 4 * share); prey.kz = fz * (2 + 4 * share); prey.hurtT = 0; // knocked back along the strike
+  sfx.hit(snout, share); cam.jolt = Math.max(cam.jolt, 0.03 + 0.06 * share); rumble(140, 0.6, 0.9);
+  for (let k = 0; k < 6 + Math.round(30 * share); k++) blood.spawn(V(snout.x, snout.y, snout.z), V(fx * 1.2 + (simRng() - 0.5) * 2.4, 0.6 + simRng() * 1.6, fz * 1.2 + (simRng() - 0.5) * 2.4), { life: 30, size: 0.8 + simRng() });
+  if (prey.hp <= 0) { prey.alive = false; prey.meat = 1; prey.counter = null; sfx.squeak(1.2); rumble(220, 0.6, 0.8); D.lastHit = { t: D.time, text: 'Killed it' }; return; }
+  prey.state = 'flee'; prey.woke = true; sfx.squeak(1.05);
+  D.lastHit = { t: D.time, text: prey.hp > 0.6 ? 'Bit it, a light wound' : prey.hp > 0.3 ? 'Bit it, badly wounded' : 'Bit it, nearly finished' };
+  if (prey.hp < 0.6 && !prey.counter && simRng() < 0.45) prey.counter = { t: -0.3, done: false }; // a wounded animal may turn and bite back
 }
 function carcassNear() {
   if (!prey || prey.alive || !prey.spawned || prey.meat <= 0) return null;
@@ -3151,7 +3228,7 @@ const TSTEPS = [
   { name: 'Walk', say: 'Push {move} to walk and turn the camera with {camera}. Step over the nest rim and head for the light.', at: () => TRAIL[1], pass: (s) => Math.hypot(D.pos.x - s.at()[0], D.pos.z - s.at()[1]) < 3 },
   { name: 'Roar', say: 'Press {roar} to roar. From a hatchling it comes out as a squeak, but it tells the others where you are.', pass: () => D.roars > tut.roars },
   { name: 'Drink', say: 'You’re thirsty. Walk down to the pond and hold {drink} at the water’s edge.', sub: () => `Thirst ${Math.round(tut.thirst * 100)}%`, at: () => pondEdge, pass: () => tut.thirst >= 0.999 },
-  { name: 'Hunt', say: 'Hungry now. A young Exaeretodon is grazing past the pond. Hold {sprint} to run it down, then press {bite} when your snout is on it.', sub: () => prey.state === 'flee' ? 'It’s running. Keep sprinting; it tires before you do.' : 'Sneak up slowly or charge it.', at: () => (prey.alive && Math.hypot(prey.x - D.pos.x, prey.z - D.pos.z) > 8 ? [prey.x, prey.z] : null), enter: () => spawnPrey(1), pass: () => prey.spawned && !prey.alive },
+  { name: 'Hunt', say: 'Hungry now. A young Exaeretodon is grazing past the pond. Hold {sprint} to run it down, then press {bite} when your snout is on it. One bite won’t drop it: keep biting.', sub: () => prey.state === 'flee' ? 'It’s running. Keep sprinting; it tires before you do.' : 'Sneak up slowly or charge it.', at: () => (prey.alive && Math.hypot(prey.x - D.pos.x, prey.z - D.pos.z) > 8 ? [prey.x, prey.z] : null), enter: () => spawnPrey(1), pass: () => prey.spawned && !prey.alive },
   { name: 'Eat', say: 'Got it. Stand over the kill and hold {drink} to eat.', sub: () => `Hunger ${Math.round(tut.hunger * 100)}%`, at: () => [prey.x, prey.z], pass: () => tut.hunger >= 0.999 },
   { name: 'Rest', say: () => (tut.restOk || tut.tired ? 'The chase wore you out. Hold {rest} to lie down, and stay down until your stamina is full.' : 'Resting restores stamina. Sprint with {sprint} until it drops, then hold {rest} to lie down.'), sub: () => `Stamina ${Math.round(D.stamina * 100)}%`, pass: () => (tut.restOk || tut.tired) && D.resting && D.stamina >= 0.995 },
   { name: 'Jump', say: 'A fallen log blocks the way. Run at it and press {jump} to leap over.', at: () => [LOG2.x, LOG2.z + 2.5], enter: () => { tut.logSide = Math.sign(D.pos.z - LOG2.z) || 1; },
@@ -3257,7 +3334,7 @@ function frame(now) {
     acc += dt; let n = 0;
     while (acc >= STEP && n < 6) { simStep(STEP); acc -= STEP; n++; }
     if (n === 6) acc = 0;
-    flakes.update(dt); drips.update(dt); splash.update(dt); splat.update(dt); dust.update(dt); shells.update(dt); updateRipples(dt); updatePrints();
+    flakes.update(dt); drips.update(dt); splash.update(dt); splat.update(dt); blood.update(dt); dust.update(dt); shells.update(dt); updateRipples(dt); updatePrints();
   }
   updateCamera(dt);
   updateHud(dt);
@@ -3271,7 +3348,7 @@ window.__demo = {
   SIM, AI, audio, resetSimForReplay, loadEngine, createAudioLayer, updateAudio, audioWorld, camera,
   D, cam, input, egg, tut, prey, TSTEPS, enterStep, SHRINKERS, scent, scentNear, scentInfo: () => ({ on: scent.on, glow: scent.mat.opacity, marks: scent.marks.length }), heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, WATERS, MUDS, MAP, COURSE, COURSE_LEN, pathInfo, course, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
   start: () => startDemo('pad'),
-  step(n = 60) { for (let i = 0; i < n; i++) { pollInput(STEP); simStep(STEP); flakes.update(STEP); drips.update(STEP); splash.update(STEP); splat.update(STEP); dust.update(STEP); shells.update(STEP); updateRipples(STEP); updateCamera(STEP); } updatePrints(); },
+  step(n = 60) { for (let i = 0; i < n; i++) { pollInput(STEP); simStep(STEP); flakes.update(STEP); drips.update(STEP); splash.update(STEP); splat.update(STEP); blood.update(STEP); dust.update(STEP); shells.update(STEP); updateRipples(STEP); updateCamera(STEP); } updatePrints(); },
   teleport(x, z, yaw = D.yaw) { D.pos.set(x, 0, z); D.yaw = yaw; clearMotion(); plantFeetAtNeutral(); cam.yaw = yaw + Math.PI; },
   counts: () => ({ flakes: flakes.items.length, drips: drips.items.length, prints: prints.length }),
   fall: (level) => startFall(level === 'trip' ? 'trip' : 'stumble', level === 'slip' ? 0.7 : level === 'stumble' ? 1.0 : 1.6, 0, level === 'trip'), // forces a slip, stumble or trip

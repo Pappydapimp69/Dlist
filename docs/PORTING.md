@@ -102,6 +102,16 @@ Search the demo by the section banners (`/* ===== name ===== */`) and function n
   - The rival answers challenge calls only.
   - The roar is mixed about 10 dB over a footstep.
 
+## Fights (`// ---- fights: hit points and damage ----`, `onBiteSnap()`, bite animation in `// ---- actions ----`)
+
+- Damage share per bite is `0.2 r^1.5 x quality`, capped at 1, with `r = (Ma / Mt)^(2/3) x bite / hide`.
+  Measured: hatchling against Exaeretodon 3 bites, juvenile 1, a sleeping ambush 1.
+- The strike: wind-up, lunge (root motion, about 0.5 m), a 70 ms hit-stop on contact (the bite animation only,
+  never the whole sim), and a head shake on a hit.
+- Prey on a hit: knockback, flinch, slower and tiring sooner when wounded, a blood trail, and a 45% chance to bite
+  back below 60% hit points.
+- Player hit: flinch away, a yelp, a speed loss and a limp below 30% health.
+
 ## Controls (`/* ===== input ===== */`, touch block, `/* ===== call wheel ===== */`)
 
 - **Xbox pad:**

@@ -417,3 +417,27 @@ Nothing from this list is left open.
   - Tearing meat is wet suction with gristle crackle.
   - Sniffs breathe through a short nasal tube (resonances from 1.4 kHz up) and are about 12 dB louder.
   - Measured old against new with the wind muted, the same events through each version's audio layer.
+- **Fights: hit points and damage.** A bite takes a share of the target's hit points:
+  `share = 0.2 r^1.5 x quality`, capped at 1, with `r = (attacker mass / target mass)^(2/3) x bite / hide`.
+  - Bite force and hide both go with cross-section. An even match takes about 5 bites, twice outclassed 2, and
+    about three times outclassed one bite.
+  - Hit quality: a solid bite 1, a glancing one 0.5, on the neck x1.25, at a run up to x1.25, on a sleeping
+    animal x2.5 (it can't brace).
+  - Measured in the tutorial:
+    - a hatchling (0.5 kg) needs 3 bites on the 0.35 kg Exaeretodon (hit points 1, 0.56, 0.12, dead)
+    - the juvenile (8 kg) needs 1
+    - an ambush on the sleeper kills in 1
+- **Attacks look like strikes now:**
+  - Wind-up: the head draws back and the jaws gape.
+  - Strike: neck and body drive forward about half a metre, and the jaws slam at 0.2 s.
+  - On a hit: a 70 ms freeze on contact, then it grips and shakes its head, with a camera kick, blood spray and a
+    wet blow sound. A miss snaps on air and recovers quickly.
+- **Prey reacts:**
+  - It's knocked back along the strike, its body jerks and its head is thrown up.
+  - It squeals and bolts. Wounded, it runs slower (down to 55% at no hit points), tires sooner and drips blood.
+  - Below 60% it may turn on you (45%): it whips round, snarls and bites. Measured: 8% of a hatchling's health per
+    bite.
+- **Player health:** there's a new Health bar. Hits make the dino flinch away from the bite, yelp and lose
+  speed. Wounds close slowly (0.8%/s, 3%/s lying down), and below 30% it limps. There's no death in the demo;
+  Upstarts owns that rule.
+- **Tutorial:** the Hunt step now says "One bite won't drop it: keep biting."
