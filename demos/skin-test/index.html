@@ -87,6 +87,16 @@
   .course .clock { font-family: var(--f-mono); font-size: 1.15rem; font-variant-numeric: tabular-nums; }
   .course .best { font-size: 0.72rem; color: var(--ink-2); }
   @media (min-width: 1280px) { .course { top: calc(14px + env(safe-area-inset-top, 0px)); } }
+  .tut { position: fixed; top: calc(92px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); width: min(460px, calc(100% - 32px));
+    box-sizing: border-box; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 14px; display: grid; gap: 4px;
+    text-align: center; pointer-events: none; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  .tut .sec { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ochre); }
+  .tut .say { margin: 0; font-size: 0.95rem; line-height: 1.4; color: var(--ink); text-wrap: balance; }
+  .tut .say b { color: var(--ochre); font-weight: 600; }
+  .tut .sub { margin: 0; font-size: 0.74rem; color: var(--ink-2); }
+  .tut.pass { border-color: rgba(212, 155, 83, 0.6); }
+  @media (min-width: 1440px) { .tut { top: calc(14px + env(safe-area-inset-top, 0px)); } }
+  @media (max-width: 760px) { .tut { top: auto; bottom: calc(150px + env(safe-area-inset-bottom, 0px)); } } /* phones: clear of the chips, above the readout */
   @media (max-width: 760px) { .keys { display: none; } .binomial { font-size: 1.1rem; } .chips { top: calc(108px + env(safe-area-inset-top, 0px)); } } /* chips sit under the title plate on phones */
 </style>
 
@@ -104,14 +114,22 @@
   <span class="best" id="courseBest">Run through the first gate to start the clock</span>
 </section>
 
+<section class="tut" id="tutPanel" hidden aria-live="polite">
+  <span class="sec" id="tutSec">Step 1</span>
+  <p class="say" id="tutSay"></p>
+  <p class="sub" id="tutSub"></p>
+</section>
+
 <div class="chips">
   <span class="chip warn" id="padChip">No controller yet. Press any button on it.</span>
   <span class="chip" id="soundChip">Sound is off. Click anywhere to turn it on.</span>
 </div>
 
 <section class="readout" aria-live="off">
-  <div class="row"><span class="lab">Water</span><span class="bar"><i id="wetBar"></i></span><span class="val" id="wetVal">Dry</span></div>
-  <div class="row"><span class="lab">Mud</span><span class="bar mud"><i id="mudBar"></i></span><span class="val" id="mudVal">None</span></div>
+  <div class="row" id="thirstRow" hidden><span class="lab">Thirst</span><span class="bar"><i id="thirstBar"></i></span><span class="val" id="thirstVal"></span></div>
+  <div class="row" id="hungerRow" hidden><span class="lab">Hunger</span><span class="bar mud"><i id="hungerBar"></i></span><span class="val" id="hungerVal"></span></div>
+  <div class="row" id="wetRow"><span class="lab">Water</span><span class="bar"><i id="wetBar"></i></span><span class="val" id="wetVal">Dry</span></div>
+  <div class="row" id="mudRow"><span class="lab">Mud</span><span class="bar mud"><i id="mudBar"></i></span><span class="val" id="mudVal">None</span></div>
   <div class="row"><span class="lab">Stamina</span><span class="bar stam"><i id="stamBar"></i></span><span class="val" id="stamVal">Fresh</span></div>
   <div class="row pace"><span class="lab">Pace</span><span class="val" id="paceVal">Standing</span></div>
 </section>
@@ -126,7 +144,7 @@
     <p class="eyebrow">Dlist tech demo · skin test</p>
     <h1>Herrerasaurus</h1>
     <p class="lede">Wade into the pond to get wet. Wet skin and fuzz dry in 8 seconds. Walk through the mud pit to get muddy. The mud dries into a crust after 8 seconds, then flakes off once you've walked for 30 seconds. The pond washes mud off.</p>
-    <p class="lede">Low rocks are footholds; tall ones are walls. Take them too fast and it stumbles. Once it's tired, below half stamina, it can trip and go down. Press A to jump. Hold B near the water to drink, or away from it to sniff the air, or the ground where its own wet or muddy tracks are. Try the obstacle course from the Start menu.</p>
+    <p class="lede">Low rocks are footholds; tall ones are walls. Take them too fast and it stumbles. Once it's tired, below half stamina, it can trip and go down. Press A to jump. Hold B near the water to drink, or away from it to sniff the air, or the ground where its own wet or muddy tracks are. Hold LB to lie down and rest. Try the obstacle course or the tutorial from the Start menu.</p>
     <p class="cta" id="introCta">Press any button on your Xbox controller to start</p>
     <button type="button" id="kbStart">No controller? Start with keyboard and mouse</button>
   </div>
@@ -568,7 +586,8 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
     const [x, z] = ringPoint(3, 54);
     const h = heightAt(x, z);
     if (h < WATER_Y + 0.12 || MUDS.some((m) => Math.hypot(x - m.x, z - m.z) < m.r + 0.8) || Math.hypot(x - SPAWN.x, z - SPAWN.z) < 3 || (MAP === 'course' && pathInfo(x, z).d < 3.2)) continue;
-    if (TUT && (trailD(x, z) < 3.4 || Math.hypot(x - NEST.x, z - NEST.z) < NEST.r + 0.4 || WATERS.some((w) => Math.hypot(x - w.x, z - w.z) < w.r + 2.5))) continue;
+    // The hunting ground is an open clearing: in fern taller than it, a half-metre-tall prey animal can't be seen.
+    if (TUT && (trailD(x, z) < 3.4 || Math.hypot(x - NEST.x, z - NEST.z) < NEST.r + 0.4 || WATERS.some((w) => Math.hypot(x - w.x, z - w.z) < w.r + 2.5) || Math.hypot(x - TRAIL[3][0], z - TRAIL[3][1]) < 20)) continue;
     const clump = fbm(x * 0.09, z * 0.09, 71);
     if (R() > smooth(0.35, 0.6, clump) + 0.12) continue;
     const fs = lerp(0.65, 1.45, R()) * (TUT ? lerp(2.2, 3.4, R()) : 1); // tutorial ferns stand over a hatchling's head
@@ -1459,6 +1478,7 @@ const sfx = {
       out.connect(audio.master); o.start(t0); o.stop(t0 + dur + 0.05);
     }
   },
+  squeak(k = 1) { sTone({ f0: 1500 * k, f1: 900 * k, dur: 0.12, gain: 0.12, type: 'triangle' }); sTone({ f0: 1700 * k, f1: 1100 * k, dur: 0.1, gain: 0.08, type: 'triangle', delay: 0.14 }); },
   tear() { sNoise({ type: 'bandpass', freq: 1500, to: 600, q: 1.2, dur: 0.18, gain: 0.3 }); sNoise({ type: 'highpass', freq: 3000, dur: 0.06, gain: 0.08, delay: 0.05 }); },
   snap() { sNoise({ type: 'highpass', freq: 1700, dur: 0.05, gain: 0.45 }); sTone({ f0: 190, f1: 60, dur: 0.09, gain: 0.3 }); },
   lap() { sNoise({ type: 'bandpass', freq: 1300, q: 2, dur: 0.07, gain: 0.1 }); },
@@ -1487,7 +1507,7 @@ const sfx = {
 
 /* ============================== input ============================== */
 const settings = { rumble: true, invertY: false, readout: true };
-const input = { moveF: 0, moveR: 0, lookX: 0, lookY: 0, sprint: 0, drink: false, jump: false, bite: false, roar: false, recenter: false, device: 'pad' };
+const input = { moveF: 0, moveR: 0, lookX: 0, lookY: 0, sprint: 0, drink: false, rest: false, jump: false, bite: false, roar: false, recenter: false, device: 'pad' };
 let padPrev = []; let padId = null; let started = false; let paused = false; let menuIdx = 0; let swallow = false;
 let swallowMask = null; // buttons held when the game started or the menu closed: each one is ignored until it is released
 const keys = new Set();
@@ -1535,6 +1555,7 @@ function pollInput(dt) {
       input.moveF = -ly; input.moveR = lx; input.lookX = rx; input.lookY = ry;
       input.sprint = p.buttons[7] ? p.buttons[7].value : 0;
       input.drink = btn(1);
+      input.rest = btn(4);
     }
     if (paused) {
       if (Math.abs(ly) > 0.6) { stickMenuHold -= dt; if (stickMenuHold <= 0) { if (ly < 0) edges.up = true; else edges.down = true; stickMenuHold = 0.25; } } else stickMenuHold = 0;
@@ -1552,6 +1573,7 @@ function pollInput(dt) {
     mouse.dx = mouse.dy = 0;
     input.sprint = k('ShiftLeft') || k('ShiftRight') ? 1 : 0;
     input.drink = k('KeyG');
+    input.rest = k('KeyZ');
   }
   if (paused) {
     if (edges.up) moveMenu(-1);
@@ -1596,8 +1618,8 @@ canvas.addEventListener('pointermove', (e) => { if (mouse.down) { mouse.dx += e.
 window.addEventListener('pointerdown', () => initAudio());
 
 const KEYS = {
-  pad: [['Move', 'Left stick'], ['Camera', 'Right stick'], ['Sprint', 'Right trigger (hold)'], ['Jump', 'A'], ['Drink / sniff', 'B (hold)'], ['Bite', 'X'], ['Roar', 'Y'], ['Camera behind', 'Click right stick'], ['Menu', 'Start']],
-  keys: [['Move', 'W A S D'], ['Camera', 'Drag mouse or Q / E'], ['Sprint', 'Shift (hold)'], ['Jump', 'Space'], ['Drink / sniff', 'G (hold)'], ['Bite', 'F'], ['Roar', 'R'], ['Camera behind', 'C'], ['Menu', 'Esc']],
+  pad: [['Move', 'Left stick'], ['Camera', 'Right stick'], ['Sprint', 'Right trigger (hold)'], ['Jump', 'A'], ['Drink / sniff', 'B (hold)'], ['Bite', 'X'], ['Roar', 'Y'], ['Rest', 'LB (hold)'], ['Camera behind', 'Click right stick'], ['Menu', 'Start']],
+  keys: [['Move', 'W A S D'], ['Camera', 'Drag mouse or Q / E'], ['Sprint', 'Shift (hold)'], ['Jump', 'Space'], ['Drink / sniff', 'G (hold)'], ['Bite', 'F'], ['Roar', 'R'], ['Rest', 'Z (hold)'], ['Camera behind', 'C'], ['Menu', 'Esc']],
 };
 function setDevice(d) {
   if (input.device === d && document.getElementById('keysList').childElementCount) return;
@@ -1621,6 +1643,7 @@ const MENU = [
   { label: 'Invert camera up and down', state: () => (settings.invertY ? 'On' : 'Off'), act: () => { settings.invertY = !settings.invertY; } },
   { label: 'Skin readout', state: () => (settings.readout ? 'Shown' : 'Hidden'), act: () => { settings.readout = !settings.readout; document.querySelector('.readout').hidden = !settings.readout; } },
   { label: 'Reset Herrerasaurus', state: () => '', act: () => { resetDino(); closeMenu(); } },
+  ...(TUT ? [{ label: 'Restart tutorial', state: () => '', act: () => location.reload() }] : []),
   ...(MAP === 'course' ? [{ label: 'Restart course', state: () => '', act: () => { resetDino(); course.state = 'ready'; closeMenu(); } }] : []),
   { label: 'Map', state: () => ({ valley: 'Valley', course: 'Obstacle course', tutorial: 'Tutorial' })[MAP], act: () => { location.hash = { valley: 'course', course: 'tutorial', tutorial: 'valley' }[MAP]; location.reload(); } },
 ];
@@ -1629,7 +1652,7 @@ function renderMenu() {
 }
 document.getElementById('menuList').addEventListener('click', (e) => { const li = e.target.closest('li'); if (!li) return; menuIdx = +li.dataset.i; activateMenu(); });
 function openMenu() { if (!started) return; paused = true; menuIdx = 0; renderMenu(); document.getElementById('menu').hidden = false; }
-function closeMenu() { paused = false; document.getElementById('menu').hidden = true; swallow = true; input.drink = false; } // the B that closed the menu must not start a drink or sniff
+function closeMenu() { paused = false; document.getElementById('menu').hidden = true; swallow = true; input.drink = input.rest = false; } // the B that closed the menu must not start a drink or sniff
 function moveMenu(d) { menuIdx = (menuIdx + d + MENU.length) % MENU.length; renderMenu(); }
 function activateMenu() { MENU[menuIdx].act(); if (paused) renderMenu(); }
 // The Xbox guide button can steal focus; pause instead of looking frozen.
@@ -1850,14 +1873,17 @@ function scentNear() {
 }
 function endAct() { D.act = 'none'; D.actT = 0; skinU.uGulp.value.w = 0; }
 function updateAct(dt, held) {
-  if (!held || (D.fall && D.fall.down) || D.jump) { if (D.act !== 'none') endAct(); return; }
+  if (!held || (D.fall && D.fall.down) || D.jump || (D.act === 'eat' && !carcassNear())) { if (D.act !== 'none') endAct(); return; }
   if (D.act === 'none') {
-    const w = findWater();
-    if (w) { D.waterYaw = w.yaw; D.act = Math.abs(wrapAngle(w.yaw - D.yaw)) < 0.45 ? 'turn' : 'alert'; }
+    // A kill in reach outranks water: otherwise a carcass by the pond could never be eaten (docs/TUTORIAL.md TD7).
+    const w = carcassNear() ? null : findWater();
+    if (carcassNear()) D.act = 'eat';
+    else if (w) { D.waterYaw = w.yaw; D.act = Math.abs(wrapAngle(w.yaw - D.yaw)) < 0.45 ? 'turn' : 'alert'; }
     else D.act = scentNear() ? 'ground' : 'air';
     D.actT = 0; D.dip = 0; D.actU = -1;
   }
   D.actT += dt;
+  if (D.act === 'eat') return;
   const rel = wrapAngle(D.waterYaw - D.yaw);
   if (D.act === 'alert' && D.actT >= 2) { D.act = 'turn'; D.actT = 0; }
   else if (D.act === 'turn' && Math.abs(rel) < 0.04 && D.speed < 0.25) {
@@ -1931,16 +1957,23 @@ function simStep(dt) {
   const jumpPress = active && (input.jump || input.jumpKey);
   input.biteKey = input.roarKey = input.recenterKey = input.jumpKey = false;
   input.bite = input.roar = input.recenter = input.jump = false;
-  updateAct(dt, active && !egged && input.drink);
+  // Rest (hold): lie down where it stands. It gets up when the button is let go.
+  const restHeld = active && !egged && input.rest;
+  if (D.resting) { if (!restHeld || downed) D.resting = false; }
+  else if (restHeld && !D.jump && !D.fall && D.act === 'none' && D.speed < 0.6) { D.resting = true; D.restFrom = D.stamina; }
+  D.rest = damp(D.rest || 0, D.resting ? 1 : 0, D.resting ? 2.2 : 3.5, dt);
+  updateAct(dt, active && !egged && !D.resting && input.drink);
   if (egged) { if (jumpPress) tearEgg(); updateEgg(dt); }
-  else if (jumpPress && !D.jump && !D.fall && D.act === 'none') startJump();
+  else if (jumpPress && !D.jump && !D.fall && D.act === 'none' && D.rest < 0.05) startJump();
   let air = !!(D.jump && D.jump.ph === 'air');
 
   let target = 0, desiredYaw = D.yaw, steer = false, turnCap = 9;
-  if (D.act === 'none' && mag > 0.02) {
+  if (D.act === 'none' && D.rest < 0.05 && mag > 0.02) {
     const dir = camFwd.clone().multiplyScalar(mF).addScaledVector(camRight, mR);
     desiredYaw = Math.atan2(dir.x, dir.z); steer = true;
-    target = input.sprint > 0.25 ? lerp(3.6, 7.4, input.sprint) * Math.max(mag, 0.65) : 3.4 * mag;
+    // In the tutorial a spent hatchling can't hold a sprint, which is what makes resting matter.
+    const top = TUT ? lerp(4.2, 7.4, smooth(0.02, 0.25, D.stamina)) : 7.4;
+    target = input.sprint > 0.25 ? lerp(3.6, top, input.sprint) * Math.max(mag, 0.65) : 3.4 * mag;
   } else if (D.act === 'turn') { desiredYaw = D.waterYaw; steer = D.speed < 0.3; turnCap = 1.4; }
   else if (D.act === 'shuffle') { desiredYaw = D.waterYaw; steer = true; target = 0.6; turnCap = 1.4; }
   else if (D.act === 'air') {
@@ -1979,7 +2012,8 @@ function simStep(dt) {
     D.accel = damp(D.accel, (D.speed - prev) / dt, 6, dt);
   } else D.accel = damp(D.accel, 0, 6, dt);
   const sprinting = D.speed > 5 && input.sprint > 0.25;
-  D.stamina = clamp(D.stamina + (sprinting ? -0.02 : D.jump ? 0 : 0.11) * dt, 0, 1);
+  // Tutorial: a sprint empties stamina in about 11 s, standing gives back 4%/s, lying down 30%/s (docs/TUTORIAL.md).
+  D.stamina = clamp(D.stamina + (sprinting ? (TUT ? -0.09 : -0.02) : D.jump ? 0 : D.rest > 0.8 ? 0.3 : TUT ? 0.04 : 0.11) * dt, 0, 1);
   D.sprintT = D.speed > 5 ? D.sprintT + dt : Math.max(0, D.sprintT - dt * 0.6);
 
   const fwd = V(Math.sin(D.yaw), 0, Math.cos(D.yaw));
@@ -2135,7 +2169,7 @@ function simStep(dt) {
     lunge = o < 0.14 ? -0.35 * smooth(0, 0.14, o) : o < 0.26 ? lerp(-0.35, 1, smooth(0.14, 0.26, o)) : 1 - smooth(0.26, 0.55, o);
     // The mid-jaw joint lets the front of the lower jaw flex: down as it gapes, up as it clamps.
     flex = o < 0.16 ? 0.13 * smooth(0, 0.16, o) : o < 0.3 ? lerp(0.13, -0.09, smooth(0.16, 0.26, o)) : -0.09 * (1 - smooth(0.3, 0.52, o));
-    if (o >= 0.2 && !D.snapped) { D.snapped = true; sfx.snap(); rumble(70, 0.5, 0.8); }
+    if (o >= 0.2 && !D.snapped) { D.snapped = true; sfx.snap(); rumble(70, 0.5, 0.8); onBiteSnap(dino.B.head.localToWorld(tmp.v.set(0, -0.09, 0.55))); }
     if (o > 0.56) { D.biteT = -1; D.snapped = false; }
   }
   if (D.roarT >= 0) {
@@ -2163,8 +2197,8 @@ function simStep(dt) {
     else if (u < 1.05) { hdT = lerp(1, 0.1, smooth(0.55, 1.0, u)); tiltT = smooth(0.75, 1.05, u); }
     else if (u < 1.8) { hdT = 0.1; tiltT = 1; gulp = (u - 1.05) / 0.75; }
     else { hdT = lerp(0.1, 1, smooth(1.8, 2.3, u)); tiltT = 1 - smooth(1.8, 2.1, u); }
-    if (u >= 0.15 && (pu < 0.15 || pu > u)) { const sAt = surfaceAt(snout.x, snout.z); if (sAt.kind === 'water') { sfx.lap(); spawnRipple(snout.x, snout.z, 0.45); D.laps = (D.laps || 0) + 1; } }
-    if (u >= 1.12 && pu < 1.12) sfx.gulp();
+    if (u >= 0.15 && (pu < 0.15 || pu > u)) { const sAt = surfaceAt(snout.x, snout.z); if (sAt.kind === 'water') { sfx.lap(); spawnRipple(snout.x, snout.z, 0.45); D.laps = (D.laps || 0) + 1; D.lapHit = true; } }
+    if (u >= 1.12 && pu < 1.12) { sfx.gulp(); if (D.lapHit) D.gulps = (D.gulps || 0) + 1; D.lapHit = false; } // only a scoop that reached water counts as a swallow
     D.actU = u;
   } else if (D.act === 'air') {
     // Head up, snout into the wind, short sharp sniffs in bursts of three with small scanning turns.
@@ -2172,6 +2206,15 @@ function simStep(dt) {
     const bt = D.actT % 1.5;
     for (const ti of [0.1, 0.26, 0.42]) { nose += Math.exp(-(((bt - ti) / 0.035) ** 2)); if (bt >= ti && D.actU < ti) sfx.sniff(); }
     D.actU = bt;
+  } else if (D.act === 'eat') {
+    // Head down on the kill: grip, tear back, swallow.
+    const c = carcassNear();
+    if (c) { hyawT = clamp(wrapAngle(Math.atan2(c.x - D.pos.x, c.z - D.pos.z) - D.yaw), -1.0, 1.0); dipTo = c.top + 0.06; }
+    hdT = 1; const P = 1.1, u = D.actT % P;
+    jawOpen = Math.max(jawOpen, u < 0.35 ? 0.45 * smooth(0, 0.3, u) : 0.45 * (1 - smooth(0.35, 0.45, u)));
+    tiltT = u > 0.45 && u < 0.85 ? 0.35 : 0;
+    if (u >= 0.42 && D.actU < 0.42) { sfx.tear(); rumble(60, 0.2, 0.1); D.bites = (D.bites || 0) + 1; if (c) c.meat = Math.max(0, c.meat - 0.1); }
+    D.actU = u;
   } else if (D.act === 'ground') {
     // Nose down on the trail, working along it.
     const p = scentNear() || D.scentTo; D.scentTo = p;
@@ -2209,20 +2252,21 @@ function simStep(dt) {
   const hd = D.hd, dip = D.dip * D.hd; // head down: the neck reaches forward and down, the reach feedback works the neck base
   // Walk: trunk a little nose-up. Sprint: trunk level and leaned forward, legs more bent.
   const pelvisPitch = -slope * 0.75 + D.pitchF + lerp(-0.03, 0.09, run) + hd * 0.22 + dip * 0.1 + lunge * 0.05 + fallPitch + jc * 0.6 - tuck * 0.04;
-  B.pelvis.position.set(0, 1.18 - 0.085 * run + bob - hd * 0.16 - dip * 0.08 + D.bodyY - jc - absorb - fallDrop, 0); B.pelvis.position.x = fallShift;
-  B.pelvis.rotation.set(pelvisPitch, 0.045 * Math.sin(ph) * mf, D.roll + fallRoll + 0.035 * Math.sin(ph) * mf);
+  const rest = D.rest || 0, breathe = rest * 0.012 * Math.sin(D.time * 2.2);
+  B.pelvis.position.set(0, 1.18 - 0.085 * run + bob - hd * 0.16 - dip * 0.08 + D.bodyY - jc - absorb - fallDrop - rest * 0.6 + breathe, 0); B.pelvis.position.x = fallShift;
+  B.pelvis.rotation.set(pelvisPitch + rest * 0.1, 0.045 * Math.sin(ph) * mf, D.roll + fallRoll + 0.035 * Math.sin(ph) * mf);
   B.spine1.rotation.set(0, -0.025 * Math.sin(ph) * mf, 0);
   B.spine2.rotation.set(0, -0.02 * Math.sin(ph) * mf, 0);
-  B.chest.rotation.set(0.008 * Math.sin(D.time * 1.6), 0, 0);
+  B.chest.rotation.set(0.008 * Math.sin(D.time * 1.6) - rest * 0.04, 0, 0);
   const look = (1 - mf) * 0.14 * Math.sin(D.time * 0.37) * Math.sin(D.time * 0.23 + 1) * (D.act === 'none' ? 1 : 0);
   const fl = flail * Math.sin(D.time * 17), fl2 = flail * Math.sin(D.time * 12.5 + 1);
   // Head counterbalances body roll on uneven footing (toward the high side).
   const nYaw = D.yawRate * 0.05 + D.hyaw + D.roll * 0.8 + fl * 0.3;
   // Walk: relaxed S-curve neck, head high. Sprint: neck straight out and low, head in line with it.
-  B.neck1.rotation.set(lerp(-0.14, 0.32, run) * (1 - hd) + hd * 0.62 + dip * 0.35 - D.hu * 0.22 - D.tilt * 0.04 + lunge * 0.1 - roarE * 0.14 + fallPitch * 0.8 + fl2 * 0.12 + tuck * 0.06 + absorb * 1.1 + jc * 0.6, nYaw * 0.25, 0);
+  B.neck1.rotation.set(lerp(-0.14, 0.32, run) * (1 - hd) + rest * 0.45 + hd * 0.62 + dip * 0.35 - D.hu * 0.22 - D.tilt * 0.04 + lunge * 0.1 - roarE * 0.14 + fallPitch * 0.8 + fl2 * 0.12 + tuck * 0.06 + absorb * 1.1 + jc * 0.6, nYaw * 0.25, 0);
   B.neck2.rotation.set(lerp(0.04, 0.17, run) * (1 - hd) + hd * 0.3 + dip * 0.2 - D.hu * 0.14 - D.tilt * 0.12 + lunge * 0.08 - roarE * 0.22 + fl * 0.1, nYaw * 0.35 + look, 0);
   B.neck3.rotation.set(lerp(0.24, 0.05, run) * (1 - hd) + hd * 0.02 - D.hu * 0.06 - D.tilt * 0.22 + lunge * 0.04 - roarE * 0.12, nYaw * 0.25 + look * 0.6, 0);
-  B.head.rotation.set(lerp(-0.08, -0.56, run) * (1 - hd) + slope * 0.35 + hd * 0.1 - D.hu * 0.22 - D.tilt * 0.45 - roarE * 0.2 + lunge * 0.05 - bob * 1.5 - nose * 0.05 - D.pitchF * 0.6 - fallPitch * (D.fall && !D.fall.down ? 1.1 : 0.4) - fl2 * 0.14, nYaw * 0.15 + shake, shake * 0.4 + fl * 0.12);
+  B.head.rotation.set(lerp(-0.08, -0.56, run) * (1 - hd) - rest * 0.28 + slope * 0.35 + hd * 0.1 - D.hu * 0.22 - D.tilt * 0.45 - roarE * 0.2 + lunge * 0.05 - bob * 1.5 - nose * 0.05 - D.pitchF * 0.6 - fallPitch * (D.fall && !D.fall.down ? 1.1 : 0.4) - fl2 * 0.14, nYaw * 0.15 + shake, shake * 0.4 + fl * 0.12);
   B.jaw.rotation.set(jawOpen, 0, 0);
   B.jaw2.rotation.set(flex + scoop * 0.05, 0, 0);
   B.lipU.position.copy(B.lipU.userData.rest); B.lipU.position.y += 0.026 * smooth(0.04, 0.45, jawOpen);
@@ -2241,7 +2285,7 @@ function simStep(dt) {
   const wag = 0.07 * Math.sin(ph + 1.3) * mf * (1 - 0.5 * run) + 0.04 * Math.sin(D.time * 0.8) * (1 - mf);
   // Walk: slight droop. Sprint: held straight out. Airborne: lifted as a counterweight.
   const tailPitch = lerp(-0.02, 0.03, run) - roarE * 0.015 + bob * 0.6 - jc * 0.25 + tuck * 0.035 - fe * 0.06 + absorb * 0.22;
-  dino.tails.forEach((t, k) => t.rotation.set(tailPitch * (1 + k * 0.1) + (k === 0 ? slope * 0.5 - D.pitchF * 0.5 - hd * 0.12 : 0), TAIL_W[k] * (D.tailYaw + wag), 0));
+  dino.tails.forEach((t, k) => t.rotation.set(tailPitch * (1 + k * 0.1) + (k === 0 ? rest * 0.32 : k < 3 ? -rest * 0.1 : 0) + (k === 0 ? slope * 0.5 - D.pitchF * 0.5 - hd * 0.12 : 0), TAIL_W[k] * (D.tailYaw + wag), 0));
   for (const s of ['L', 'R']) {
     const sgnA = s === 'L' ? 1 : -1;
     B['upper' + s].rotation.set(0.12 * Math.sin(ph + (sgnA > 0 ? 0 : Math.PI)) * mf - roarE * 0.2 + lunge * 0.15 - tuck * 0.35 - fe * 0.4 + flail * 0.75 * Math.sin(D.time * 15 + sgnA), 0, flail * 0.45 * sgnA);
@@ -2283,6 +2327,7 @@ function simStep(dt) {
   dino.rig.updateMatrixWorld(true);
 
   courseStep();
+  tutStep(dt);
 
   // ---- ripples while wading ----
   D.rippleT -= dt;
@@ -2349,10 +2394,10 @@ function updateHud(dt) {
   hud.mudVal.textContent = txt;
   hud.stamBar.style.width = (D.stamina * 100).toFixed(0) + '%';
   hud.stamVal.textContent = D.stamina > 0.95 ? 'Fresh' : D.stamina > 0.25 ? `${Math.round(D.stamina * 100)}%` : `Tired, ${Math.round(D.stamina * 100)}%`;
-  const F = D.fall, actTxt = { alert: 'Noticed water', turn: 'Turning to the water', shuffle: 'Stepping closer', drink: 'Drinking', air: 'Sniffing the air, nose into the wind', ground: 'Sniffing its own trail' }[D.act];
+  const F = D.fall, actTxt = { alert: 'Noticed water', turn: 'Turning to the water', shuffle: 'Stepping closer', drink: 'Drinking', eat: 'Eating', air: 'Sniffing the air, nose into the wind', ground: 'Sniffing its own trail' }[D.act];
   const gait = Froude(D.speed) < 0.5 ? 'Walk' : D.speed < 5 ? 'Run' : 'Sprint';
   hud.pace.textContent = F ? (F.down ? (F.kind === 'trip' ? 'Tripped, getting up' : 'Fell, getting up') : F.level === 'slip' ? 'Slipped, caught itself' : (F.kind === 'trip' ? 'Caught a toe, stumbled' : 'Stumbled'))
-    : D.jump ? (D.jump.ph === 'crouch' ? 'Crouching to jump' : 'Airborne') : actTxt || (D.speed < 0.15 ? 'Standing' : `${gait}, ${D.speed.toFixed(1)} m/s`);
+    : D.jump ? (D.jump.ph === 'crouch' ? 'Crouching to jump' : 'Airborne') : D.resting ? 'Lying down, resting' : D.rest > 0.05 ? 'Getting up' : inEgg() ? 'Inside the egg' : actTxt || (D.speed < 0.15 ? 'Standing' : `${gait}, ${D.speed.toFixed(1)} m/s`);
 }
 
 /* ============================== obstacle course ============================== */
@@ -2390,6 +2435,188 @@ function updateCourse() {
     : course.best ? `Best ${fmtT(course.best)}` : course.state === 'ready' ? 'Run through the first gate to start the clock' : 'No best time yet';
 }
 
+/* ============================== tutorial ============================== */
+// A passive observer over the real game: each step watches ordinary events, pinned to its own entity (docs/TUTORIAL.md TD4).
+const tut = { step: 0, thirst: 0.3, hunger: 0.2, gulps: 0, bites: 0, roars: 0, entered: 0, passT: -1, restOk: false, text: '', dev: '' };
+
+// ---- prey: a young Exaeretodon (plant-eating cynodont). It doesn't exist until the Hunt step starts (TD8). ----
+const prey = (() => {
+  if (!TUT) return null;
+  const g = new THREE.Group(), fur = new THREE.MeshStandardMaterial({ color: new THREE.Color('#6e5639'), roughness: 0.95, flatShading: true });
+  const pale = new THREE.MeshStandardMaterial({ color: new THREE.Color('#a38962'), roughness: 0.95, flatShading: true });
+  const add = (geo, mat, x, y, z, sx, sy, sz, parent = g) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.castShadow = true; parent.add(m); return m; };
+  const ball = new THREE.IcosahedronGeometry(1, 1);
+  add(ball, fur, 0, 0.62, 0, 0.42, 0.36, 0.85);           // barrel body, low-slung like a cynodont
+  add(ball, pale, 0, 0.5, 0.1, 0.36, 0.24, 0.7);          // paler belly
+  const head = new THREE.Group(); head.position.set(0, 0.7, 0.85); g.add(head);
+  add(ball, fur, 0, 0, 0.22, 0.2, 0.18, 0.3, head);        // broad skull
+  add(ball, pale, 0, -0.05, 0.45, 0.13, 0.1, 0.16, head);  // muzzle
+  const tail = add(new THREE.ConeGeometry(0.12, 0.6, 6), fur, 0, 0.6, -1.05, 1, 1, 1); tail.rotation.x = -Math.PI / 2 - 0.25;
+  const legs = [];
+  for (const [x, z] of [[0.3, 0.5], [-0.3, 0.5], [0.3, -0.45], [-0.3, -0.45]]) {
+    const pivot = new THREE.Group(); pivot.position.set(x, 0.55, z); g.add(pivot);
+    add(new THREE.CylinderGeometry(0.06, 0.05, 0.5, 6), fur, 0, -0.27, 0, 1, 1, 1, pivot);
+    legs.push(pivot);
+  }
+  g.visible = false; scene.add(g);
+  return { g, head, legs, id: 1, alive: false, spawned: false, x: 0, z: 0, yaw: 0, speed: 0, state: 'graze', fatigue: 0, calmT: 0, wanderT: 0, phase: 0, meat: 1, top: 0, stuckT: 0, lastX: 0, lastZ: 0, obstacle: null };
+})();
+const HUNT = { x: TRAIL[3][0], z: TRAIL[3][1] };
+function preySpot(minFromPlayer) {
+  // A dry, open spot near the hunting ground, out of the player's immediate reach.
+  const r = rng(Math.floor(D.time * 1000) + 7);
+  for (let i = 0; i < 200; i++) {
+    const a = r() * Math.PI * 2, d = 3 + r() * 12, x = HUNT.x + Math.cos(a) * d, z = HUNT.z + Math.sin(a) * d;
+    if (Math.hypot(x, z) > WORLD_R - 6 || surfaceAt(x, z).kind !== 'ground' || Math.hypot(x - D.pos.x, z - D.pos.z) < minFromPlayer) continue;
+    if (obstacles.some((o) => o !== prey.obstacle && o.x != null && Math.hypot(x - o.x, z - o.z) < o.r + 1)) continue;
+    return [x, z];
+  }
+  return [HUNT.x, HUNT.z];
+}
+function spawnPrey() {
+  const [x, z] = preySpot(16);
+  Object.assign(prey, { alive: true, spawned: true, x, z, yaw: Math.atan2(D.pos.x - x, D.pos.z - z) + Math.PI, speed: 0, state: 'graze', fatigue: 0, calmT: 0, stuckT: 0, lastX: x, lastZ: z });
+  prey.g.visible = true; prey.g.rotation.set(0, prey.yaw, 0);
+  if (!prey.obstacle) { prey.obstacle = { x, z, r: 0.5 }; obstacles.push(prey.obstacle); }
+}
+const preyBlocked = (x, z) => Math.hypot(x, z) > WORLD_R - 4 || surfaceAt(x, z).kind !== 'ground' || obstacles.some((o) => o !== prey.obstacle && o.x != null && Math.hypot(x - o.x, z - o.z) < o.r + 0.7);
+function updatePrey(dt) {
+  if (!prey || !prey.spawned) return;
+  const dx = prey.x - D.pos.x, dz = prey.z - D.pos.z, dist = Math.hypot(dx, dz);
+  if (prey.alive) {
+    // Flees when the hatchling is close, or closing fast. Flight speed sits between its walk and its sprint (TD9, Brain: speed parity).
+    if (prey.state === 'graze' && (dist < 9 || (dist < 15 && D.speed > 3.5))) { prey.state = 'flee'; sfx.squeak(0.7); }
+    if (prey.state === 'flee') {
+      prey.fatigue = Math.min(1, prey.fatigue + dt / 7);
+      if (dist > 24) { prey.calmT += dt; if (prey.calmT > 2) { prey.state = 'graze'; prey.calmT = 0; } } else prey.calmT = 0;
+    } else prey.fatigue = Math.max(0, prey.fatigue - dt / 12);
+    let want = prey.yaw, v = 0;
+    if (prey.state === 'flee') { want = Math.atan2(dx, dz); v = lerp(5.4, 4.0, prey.fatigue); }
+    else { prey.wanderT -= dt; if (prey.wanderT <= 0) { prey.wanderT = 2 + Math.random() * 3; prey.wanderYaw = prey.yaw + (Math.random() - 0.5) * 2; prey.wanderGo = Math.random() < 0.5; } want = prey.wanderYaw ?? prey.yaw; v = prey.wanderGo ? 0.7 : 0; if (Math.hypot(prey.x - HUNT.x, prey.z - HUNT.z) > 18) want = Math.atan2(HUNT.x - prey.x, HUNT.z - prey.z); }
+    // Steer around water, trees and the world edge: try the wanted heading, then swing either way until the path ahead is clear.
+    if (v > 0) {
+      let best = null;
+      for (const off of [0, 0.4, -0.4, 0.8, -0.8, 1.2, -1.2, 1.7, -1.7, 2.3, -2.3, Math.PI]) {
+        const a = want + off, ok = [1.2, 2.5].every((r) => !preyBlocked(prey.x + Math.sin(a) * r, prey.z + Math.cos(a) * r));
+        if (ok) { best = a; break; }
+      }
+      if (best == null) { v = 0; best = want; }
+      prey.yaw += clamp(wrapAngle(best - prey.yaw), -3.2 * dt, 3.2 * dt);
+    }
+    prey.speed = damp(prey.speed, v, 4, dt);
+    const nx = prey.x + Math.sin(prey.yaw) * prey.speed * dt, nz = prey.z + Math.cos(prey.yaw) * prey.speed * dt;
+    if (!preyBlocked(nx, nz)) { prey.x = nx; prey.z = nz; }
+    // Lost or wedged: put it back on the hunting ground, out of sight but not far (no soft-lock, TD8).
+    prey.stuckT = prey.state === 'flee' && Math.hypot(prey.x - prey.lastX, prey.z - prey.lastZ) < 0.02 ? prey.stuckT + dt : 0;
+    prey.lastX = prey.x; prey.lastZ = prey.z;
+    if (dist > 45 || prey.stuckT > 4) { const [x, z] = preySpot(18); prey.x = x; prey.z = z; prey.state = 'graze'; prey.fatigue = 0; prey.stuckT = 0; }
+    prey.phase += prey.speed * dt * 1.6;
+    const sw = Math.min(0.7, prey.speed * 0.16);
+    prey.legs.forEach((l, i) => { l.rotation.x = Math.sin(prey.phase * Math.PI * 2 + (i === 0 || i === 3 ? 0 : Math.PI)) * sw; });
+    prey.head.rotation.x = prey.state === 'graze' && prey.speed < 0.3 ? 0.5 + 0.08 * Math.sin(D.time * 5) : -0.1;
+    prey.g.position.set(prey.x, groundAt(prey.x, prey.z) + Math.abs(Math.sin(prey.phase * Math.PI * 2)) * 0.04 * Math.min(1, prey.speed), prey.z);
+    prey.g.rotation.set(0, prey.yaw, 0);
+  } else {
+    // A carcass: on its side, shrinking as it is eaten.
+    const k = 0.35 + 0.65 * prey.meat;
+    prey.g.scale.set(1, k, 1); prey.g.rotation.set(0, prey.yaw, Math.PI / 2 * 0.92);
+    prey.g.position.set(prey.x, groundAt(prey.x, prey.z) + 0.35 * k, prey.z);
+    prey.legs.forEach((l) => { l.rotation.x = 0.3; });
+    prey.top = groundAt(prey.x, prey.z) + 0.7 * k;
+    if (prey.meat <= 0 && prey.g.visible) { prey.g.visible = false; if (prey.obstacle) { obstacles.splice(obstacles.indexOf(prey.obstacle), 1); prey.obstacle = null; } }
+  }
+  if (prey.obstacle) { prey.obstacle.x = prey.x; prey.obstacle.z = prey.z; }
+}
+function onBiteSnap(snout) {
+  if (!prey || !prey.alive) return;
+  // The snap lands if the snout is on the body (horizontal distance; a hatchling's head is above a low cynodont).
+  const ax = Math.sin(prey.yaw), az = Math.cos(prey.yaw), rx = snout.x - prey.x, rz = snout.z - prey.z;
+  const along = clamp(rx * ax + rz * az, -0.9, 1.1), d = Math.hypot(rx - ax * along, rz - az * along);
+  if (d < 1.05) { prey.alive = false; prey.meat = 1; sfx.squeak(1.2); rumble(220, 0.6, 0.8); }
+}
+function carcassNear() {
+  if (!prey || prey.alive || !prey.spawned || prey.meat <= 0) return null;
+  const sx = D.pos.x + Math.sin(D.yaw) * 1.6, sz = D.pos.z + Math.cos(D.yaw) * 1.6;
+  return Math.hypot(prey.x - sx, prey.z - sz) < 2.0 ? prey : null;
+}
+
+// ---- marker: a soft light shaft standing in the world, so it never needs a screen projection (Brain: waypoint marker lesson) ----
+const marker = (() => {
+  if (!TUT) return null;
+  const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#e8b46a'), transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide, fog: false });
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.9, 30, 20, 1, true), mat); beam.position.y = 15; beam.renderOrder = 4;
+  const ring = new THREE.Mesh(new THREE.RingGeometry(1.6, 2.0, 48), new THREE.MeshBasicMaterial({ color: new THREE.Color('#e8b46a'), transparent: true, opacity: 0.6, depthWrite: false }));
+  ring.rotation.x = -Math.PI / 2; ring.renderOrder = 4;
+  const g = new THREE.Group(); g.add(beam, ring); g.visible = false; scene.add(g);
+  return { g, beam, ring };
+})();
+const pondEdge = (() => { const [ax, az] = TRAIL[1], dx = ax - POND.x, dz = az - POND.z, d = Math.hypot(dx, dz); return [POND.x + dx / d * (POND.r + 0.6), POND.z + dz / d * (POND.r + 0.6)]; })();
+
+// ---- the step table: text, marker and pass test live together (TD5) ----
+// {key} tokens are resolved against the controls table at display time, for the device in use (TD6).
+const TSTEPS = [
+  { name: 'Hatch', say: 'Press {jump} again and again to tear free of the egg.', sub: () => `${egg ? EGG_PRESSES - egg.left : 0} of ${EGG_PRESSES}`, pass: () => !inEgg() },
+  { name: 'Walk', say: 'Push {move} to walk and turn the camera with {camera}. Step over the nest rim and head for the light.', at: () => TRAIL[1], pass: (s) => Math.hypot(D.pos.x - s.at()[0], D.pos.z - s.at()[1]) < 3 },
+  { name: 'Roar', say: 'Press {roar} to roar. From a hatchling it comes out as a squeak, but it tells the others where you are.', pass: () => D.roars > tut.roars },
+  { name: 'Drink', say: 'You’re thirsty. Walk down to the pond and hold {drink} at the water’s edge.', sub: () => `Thirst ${Math.round(tut.thirst * 100)}%`, at: () => pondEdge, pass: () => tut.thirst >= 0.999 },
+  { name: 'Hunt', say: 'Hungry now. A young Exaeretodon is grazing past the pond. Hold {sprint} to run it down, then press {bite} when your snout is on it.', sub: () => prey.state === 'flee' ? 'It’s running. Keep sprinting; it tires before you do.' : 'Sneak up slowly or charge it.', at: () => (prey.alive && Math.hypot(prey.x - D.pos.x, prey.z - D.pos.z) > 8 ? [prey.x, prey.z] : null), enter: () => spawnPrey(), pass: () => prey.spawned && !prey.alive },
+  { name: 'Eat', say: 'Got it. Stand over the kill and hold {drink} to eat.', sub: () => `Hunger ${Math.round(tut.hunger * 100)}%`, at: () => [prey.x, prey.z], pass: () => tut.hunger >= 0.999 },
+  { name: 'Rest', say: () => (tut.restOk || D.stamina < 0.9 ? 'The chase wore you out. Hold {rest} to lie down, and stay down until your stamina is full.' : 'Resting restores stamina. Sprint with {sprint} until it drops, then hold {rest} to lie down.'), sub: () => `Stamina ${Math.round(D.stamina * 100)}%`, pass: () => tut.restOk && D.resting && D.stamina >= 0.995 },
+  { name: 'Done', say: 'That’s your first day. You can walk, roar, drink, hunt and rest.', sub: () => `Open the menu with {menu} to restart, or pick Map to head out to the valley.` },
+];
+const TOKENS = { move: 'Move', camera: 'Camera', sprint: 'Sprint', jump: 'Jump', drink: 'Drink / sniff', bite: 'Bite', roar: 'Roar', rest: 'Rest', menu: 'Menu' };
+function keyName(tok) { const row = KEYS[input.device].find(([a]) => a === TOKENS[tok]); return row ? row[1] : tok; }
+const fill = (t) => (typeof t === 'function' ? t() : t || '').replace(/\{(\w+)\}/g, (_, k) => `<b>${keyName(k)}</b>`);
+
+function tutStep(dt) {
+  if (!TUT) return;
+  updatePrey(dt);
+  // Stats only move from their own sources: a swallow of pond water, a mouthful of the carcass.
+  if (D.gulps > tut.gulps) { tut.thirst = Math.min(1, tut.thirst + 0.2 * (D.gulps - tut.gulps)); tut.gulps = D.gulps; }
+  if (D.bites > tut.bites) { tut.hunger = Math.min(1, tut.hunger + 0.1 * (D.bites - tut.bites)); tut.bites = D.bites; }
+  const s = TSTEPS[tut.step];
+  if (s.name === 'Rest' && D.resting && D.restFrom < 0.9) tut.restOk = true;
+  if (tut.passT >= 0) { tut.passT += dt; if (tut.passT > 1.2) enterStep(tut.step + 1); return; }
+  if (s.pass && s.pass(s)) { tut.passT = 0; sfx.chirp(1); }
+}
+function enterStep(i) {
+  tut.step = Math.min(i, TSTEPS.length - 1); tut.passT = -1; tut.roars = D.roars || 0; tut.restOk = false;
+  const s = TSTEPS[tut.step]; if (s.enter) s.enter();
+}
+function updateTut() {
+  if (!TUT) return;
+  const s = TSTEPS[tut.step], n = TSTEPS.length - 1;
+  const panel = document.getElementById('tutPanel');
+  panel.classList.toggle('pass', tut.passT >= 0);
+  document.getElementById('tutSec').textContent = tut.step < n ? `Step ${tut.step + 1} of ${n} · ${s.name}${tut.passT >= 0 ? ' · done' : ''}` : 'Tutorial complete';
+  const say = fill(s.say), sub = fill(s.sub);
+  if (say !== tut.say) { document.getElementById('tutSay').innerHTML = say; tut.say = say; } // repaints when the device changes, too
+  if (sub !== tut.sub) { document.getElementById('tutSub').innerHTML = sub; tut.sub = sub; }
+  const at = s.at && tut.passT < 0 ? s.at() : null;
+  marker.g.visible = !!at;
+  if (at) {
+    marker.g.position.set(at[0], groundAt(at[0], at[1]) + 0.05, at[1]);
+    const near = Math.hypot(D.pos.x - at[0], D.pos.z - at[1]);
+    marker.beam.material.opacity = 0.08 + 0.16 * smooth(4, 14, near) * (0.8 + 0.2 * Math.sin(D.time * 3));
+  }
+  document.getElementById('thirstBar').style.width = (tut.thirst * 100).toFixed(0) + '%';
+  document.getElementById('thirstVal').textContent = tut.thirst >= 0.999 ? 'Quenched' : tut.thirst < 0.5 ? `Thirsty, ${Math.round(tut.thirst * 100)}%` : `${Math.round(tut.thirst * 100)}%`;
+  document.getElementById('hungerBar').style.width = (tut.hunger * 100).toFixed(0) + '%';
+  document.getElementById('hungerVal').textContent = tut.hunger >= 0.999 ? 'Full' : tut.hunger < 0.5 ? `Hungry, ${Math.round(tut.hunger * 100)}%` : `${Math.round(tut.hunger * 100)}%`;
+}
+if (TUT) {
+  document.getElementById('tutPanel').hidden = false;
+  for (const id of ['thirstRow', 'hungerRow']) document.getElementById(id).hidden = false;
+  for (const id of ['wetRow', 'mudRow']) document.getElementById(id).hidden = true;
+  document.querySelector('.meta').textContent = 'Hatchling · minutes old · Ischigualasto, about 231 million years ago';
+  document.querySelector('.eyebrow').textContent = 'Dlist tech demo · tutorial';
+  document.querySelector('.card h1').textContent = 'First day';
+  const ledes = document.querySelectorAll('.lede');
+  ledes[0].textContent = 'You start as a Herrerasaurus egg in a nest of ferns and twigs. Tear your way out, then learn the basics one at a time: walking, roaring, drinking, hunting and resting.';
+  ledes[1].textContent = 'Instructions appear at the top of the screen, and a column of light shows where to go. Everything you learn here works the same way out in the valley.';
+  document.querySelector('canvas').setAttribute('aria-label', '3D view: a Herrerasaurus egg in a nest, in a forest of giant ferns');
+}
+
 /* ============================== main loop ============================== */
 function resize() { renderer.setSize(window.innerWidth, window.innerHeight, false); camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); }
 window.addEventListener('resize', resize);
@@ -2408,11 +2635,12 @@ function frame(now) {
   updateCamera(dt);
   updateHud(dt);
   updateCourse();
+  updateTut();
   renderer.render(scene, camera);
 }
 // Test and debugging hook: lets an automated check drive the demo without a real controller.
 window.__demo = {
-  D, cam, input, egg, heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, WATERS, MUDS, MAP, COURSE, COURSE_LEN, pathInfo, course, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
+  D, cam, input, egg, tut, prey, TSTEPS, enterStep, heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, WATERS, MUDS, MAP, COURSE, COURSE_LEN, pathInfo, course, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
   start: () => startDemo('pad'),
   step(n = 60) { for (let i = 0; i < n; i++) { pollInput(STEP); simStep(STEP); flakes.update(STEP); drips.update(STEP); splash.update(STEP); splat.update(STEP); dust.update(STEP); shells.update(STEP); updateRipples(STEP); updateCamera(STEP); } updatePrints(); },
   teleport(x, z, yaw = D.yaw) { D.pos.set(x, 0, z); D.yaw = yaw; clearMotion(); plantFeetAtNeutral(); cam.yaw = yaw + Math.PI; },

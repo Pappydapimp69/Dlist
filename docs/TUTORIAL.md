@@ -1,6 +1,6 @@
 # Tutorial map — blueprint
 
-Status: **building**. Third map in the skin-test demo, opened with `#tutorial`
+Status: **T1–T7 built and verified headless**. Owner playtest is the remaining gate. Third map in the skin-test demo, opened with `#tutorial`
 (also from the Start menu's Map entry).
 
 The player hatches from an egg in a nest as a baby Herrerasaurus and learns the
@@ -41,7 +41,7 @@ basics in order: **walk, roar (call), drink, hunt (and eat), rest**.
 | Nest | spawn, (0, 34) | Raised rim about knee high. Egg in the middle. |
 | First marker | (6, 16) | Walk lesson ends here. |
 | Pond | (-2, -4), r 8 | The only water. Drink lesson. |
-| Hunting ground | around (-20, -22) | Prey spawns here when the Hunt step starts. |
+| Hunting ground | around (-20, -22) | Open clearing, 20 m with no ferns. Prey spawns here when the Hunt step starts. |
 | Mud pit | (28, -26) | Kept small; the engine expects one. |
 
 ## 4. Steps
@@ -77,7 +77,19 @@ with a Cognitive Update.
 | T6 | Rest | New Rest verb on every map (LB / Z): lies down, faster stamina recovery; lesson passes; completion card |
 | T7 | Verify | Automated walkthrough of every step through the real input path, screenshots checked by eye, valley and course unchanged |
 
-## 6. Risks
+## 6. Build log
+
+| Milestone | Result |
+|---|---|
+| T1 | Done. Plants scaled 2.2–3.4x (ferns), 2.4x (conifers), 2.8x (Dicroidium), 2.6x (horsetails). |
+| T2 | Done. Egg hides the rig until it tears; camera pulls back to 11 m to frame the egg, then closes to 6.6 m. Head bone 1.3x. Chirp f0/formants from an 8 cm tract (Brain dlist E8). |
+| T3 | Done. Key names resolve from the controls table; the marker is a world-space light shaft (no screen projection, per Brain's waypoint-marker lesson). |
+| T4 | Done. Only a swallow whose scoop reached water counts (+20% thirst). |
+| T5 | Done. **Found in testing:** 3 m ferns hid the 0.9 m prey completely, so the hunting ground became a fern-free clearing and the marker stays on the prey until you're within 8 m. Bite connects when the snout is within ~1 m of the prey's body axis. Eat outranks drink on B. |
+| T6 | Done. Rest works on every map (LB / Z). In the tutorial, low stamina caps the sprint (7.4 down to 4.2 m/s) so resting matters. |
+| T7 | Done. A headless bot plays the whole tutorial through the real input path; 3 of 3 runs reach Done (prey AI is random). Valley and course checked unchanged. Screenshots checked by eye at 1280x720 and 390x844. |
+
+## 7. Risks
 
 | Risk | Mitigation |
 |---|---|
