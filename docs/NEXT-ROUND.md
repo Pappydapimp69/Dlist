@@ -315,3 +315,7 @@ Nothing from this list is left open.
   falls slower), and heavier animals hit harder, lie longer and get up more slowly. Slip and stumble
   flailing slows down for big animals and gets smaller for heavy ones, while light ones like Eodromaeus
   scramble quicker and wider. Herrerasaurus (1.15 m hip, 350 kg) is the reference.
+- **Trips only while sprinting:** a trip (falling down) now needs both a sprint (right trigger, above
+  5 m/s) and stamina below half. Walking or jogging over rough ground can still slip or stumble, but it
+  never goes down. A tired test run over every step-up rock gave 5 trips and 67 slips or stumbles when
+  sprinting, and 0 trips and 17 slips or stumbles at a walk.

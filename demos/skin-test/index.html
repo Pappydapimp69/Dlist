@@ -145,7 +145,7 @@
         <span class="mdesc">A timed track from gate to gate: rocks and pebbles, fallen logs, a stream, a mud pit, a boulder slalom and a log bridge over a pond. The big log has to be jumped.</span>
       </button>
     </div>
-    <p class="lede small">A jumps · hold B to drink near water or sniff away from it · X bites · Y roars · right trigger sprints. Too fast over rocks and logs and it slips or stumbles; tired, it can trip.</p>
+    <p class="lede small">A jumps · hold B to drink near water or sniff away from it · X bites · Y roars · right trigger sprints. Too fast over rocks and logs and it slips or stumbles; sprinting on tired legs, it can trip.</p>
     <p class="cta" id="introCta">D-pad or left stick to choose · A to enter</p>
     <button type="button" id="kbStart">No controller? Enter with keyboard and mouse</button>
   </div>
@@ -1703,14 +1703,15 @@ function stability(L, li, g, impact = 0) {
   const cap = lerp(0.65, 1, smooth(0, 0.8, D.stamina)); // fresher legs recover more
   const score = Math.max(trip, slip, roll) / cap;
   const kind = trip >= Math.max(slip, roll) ? 'trip' : 'stumble';
-  // Fresh legs only ever stagger. Below half stamina a bad step can put it down, and it stays rare.
-  const downAt = D.stamina >= 0.5 ? Infinity : lerp(2.1, 3.5, smooth(0.1, 0.5, D.stamina));
+  // Only a sprint can put it down, and only on tired legs (below half stamina); it stays rare.
+  const sprinting = D.speed > 5 && input.sprint > 0.25;
+  const downAt = !sprinting || D.stamina >= 0.5 ? Infinity : lerp(2.1, 3.5, smooth(0.1, 0.5, D.stamina));
   D.check = { rock: rid, leg: li, trip, slip, roll, demand, mu, sup, legT, score, kind, v, downAt, outcome: score >= downAt ? 'down' : score >= 0.55 ? 'stagger' : 'ok' };
   D.checks++;
   if (score >= 0.55 && !D.fall) startFall(kind, score + 0.1, li, score >= downAt);
 }
 // Three escalating outcomes: a slip (the foot skids and it catches itself), a stumble (a big lurch and
-// scramble), and a trip (it goes down; only below half stamina).
+// scramble), and a trip (it goes down; only when sprinting below half stamina).
 function startFall(kind, score, li, down) {
   const k = clamp((score - 0.5) * 2, 0, 1), level = down ? 'trip' : score < 0.9 ? 'slip' : 'stumble';
   const dur = level === 'trip' ? lerp(1, 2, clamp(score - 1, 0, 1)) : level === 'slip' ? lerp(0.32, 0.45, k) : lerp(0.65, 1.15, k);
