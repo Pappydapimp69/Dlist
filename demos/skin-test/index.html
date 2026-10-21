@@ -2329,7 +2329,7 @@ function scentNear() {
   const sx = D.pos.x + Math.sin(D.yaw) * 1.4, sz = D.pos.z + Math.cos(D.yaw) * 1.4;
   let best = null, bd = 2.0;
   for (const p of prints) { if (scentOf(p) < 0.05) continue; const d = Math.hypot(p.x - sx, p.z - sz); if (d < bd) { bd = d; best = p; } }
-  if (TUT && scent.on) for (const p of scent.marks) { const d = Math.hypot(p.x - sx, p.z - sz); if (d < bd) { bd = d; best = p; } }
+  if (TUT && scent.on) for (const p of scent.marks) { if (scentOf(p) < 0.05) continue; const d = Math.hypot(p.x - sx, p.z - sz); if (d < bd) { bd = d; best = p; } }
   return best;
 }
 function endAct() { D.act = 'none'; D.actT = 0; skinU.uGulp.value.w = 0; }
@@ -3027,7 +3027,7 @@ function updatePrey(dt) {
     }
     prey.speed = damp(prey.speed, v, 4, dt);
     const nx = prey.x + Math.sin(prey.yaw) * prey.speed * dt, nz = prey.z + Math.cos(prey.yaw) * prey.speed * dt;
-    if (!preyBlocked(nx, nz)) { prey.x = nx; prey.z = nz; }
+    if (!preyBlocked(nx, nz)) { prey.x = nx; prey.z = nz; layScent(prey.speed * dt); }
     // Lost or wedged: put it back on the hunting ground, out of sight but not far (no soft-lock, TD8).
     prey.stuckT = prey.state === 'flee' && Math.hypot(prey.x - prey.lastX, prey.z - prey.lastZ) < 0.02 ? prey.stuckT + dt : 0;
     prey.lastX = prey.x; prey.lastZ = prey.z;
@@ -3087,16 +3087,38 @@ const scent = (() => {
     const [ax, az] = SCENT_PATH[i], [bx, bz] = SCENT_PATH[i + 1], L = Math.hypot(bx - ax, bz - az), n = Math.ceil(L / 1.3);
     for (let k = 0; k < n; k++) { const t = k / n, x = lerp(ax, bx, t) + (hashI(i, k, 5) - 0.5) * 0.5, z = lerp(az, bz, t) + (hashI(k, i, 6) - 0.5) * 0.5; marks.push({ x, z, y: groundAt(x, z) + 0.03, s: 1, t: 0, life: 1e12, yaw: Math.atan2(bx - ax, bz - az) }); }
   }
-  const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#f0c27a'), transparent: true, opacity: 0, depthWrite: false, fog: false });
+  // A sense, not paint: the glow shows through foliage (no depth test), but only near you (posed out past 25 m).
+  const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#f0c27a'), transparent: true, opacity: 0, depthWrite: false, depthTest: false, fog: false });
   const geo = new THREE.CircleGeometry(0.22, 10); geo.rotateX(-Math.PI / 2);
-  const mesh = new THREE.InstancedMesh(geo, mat, Math.max(1, marks.length)); mesh.renderOrder = 4; mesh.visible = false;
-  const o = new THREE.Object3D();
-  marks.forEach((p, i) => { o.position.set(p.x, p.y, p.z); o.scale.set(1 + hashI(i, 2, 7) * 0.6, 1, 1.4); o.rotation.set(0, p.yaw, 0); o.updateMatrix(); mesh.setMatrixAt(i, o.matrix); });
+  // Room for the authored trail plus marks the prey lays as it moves, so the trail leads to where it is now.
+  const LIVE_MAX = 160, authored = marks.length;
+  const mesh = new THREE.InstancedMesh(geo, mat, authored + LIVE_MAX); mesh.renderOrder = 4; mesh.visible = false;
   if (TUT) scene.add(mesh);
-  return { marks, mesh, mat, on: false, glowT: 0 };
+  return { marks, authored, LIVE_MAX, mesh, mat, on: false, glowT: 0, dirty: true, o: new THREE.Object3D() };
 })();
+// The prey lays scent as it travels: one mark per 1.3 m (a travel-gated deposit, Brain: pheromone trail lessons;
+// a sleeping prey lays none, which is why its bed has the authored trail). Prey marks fade over 2 minutes.
+function layScent(dist) {
+  if (!TUT || !prey.alive) return;
+  prey.scentAcc = (prey.scentAcc || 0) + dist;
+  if (prey.scentAcc < 1.3) return;
+  prey.scentAcc = 0;
+  const live = scent.marks.length - scent.authored;
+  if (live >= scent.LIVE_MAX) scent.marks.splice(scent.authored, 1); // oldest prey mark goes first
+  const j = scent.marks.length, x = prey.x + (hashI(j, 3, 8) - 0.5) * 0.4, z = prey.z + (hashI(3, j, 9) - 0.5) * 0.4;
+  scent.marks.push({ x, z, y: groundAt(x, z) + 0.03, s: 1, t: D.time, life: 120, yaw: prey.yaw, prey: true });
+  scent.dirty = true;
+}
 function updateScent(dt) {
   if (!scent.on) return;
+  // Re-pose the marks: fresh ones full size, older prey marks shrink as their scent fades; spent ones drop out.
+  if (scent.dirty || (D.time * 4 | 0) !== scent.lastPose) {
+    scent.lastPose = D.time * 4 | 0; scent.dirty = false;
+    for (let i = scent.marks.length - 1; i >= scent.authored; i--) if (scentOf(scent.marks[i]) <= 0.02) scent.marks.splice(i, 1);
+    const o = scent.o;
+    scent.marks.forEach((p, i) => { const k = (p.prey ? 0.35 + 0.65 * scentOf(p) : 1) * (Math.hypot(p.x - D.pos.x, p.z - D.pos.z) < 25 ? 1 : 0); o.position.set(p.x, p.y, p.z); o.scale.set((1 + hashI(i, 2, 7) * 0.6) * k, 1, 1.4 * k); o.rotation.set(0, p.yaw, 0); o.updateMatrix(); scent.mesh.setMatrixAt(i, o.matrix); });
+    scent.mesh.count = scent.marks.length; scent.mesh.instanceMatrix.needsUpdate = true; scent.mesh.computeBoundingSphere();
+  }
   if (D.act === 'ground' || D.act === 'air') scent.glowT = 6; else scent.glowT = Math.max(0, scent.glowT - dt);
   const g = smooth(0, 1.5, scent.glowT);
   scent.mesh.visible = g > 0.01; scent.mat.opacity = 0.7 * g * (0.85 + 0.15 * Math.sin(D.time * 4));
@@ -3120,7 +3142,7 @@ const TSTEPS = [
     // The trail only exists from here on: laid earlier, a B press by the log would sniff the ground and never the air (Brain: an outranked verb starves its step).
     enter: () => { scent.on = true; },
     at: () => (Math.hypot(D.pos.x - SCENT_PATH[0][0], D.pos.z - SCENT_PATH[0][1]) > 6 && pathD(SCENT_PATH, D.pos.x, D.pos.z) > 4 ? SCENT_PATH[0] : null), pass: () => Math.hypot(D.pos.x - BED[0], D.pos.z - BED[1]) < 10 },
-  { name: 'Sneak', say: 'It’s asleep. Walk up slowly, because sprinting, jumping or roaring will wake it. Press {bite} when your snout is on it.', sub: () => (prey.woke ? 'It woke up! Run it down.' : 'Don’t linger right over it, either.'), pass: () => prey.id === 2 && !prey.alive },
+  { name: 'Sneak', say: () => (prey.woke ? 'It woke and ran. Hold {drink} to sniff out its fresh trail, follow it, then press {bite} when your snout is on it.' : 'It’s asleep. Walk up slowly, because sprinting, jumping or roaring will wake it. Press {bite} when your snout is on it.'), sub: () => (prey.woke ? 'It woke up! Run it down.' : 'Don’t linger right over it, either.'), pass: () => prey.id === 2 && !prey.alive },
   { name: 'Grow', say: 'You grow while you’re fed and watered. Keep Hunger and Thirst above half: drink at the pond, eat your kill.',
     sub: () => (tut.heardT >= 0 && D.time - tut.heardT < 7 ? 'That deep boom came from the east, past the hills. Something big lives out there.' : growStall() || `Growing, ${Math.round(tut.growth * 100)}%`),
     enter: () => { document.getElementById('growRow').hidden = false; const a = AI.find((x) => x.id === 'saurosuchus'); if (a.next === Infinity) a.next = D.time + 6; }, pass: () => tut.growth >= 1 },
@@ -3227,7 +3249,7 @@ function frame(now) {
 // Test and debugging hook: lets an automated check drive the demo without a real controller.
 window.__demo = {
   SIM, AI, audio, resetSimForReplay, loadEngine, createAudioLayer, updateAudio, audioWorld, camera,
-  D, cam, input, egg, tut, prey, TSTEPS, enterStep, SHRINKERS, scentInfo: () => ({ on: scent.on, glow: scent.mat.opacity, marks: scent.marks.length }), heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, WATERS, MUDS, MAP, COURSE, COURSE_LEN, pathInfo, course, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
+  D, cam, input, egg, tut, prey, TSTEPS, enterStep, SHRINKERS, scent, scentNear, scentInfo: () => ({ on: scent.on, glow: scent.mat.opacity, marks: scent.marks.length }), heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, WATERS, MUDS, MAP, COURSE, COURSE_LEN, pathInfo, course, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
   start: () => startDemo('pad'),
   step(n = 60) { for (let i = 0; i < n; i++) { pollInput(STEP); simStep(STEP); flakes.update(STEP); drips.update(STEP); splash.update(STEP); splat.update(STEP); dust.update(STEP); shells.update(STEP); updateRipples(STEP); updateCamera(STEP); } updatePrints(); },
   teleport(x, z, yaw = D.yaw) { D.pos.set(x, 0, z); D.yaw = yaw; clearMotion(); plantFeetAtNeutral(); cam.yaw = yaw + Math.PI; },
