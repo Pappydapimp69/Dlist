@@ -1,3 +1,7 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Herrerasaurus Skin Test</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,7 +23,8 @@
     --f-ui: "Archivo", "Helvetica Neue", Arial, sans-serif;
     --f-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
   }
-  html, body { height: 100%; }
+  [hidden] { display: none !important; } /* the overlays and panels set display, so hidden needs the override */
+  html, body { height: 100%; margin: 0; }
   body { background: var(--bg); color: var(--ink); font-family: var(--f-ui); overflow: hidden; }
   #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
   .vignette { position: fixed; inset: 0; pointer-events: none;
