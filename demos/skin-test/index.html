@@ -1232,18 +1232,24 @@ function initAudio() {
     const wf = ctx.createBiquadFilter(); wf.type = 'lowpass'; wf.frequency.value = 420;
     const wg = ctx.createGain(); wg.gain.value = 0.16; wind.connect(wf).connect(wg).connect(audio.master); wind.start();
     audio.windGain = wg; audio.on = true;
-    const chip = document.getElementById('soundChip'); chip.textContent = 'Sound is on'; chip.className = 'chip ok';
+    ctx.onstatechange = soundChip; soundChip();
+    if (ctx.state !== 'running') ctx.resume().catch(() => {}); // never awaited: some browsers leave resume() pending
   } catch (e) { audio.ctx = null; }
 }
+function soundChip() {
+  const chip = document.getElementById('soundChip'), run = audio.ctx && audio.ctx.state === 'running';
+  chip.textContent = run ? 'Sound is on' : 'Sound is waiting on the browser. Press any key or click once.'; chip.className = run ? 'chip ok' : 'chip warn';
+}
+const audioLive = () => audio.on && audio.ctx.state === 'running';
 function sNoise({ dur = 0.1, type = 'lowpass', freq = 300, to = null, q = 0.7, gain = 0.5, attack = 0.004, delay = 0 }) {
-  if (!audio.on) return; const ctx = audio.ctx; const t = ctx.currentTime + delay;
+  if (!audioLive()) return; const ctx = audio.ctx; const t = ctx.currentTime + delay;
   const src = ctx.createBufferSource(); src.buffer = audio.noise; src.playbackRate.value = 0.8 + Math.random() * 0.4;
   const f = ctx.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(freq, t); if (to) f.frequency.exponentialRampToValueAtTime(to, t + dur); f.Q.value = q;
   const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + attack); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   src.connect(f).connect(g).connect(audio.master); src.start(t, Math.random() * 1.5); src.stop(t + dur + 0.05);
 }
 function sTone({ f0 = 60, f1 = 40, dur = 0.15, gain = 0.4, type = 'sine', delay = 0 }) {
-  if (!audio.on) return; const ctx = audio.ctx; const t = ctx.currentTime + delay;
+  if (!audioLive()) return; const ctx = audio.ctx; const t = ctx.currentTime + delay;
   const o = ctx.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
   const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   o.connect(g).connect(audio.master); o.start(t); o.stop(t + dur + 0.05);
@@ -1262,7 +1268,7 @@ const sfx = {
   scuff() { sNoise({ type: 'lowpass', freq: 900, to: 200, dur: 0.22, gain: 0.3 }); },
   thud() { sTone({ f0: 60, f1: 28, dur: 0.35, gain: 0.5 }); sNoise({ type: 'lowpass', freq: 400, dur: 0.25, gain: 0.35 }); },
   roar() {
-    if (!audio.on) return; const ctx = audio.ctx; const t = ctx.currentTime; const dur = 1.7;
+    if (!audioLive()) return; const ctx = audio.ctx; const t = ctx.currentTime; const dur = 1.7;
     const out = ctx.createGain(); out.gain.setValueAtTime(0.0001, t); out.gain.exponentialRampToValueAtTime(0.55, t + 0.18); out.gain.setValueAtTime(0.55, t + 1.15); out.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     const shaper = ctx.createWaveShaper(); const curve = new Float32Array(256); for (let i = 0; i < 256; i++) { const x = i / 128 - 1; curve[i] = Math.tanh(x * 2.6); } shaper.curve = curve;
     const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 0.9; bp.frequency.setValueAtTime(380, t); bp.frequency.linearRampToValueAtTime(900, t + 0.5); bp.frequency.linearRampToValueAtTime(320, t + dur);
@@ -1311,6 +1317,7 @@ function pollInput(dt) {
   if (p) {
     if (padId !== p.id) { padId = p.id; chip.textContent = 'Controller connected: ' + p.id.replace(/\s*\(.*$/, '').slice(0, 40); chip.className = 'chip ok'; }
     const raw = p.buttons.map((b) => b.pressed);
+    if (raw.some((v, i) => v && !padPrev[i]) && !audioLive()) initAudio(); // sound starts with the first button press, where the browser allows it
     if (!started && raw.some(Boolean)) { startDemo('pad'); swallow = true; }
     // Only the buttons that were down stay swallowed; sticks and triggers keep working (holding RT or LB across the menu must not freeze the controls).
     if (swallow) { swallow = false; swallowMask = raw.map((v, i) => v && i !== 6 && i !== 7); }
@@ -1449,14 +1456,14 @@ function plantFeetAtNeutral() {
     const w = L.neutral.clone().applyAxisAngle(UP, D.yaw).add(D.pos);
     w.y = groundAt(w.x, w.z) + 0.035;
     L.planted.copy(w); L.footPos.copy(w); L.liftPos.copy(w); L.swing = false; L.groundY = w.y - 0.035;
-    L.liftS = 0; L.stanceU = 0; L.rise = 0; L.pathRock = -1; L.liftRock = -1; L.centre = 0;
+    L.liftS = 0; L.stanceU = 0; L.rise = 0; L.pathRock = -1; L.liftRock = -1; L.centre = 0; L.adjX = L.adjZ = 0; L.offAdj = L.offT = 0; L.planRise = 0;
   }
 }
 function clearMotion() {
   D.speed = D.accel = D.yawRate = D.tailYaw = D.tailYawV = D.roll = D.pitchF = D.bodyY = 0; D.tailTurnYaw = D.yaw; D.tailTurnSign = 0;
   D.jump = null; D.lastJump = null; D.fall = null; D.check = null; D.landT = -1; D.stamina = 1; D.phase = 0; D.cycleT = 1; D.run = 0; D.sprintT = 0; D.biteT = D.roarT = -1; D.snapped = false; D.scentTo = null; D.windTurn = false;
   if (D.act !== 'none') endAct();
-  D.hd = D.hu = D.tilt = D.hyaw = D.dip = 0;
+  D.hd = D.hu = D.tilt = D.hyaw = D.dip = 0; D.rough = 0;
 }
 function resetDino() {
   D.pos.set(SPAWN.x, 0, SPAWN.z); D.yaw = SPAWN.yaw;
@@ -1781,8 +1788,14 @@ function simStep(dt) {
   // ---- gait ----
   // Duty factor switches on Froude number, stride follows Alexander's relation (Brain lessons dlist E2, E3).
   const v = D.speed, Fr = v * v / (9.81 * CREATURE.hip);
-  const duty = 0.5 + 0.14 * Math.tanh((0.5 - Fr) / 0.25);
-  const stride = Math.max(0.8, 2.3 * CREATURE.leg * Math.pow(v * v / (9.81 * CREATURE.leg), 0.3));
+  // Uneven ground ahead (step-up rocks): shorter, more careful steps with a longer stance.
+  {
+    let rh = 0; const hx = Math.sin(D.yaw), hz = Math.cos(D.yaw), sx = Math.cos(D.yaw), sz = -Math.sin(D.yaw);
+    for (let d = 0.4; d <= 2.6; d += 0.55) for (const o of [-0.2, 0.2]) { const x = D.pos.x + hx * d + sx * o, z = D.pos.z + hz * d + sz * o; rh = Math.max(rh, groundAt(x, z) - heightAt(x, z)); }
+    D.rough = damp(D.rough || 0, smooth(TIER.pebble, TIER.step * 0.8, rh), 4, dt);
+  }
+  const duty = 0.5 + 0.14 * Math.tanh((0.5 - Fr) / 0.25) + 0.06 * D.rough;
+  const stride = Math.max(0.8, 2.3 * CREATURE.leg * Math.pow(v * v / (9.81 * CREATURE.leg), 0.3)) * lerp(1, 0.72, D.rough);
   const rootG = heightAt(D.pos.x, D.pos.z);
   if (!D.jump && !downed) {
     const anySwing = dino.legs.some((L) => L.swing);
@@ -1792,7 +1805,9 @@ function simStep(dt) {
     // Lean comes from the feet: plant the support window back when accelerating, forward when braking (E4).
     const lean = -0.11 * clamp(D.accel, -4, 2.1);
     dino.legs.forEach((L, li) => {
-      const q = (D.phase + L.off) % 1;
+      // Each leg can run slightly ahead of or behind the other: a high step takes longer, a short one lands sooner.
+      L.offAdj = damp(L.offAdj || 0, L.offT || 0, 3, dt); if (!L.swing && !(D.rough > 0.05)) L.offT = 0;
+      const q = (((D.phase + L.off + L.offAdj) % 1) + 1) % 1;
       if (q < duty) {
         if (L.swing) footDown(L, li);
         L.footPos.copy(L.planted); L.liftS = 0; L.stanceU = q / duty; L.groundY = L.planted.y - 0.035;
@@ -1801,11 +1816,27 @@ function simStep(dt) {
       if (!L.swing) {
         L.swing = true; L.liftPos.copy(L.planted); L.rise = 0; L.pathRock = -1; L.liftRock = groundInfo(L.planted.x, L.planted.z).rock;
         L.centre = 0.5 * v * duty * D.cycleT; // speed frozen at lift-off (E6)
+        // Pick a foothold: shorten, lengthen or shift the step to land flat, away from rock edges.
+        L.adjX = L.adjZ = 0; L.offT = 0;
+        if (D.rough > 0.05) {
+          const rem0 = (1 - duty) * D.cycleT, yaw0 = D.yaw + D.yawRate * rem0, cy = Math.cos(yaw0), sy = Math.sin(yaw0);
+          const bx = L.neutral.x, bz = L.neutral.z + L.centre + lean;
+          const ox = D.pos.x + Math.sin(D.yaw) * v * rem0, oz = D.pos.z + Math.cos(D.yaw) * v * rem0;
+          let best = Infinity;
+          for (const cz of [0, -0.12, -0.24, -0.36, 0.12, 0.22]) for (const cx of [0, 0.07 * L.sx, -0.05 * L.sx]) {
+            const lx2 = bx + cx, lz2 = bz + cz, x = ox + lx2 * cy + lz2 * sy, z = oz - lx2 * sy + lz2 * cy;
+            const g = groundInfo(x, z), gy = g.y, onRk = g.rock >= 0 && ROCKS[g.rock].tier >= 1, ny = g.ny, ed = g.edge;
+            const toe = groundAt(x + sy * 0.12, z + cy * 0.12), heel = groundAt(x - sy * 0.12, z - cy * 0.12);
+            const sc = (onRk ? 1.5 * smooth(0.5, 0.95, ed) + 2 * (1 - ny) : 0) + 4 * Math.max(Math.abs(toe - gy), Math.abs(heel - gy)) + 0.9 * Math.abs(cz) + 1.2 * Math.abs(cx);
+            if (sc < best) { best = sc; L.adjX = cx; L.adjZ = cz; L.planRise = gy - (L.liftPos.y - 0.035); }
+          }
+          L.offT = clamp(Math.max(0, L.planRise) * 0.3 - L.adjZ * 0.12, -0.1, 0.1);
+        }
       }
       const s = (q - duty) / (1 - duty), rem = (1 - s) * (1 - duty) * D.cycleT;
       // Predict the heading at touchdown, and where the body will be by then (E6).
       const yawL = D.yaw + D.yawRate * rem, ym = D.yaw + D.yawRate * rem * 0.5;
-      const lx = L.neutral.x, lz = L.neutral.z + L.centre + lean;
+      const lx = L.neutral.x + (L.adjX || 0), lz = L.neutral.z + L.centre + lean + (L.adjZ || 0);
       let landX = D.pos.x + lx * Math.cos(yawL) + lz * Math.sin(yawL) + Math.sin(ym) * v * rem;
       let landZ = D.pos.z - lx * Math.sin(yawL) + lz * Math.cos(yawL) + Math.cos(ym) * v * rem;
       let gL = groundAt(landX, landZ);

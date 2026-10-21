@@ -243,3 +243,11 @@ Nothing from this list is left open.
   shorter (hop 0.53 s). The landing is heavier: a 0.3 m absorb over 0.55 s, a neck whip, a tail dip, a
   dust puff, a stronger rumble, a camera jolt (reduced-motion aware), and 0.25 s of sluggish turning and
   acceleration after a big landing.
+- **Sound on first press:** the first controller button now starts the audio, wherever the browser allows
+  it. Some browsers only unlock sound from a key or click, and the chip says so when that happens. Sounds
+  are skipped while audio is suspended rather than queued up.
+- **Uneven-ground gait:** near step-up rocks, steps get shorter (stride down to 72%) and stance longer.
+  At lift-off, each foot picks a foothold from 18 candidates (shorter, longer or shifted a little sideways),
+  scoring rock-edge landings, tilted faces and toe-heel straddles as bad. Each leg's timing can drift up to
+  ±0.1 of a cycle (a high step lands later), so the two legs take visibly different steps, then fall back
+  into rhythm on flat ground.
