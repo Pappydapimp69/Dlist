@@ -300,3 +300,22 @@ Nothing from this list is left open.
   It has a timer, a section readout and a best time (kept in the browser). Switch maps from the Start menu.
   An automated run at a full walk finished in 39.8 s, jumped the big log, slipped and stumbled a few times,
   and came out wet and muddy.
+- **Splash screen map picker:** pick Valley or Obstacle course with the D-pad or left stick and enter with A
+  (or keys or a click). The loaded map starts at once. The other map reloads the page on that map and asks
+  for one button press, because the browser only exposes a controller after a press.
+- **Midday sun:** the sun is held near its highest point (about 80°, inside the requested ±15% of the
+  apogee), with whiter light and a bluer sky, so shadows are short instead of sunset-long.
+- **Clearer course boundaries:** edge stakes every 3 m down both sides of the track (none in the water or
+  mud), a stronger worn-track tint, and a darker edge line.
+- **Trips are real falls:** a trip (still only below 50% stamina) now topples the dino onto its side
+  (the side it was leaning toward). It lies there kicking its legs and with its head up, then rolls
+  back upright and stands. On impact there's a thud, a camera jolt and a line of dust along the side it
+  fell on. The tail drops flat while it's lying down.
+- **Size and weight shape every fall:** timing scales with the square root of hip height (a bigger animal
+  falls slower), and heavier animals hit harder, lie longer and get up more slowly. Slip and stumble
+  flailing slows down for big animals and gets smaller for heavy ones, while light ones like Eodromaeus
+  scramble quicker and wider. Herrerasaurus (1.15 m hip, 350 kg) is the reference.
+- **Trips only while sprinting:** a trip (falling down) now needs both a sprint (right trigger, above
+  5 m/s) and stamina below half. Walking or jogging over rough ground can still slip or stumble, but it
+  never goes down. A tired test run over every step-up rock gave 5 trips and 67 slips or stumbles when
+  sprinting, and 0 trips and 17 slips or stumbles at a walk.

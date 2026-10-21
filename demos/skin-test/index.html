@@ -77,6 +77,15 @@
     border: 1px solid var(--line); border-radius: 5px; padding: 7px 11px; cursor: pointer; }
   .card button:hover { color: var(--ink); border-color: rgba(239, 230, 214, 0.35); }
   .card button:focus-visible, .menu li:focus-visible { outline: 2px solid var(--ochre); outline-offset: 2px; }
+  .splash { width: min(720px, 100%); }
+  .maps { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .card .map { justify-self: stretch; display: grid; gap: 6px; text-align: left; padding: 14px 16px; border-radius: 6px;
+    border: 1px solid var(--line); background: rgba(239, 230, 214, 0.04); color: var(--ink); cursor: pointer; }
+  .card .map.on { border-color: rgba(212, 155, 83, 0.7); background: rgba(212, 155, 83, 0.14); }
+  .map .mname { font-family: var(--f-display); font-style: italic; font-size: 1.35rem; }
+  .map .mdesc { font-size: 0.8rem; line-height: 1.45; color: var(--ink-2); }
+  .lede.small { font-size: 0.8rem; }
+  @media (max-width: 600px) { .maps { grid-template-columns: 1fr; } }
   .menu h2 { margin: 0; font-family: var(--f-display); font-style: italic; font-weight: 500; font-size: 1.6rem; }
   .menu ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
   .menu li { display: flex; justify-content: space-between; gap: 16px; padding: 9px 12px; border-radius: 5px; cursor: pointer;
@@ -145,13 +154,27 @@
 </aside>
 
 <div class="overlay" id="intro">
-  <div class="card">
-    <p class="eyebrow">Dlist tech demo · skin test</p>
+  <div class="card splash">
+    <p class="eyebrow">Dlist tech demo</p>
     <h1>Herrerasaurus</h1>
-    <p class="lede">Wade into the pond to get wet. Wet skin and fuzz dry in 8 seconds. Walk through the mud pit to get muddy. The mud dries into a crust after 8 seconds, then flakes off once you've walked for 30 seconds. The pond washes mud off.</p>
-    <p class="lede">Low rocks are footholds; tall ones are walls. Take them too fast and it stumbles. Once it's tired, below half stamina, it can trip and go down. Press A to jump. Hold B near the water to drink, or away from it to sniff the air, or the ground where its own wet or muddy tracks are. Hold LB to lie down and rest. Try the obstacle course or the tutorial from the Start menu.</p>
-    <p class="cta" id="introCta">Press any button on your Xbox controller to start</p>
-    <button type="button" id="kbStart">No controller? Start with keyboard and mouse</button>
+    <p class="lede" id="introLede">Choose a map.</p>
+    <div class="maps" id="mapPick" role="listbox" aria-label="Map">
+      <button type="button" class="map" data-map="tutorial" role="option">
+        <span class="mname">Tutorial</span>
+        <span class="mdesc">Hatch from an egg as a baby Herrerasaurus, then learn the basics one at a time: walk, roar, drink, hunt and rest. Start here.</span>
+      </button>
+      <button type="button" class="map" data-map="valley" role="option">
+        <span class="mname">Valley</span>
+        <span class="mdesc">Open floodplain with a pond and a mud pit. Wade in to get wet; wet skin and fuzz dry in 8 s. Mud crusts after 8 s and flakes off after 30 s of walking; the pond washes it off.</span>
+      </button>
+      <button type="button" class="map" data-map="course" role="option">
+        <span class="mname">Obstacle course</span>
+        <span class="mdesc">A timed track from gate to gate: rocks and pebbles, fallen logs, a stream, a mud pit, a boulder slalom and a log bridge over a pond. The big log has to be jumped.</span>
+      </button>
+    </div>
+    <p class="lede small">A jumps · hold B to drink near water or sniff away from it · X bites · Y roars · right trigger sprints · hold LB to lie down and rest. Too fast over rocks and logs and it slips or stumbles; sprinting on tired legs, it can trip.</p>
+    <p class="cta" id="introCta">D-pad or left stick to choose · A to enter</p>
+    <button type="button" id="kbStart">No controller? Enter with keyboard and mouse</button>
   </div>
 </div>
 
@@ -247,6 +270,9 @@ const SPAWN = MAP === 'course' ? { x: -42, z: 29, yaw: Math.PI / 2 } : TUT ? { x
 const CREATURE = { hip: 1.15, leg: 1.18, mass: 350, reach: 2.8, snout: 1.8 }; // reach: water it notices; snout: how far ahead the lowered snout dips
 const TIER = { pebble: 0.08 * CREATURE.hip, step: 0.55 * CREATURE.hip }; // step-ups to about knee height; above that, a wall
 const JUMP_K = Math.pow(CREATURE.mass / 350, -1 / 6) * CREATURE.hip / 1.15;
+// Falls, stumbles and slips scale with the animal: a bigger body topples and recovers more slowly (time ~ sqrt(size)),
+// a heavier one lands harder and flails less (more inertia), a lighter one is quicker and twitchier.
+const BODY = { ts: Math.sqrt(CREATURE.hip / 1.15) * Math.pow(CREATURE.mass / 350, 0.1), mk: Math.cbrt(CREATURE.mass / 350), agile: Math.pow(350 / CREATURE.mass, 0.15) };
 const WIND_FROM = Math.atan2(-0.8, -0.55); // heading the wind blows from
 const WIND_DIR = V(0.8, 0, 0.55).normalize(); // downwind
 
@@ -338,8 +364,8 @@ const FOG_COLOR = new THREE.Color().setRGB(0.47, 0.44, 0.38);
 scene.fog = new THREE.FogExp2(FOG_COLOR, 0.0115);
 const uTime = { value: 0 };
 
-// Late-afternoon sun, low and warm, so shadows are long and wet skin catches highlights.
-const SUN_DIR = V(-0.55, 0.42, 0.62).normalize();
+// Midday sun near its highest point (about 80 degrees up, inside the 15% band around the apogee), so shadows are short.
+const SUN_DIR = V(-0.12, 0.985, 0.13).normalize();
 const skyMat = new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false, fog: false,
   uniforms: { uSun: { value: SUN_DIR } },
@@ -349,13 +375,13 @@ const skyMat = new THREE.ShaderMaterial({
     void main(){
       vec3 d = normalize(vDir);
       float h = d.y;
-      vec3 zen = vec3(0.12, 0.19, 0.32);
-      vec3 hor = vec3(0.50, 0.465, 0.40);
+      vec3 zen = vec3(0.11, 0.2, 0.36);
+      vec3 hor = vec3(0.52, 0.5, 0.45);
       vec3 gnd = vec3(0.30, 0.26, 0.21);
       vec3 col = mix(hor, zen, pow(smoothstep(0.0, 1.0, max(h, 0.0)), 0.5));
       col = mix(col, gnd, smoothstep(0.0, -0.3, h));
       float s = max(dot(d, uSun), 0.0);
-      col += vec3(1.0, 0.72, 0.42) * (pow(s, 6.0) * 0.32 + pow(s, 900.0) * 9.0);
+      col += vec3(1.0, 0.9, 0.74) * (pow(s, 6.0) * 0.32 + pow(s, 900.0) * 9.0);
       gl_FragColor = vec4(col, 1.0);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
@@ -374,7 +400,7 @@ scene.add(sky);
 
 const hemi = new THREE.HemisphereLight(new THREE.Color().setRGB(0.55, 0.6, 0.68), new THREE.Color().setRGB(0.28, 0.2, 0.13), 0.55);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(new THREE.Color().setRGB(1.0, 0.8, 0.58), 3.1);
+const sun = new THREE.DirectionalLight(new THREE.Color().setRGB(1.0, 0.93, 0.82), 3.2);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.camera.left = -24; sun.shadow.camera.right = 24;
@@ -436,7 +462,7 @@ const T_SIZE = 180, T_SEG = 240;
       if (h < WATER_Y && dp < w.r + 2) c.lerp(cUnder, smooth(0, -0.4, h));
     }
     for (const m of MUDS) c.lerp(cMudBank, 1 - smooth(m.r - 0.5, m.r + 2.6, Math.hypot(x - m.x, z - m.z)));
-    if (MAP === 'course') c.lerp(cPale, (1 - smooth(1.8, 3.2, pathInfo(x, z).d)) * 0.45); // a worn track marks the course
+    if (MAP === 'course') { const pd = pathInfo(x, z).d; c.lerp(cPale, (1 - smooth(2.2, 3.0, pd)) * 0.7); c.lerp(cBank, smooth(2.9, 3.2, pd) * (1 - smooth(3.4, 3.9, pd)) * 0.6); } // a worn track with a darker edge line
     col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
@@ -766,6 +792,19 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
     const posts = [];
     COURSE.forEach((p, i) => { const j = Math.min(i, COURSE.length - 2), q = at(j, i === COURSE.length - 1 ? 1 : 0); for (const o of [-3.4, 3.4]) { const a = at(j, i === COURSE.length - 1 ? 1 : 0, o); posts.push({ x: a.x, y: heightAt(a.x, a.z) - 0.1, z: a.z, s: 1, sy: i === COURSE.length - 1 ? 1.5 : 1, ry: 0 }); obstacles.push({ x: a.x, z: a.z, r: 0.2 }); } void q; });
     scatter(postGeo, conMat, posts);
+    // Edge stakes every 3 m down both sides of the track (not in the water or mud), so the boundary reads from a distance.
+    const stakeGeo = mergeColored([{ geo: new THREE.CylinderGeometry(0.05, 0.07, 0.75, 6), color: (x, y) => new THREE.Color(y > 0.3 ? '#b5743a' : '#3f2e21'), matrix: M4().makeTranslation(0, 0.37, 0) }]);
+    const stakes = [];
+    for (let i = 0; i < COURSE.length - 1; i++) {
+      const [ax, az] = COURSE[i], [bx, bz] = COURSE[i + 1], L = Math.hypot(bx - ax, bz - az);
+      for (let d = 1.5; d < L - 1; d += 3) for (const o of [-3.4, 3.4]) {
+        const a = at(i, d / L, o);
+        if (pathInfo(a.x, a.z).d < 3.2 || heightAt(a.x, a.z) < WATER_Y + 0.08 || inMudPit(a.x, a.z)) continue; // skip inside bends, water and mud
+        stakes.push({ x: a.x, y: heightAt(a.x, a.z) - 0.05, z: a.z, s: 1, ry: 0, tx: (hashI(i, d * 10, 3) - 0.5) * 0.12 });
+        obstacles.push({ x: a.x, z: a.z, r: 0.1 });
+      }
+    }
+    scatter(stakeGeo, conMat, stakes);
   }
   // Tutorial nest: twigs and dead fronds piled on the rim (visual only; the rim itself is terrain).
   if (TUT) {
@@ -1543,7 +1582,17 @@ function pollInput(dt) {
     if (padId !== p.id) { padId = p.id; chip.textContent = 'Controller connected: ' + p.id.replace(/\s*\(.*$/, '').slice(0, 40); chip.className = 'chip ok'; }
     const raw = p.buttons.map((b) => b.pressed);
     if (raw.some((v, i) => v && !padPrev[i]) && !audioLive()) initAudio(); // sound starts with the first button press, where the browser allows it
-    if (!started && raw.some(Boolean)) { startDemo('pad'); swallow = true; }
+    if (!started) {
+      const rise = (i) => raw[i] && !padPrev[i], ax = p.axes[0] || 0;
+      if (picker.ready) { if (raw.some(Boolean)) { startDemo('pad'); swallow = true; } }
+      else {
+        let d = rise(14) || rise(13) ? 1 : rise(15) || rise(12) ? -1 : 0; // D-pad left/right (and up/down)
+        if (Math.abs(ax) > 0.6) { picker.hold -= dt; if (picker.hold <= 0) { d = ax > 0 ? 1 : -1; picker.hold = 0.3; } } else picker.hold = 0;
+        if (d) { picker.sel = (picker.sel + d + MAPS.length) % MAPS.length; renderSplash(); }
+        if (rise(0)) { if (enterMap('pad')) swallow = true; }
+      }
+      if (!started) { padPrev = raw; return; }
+    }
     // Only the buttons that were down stay swallowed; sticks and triggers keep working (holding RT or LB across the menu must not freeze the controls).
     if (swallow) { swallow = false; swallowMask = raw.map((v, i) => v && i !== 6 && i !== 7); }
     if (swallowMask) { for (let i = 0; i < raw.length; i++) if (!raw[i]) swallowMask[i] = false; if (!swallowMask.some(Boolean)) swallowMask = null; }
@@ -1599,7 +1648,13 @@ function pollInput(dt) {
 window.addEventListener('keydown', (e) => {
   initAudio();
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
-  if (!started) { if (e.code === 'Enter' || e.code === 'Space') startDemo('keys'); return; }
+  if (!started) {
+    if (picker.ready) { startDemo('keys'); return; }
+    if (['ArrowLeft', 'ArrowUp', 'KeyA', 'KeyW'].includes(e.code)) { picker.sel = (picker.sel + MAPS.length - 1) % MAPS.length; renderSplash(); }
+    else if (['ArrowRight', 'ArrowDown', 'KeyD', 'KeyS'].includes(e.code)) { picker.sel = (picker.sel + 1) % MAPS.length; renderSplash(); }
+    else if (e.code === 'Enter' || e.code === 'Space') enterMap('keys');
+    return;
+  }
   setDevice('keys');
   if (e.repeat) return;
   keys.add(e.code);
@@ -1639,7 +1694,27 @@ function startDemo(dev) {
   started = true; setDevice(dev);
   document.getElementById('intro').hidden = true;
 }
-document.getElementById('kbStart').addEventListener('click', () => { initAudio(); startDemo('keys'); });
+// Splash: pick a map. Entering the map that is already loaded starts at once; the other one reloads the page
+// on that map, which then asks for one button press (the browser only shows a controller after a press).
+const MAPS = ['tutorial', 'valley', 'course']; // same order as the picker buttons
+const MAP_NAME = { tutorial: 'Tutorial', valley: 'Valley', course: 'Obstacle course' };
+const picker = { sel: MAPS.indexOf(MAP), ready: false, hold: 0 };
+try { if (sessionStorage.getItem('dlist.enter') === MAP) { picker.ready = true; sessionStorage.removeItem('dlist.enter'); } } catch (e) { /* no session storage: pick again */ }
+function renderSplash() {
+  document.querySelectorAll('#mapPick .map').forEach((b, i) => { b.classList.toggle('on', i === picker.sel); b.setAttribute('aria-selected', i === picker.sel); });
+  document.getElementById('mapPick').hidden = picker.ready;
+  document.getElementById('introLede').textContent = picker.ready ? MAP_NAME[MAP] + ' is loaded.' : 'Choose a map.';
+  document.getElementById('introCta').textContent = picker.ready ? 'Press any button on your Xbox controller to start' : 'D-pad or left stick to choose · A to enter';
+}
+function enterMap(dev) {
+  const m = MAPS[picker.sel];
+  if (m === MAP) { startDemo(dev); return true; }
+  try { sessionStorage.setItem('dlist.enter', m); } catch (e) { /* the next load shows the picker again */ }
+  location.hash = m; location.reload(); return false;
+}
+renderSplash();
+document.querySelectorAll('#mapPick .map').forEach((b, i) => b.addEventListener('click', () => { initAudio(); picker.sel = i; renderSplash(); enterMap('keys'); }));
+document.getElementById('kbStart').addEventListener('click', () => { initAudio(); enterMap('keys'); });
 
 /* ============================== pause menu ============================== */
 const MENU = [
@@ -1650,7 +1725,7 @@ const MENU = [
   { label: 'Reset Herrerasaurus', state: () => '', act: () => { resetDino(); closeMenu(); } },
   ...(TUT ? [{ label: 'Restart tutorial', state: () => '', act: () => location.reload() }] : []),
   ...(MAP === 'course' ? [{ label: 'Restart course', state: () => '', act: () => { resetDino(); course.state = 'ready'; closeMenu(); } }] : []),
-  { label: 'Map', state: () => ({ valley: 'Valley', course: 'Obstacle course', tutorial: 'Tutorial' })[MAP], act: () => { location.hash = { valley: 'course', course: 'tutorial', tutorial: 'valley' }[MAP]; location.reload(); } },
+  { label: 'Map', state: () => MAP_NAME[MAP], act: () => { const m = MAPS[(MAPS.indexOf(MAP) + 1) % MAPS.length]; try { sessionStorage.setItem('dlist.enter', m); } catch (e) { /* picker shows again */ } location.hash = m; location.reload(); } },
 ];
 function renderMenu() {
   document.getElementById('menuList').innerHTML = MENU.map((m, i) => `<li role="menuitem" tabindex="-1" data-i="${i}" class="${i === menuIdx ? 'on' : ''}"><span>${m.label}</span><span class="state">${m.state()}</span></li>`).join('');
@@ -1764,22 +1839,23 @@ function stability(L, li, g, impact = 0) {
   const cap = lerp(0.65, 1, smooth(0, 0.8, D.stamina)); // fresher legs recover more
   const score = Math.max(trip, slip, roll) / cap;
   const kind = trip >= Math.max(slip, roll) ? 'trip' : 'stumble';
-  // Fresh legs only ever stagger. Below half stamina a bad step can put it down, and it stays rare.
-  const downAt = D.stamina >= 0.5 ? Infinity : lerp(2.1, 3.5, smooth(0.1, 0.5, D.stamina));
+  // Only a sprint can put it down, and only on tired legs (below half stamina); it stays rare.
+  const sprinting = D.speed > 5 && input.sprint > 0.25;
+  const downAt = !sprinting || D.stamina >= 0.5 ? Infinity : lerp(2.1, 3.5, smooth(0.1, 0.5, D.stamina));
   D.check = { rock: rid, leg: li, trip, slip, roll, demand, mu, sup, legT, score, kind, v, downAt, outcome: score >= downAt ? 'down' : score >= 0.55 ? 'stagger' : 'ok' };
   D.checks++;
   if (score >= 0.55 && !D.fall) startFall(kind, score + 0.1, li, score >= downAt);
 }
 // Three escalating outcomes: a slip (the foot skids and it catches itself), a stumble (a big lurch and
-// scramble), and a trip (it goes down; only below half stamina).
+// scramble), and a trip (it goes down; only when sprinting below half stamina).
 function startFall(kind, score, li, down) {
   const k = clamp((score - 0.5) * 2, 0, 1), level = down ? 'trip' : score < 0.9 ? 'slip' : 'stumble';
   const dur = level === 'trip' ? lerp(1, 2, clamp(score - 1, 0, 1)) : level === 'slip' ? lerp(0.32, 0.45, k) : lerp(0.65, 1.15, k);
-  D.fall = { kind, level, down, t: 0, dur, side: dino.legs[li].sx, leg: li, sev: clamp(score, 0.5, 1.5), thud: false };
+  D.fall = { kind, level, down, t: 0, dur: dur * BODY.ts, side: dino.legs[li].sx, leg: li, sev: clamp(score, 0.5, 1.5), thud: false, lie: 0, kick: 0 };
   D.speed *= level === 'trip' ? 0.45 : level === 'slip' ? 0.97 : lerp(0.94, 0.8, k);
   D.jump = null; if (D.act !== 'none' && level !== 'slip') endAct();
   sfx.scuff(); if (level === 'stumble') sfx.scuff();
-  rumble(level === 'trip' ? 260 : level === 'slip' ? 90 : 180, level === 'slip' ? 0.3 : 0.5, level === 'trip' ? 0.6 : level === 'slip' ? 0.15 : 0.5);
+  rumble(level === 'trip' ? 260 : level === 'slip' ? 90 : 180, level === 'slip' ? 0.3 : 0.5, Math.min(1, (level === 'trip' ? 0.6 : level === 'slip' ? 0.15 : 0.5) * BODY.mk));
   if (level !== 'slip') cam.jolt = Math.max(cam.jolt, down ? 0.06 : 0.04 + 0.05 * k);
 }
 function footDown(L, li) {
@@ -2139,15 +2215,29 @@ function simStep(dt) {
   if (D.fall) {
     const F = D.fall; F.t += dt;
     if (F.down) {
-      fe = smooth(0, 0.35, F.t) * (1 - smooth(0.35 + F.dur, 1.1 + F.dur, F.t));
-      if (F.t > 0.3 && !F.thud) { F.thud = true; sfx.thud(); rumble(200, 0.6, 0.9); }
-      fallDrop = 0.64 * fe; fallPitch = (F.kind === 'trip' ? 0.24 : 0.08) * fe; fallRoll = (F.kind === 'trip' ? 0.06 : 0.3) * F.side * fe;
-      flail = 0.6 * smooth(0, 0.2, F.t) * (1 - smooth(0.2, 0.5, F.t));
-      if (F.t > 1.1 + F.dur) D.fall = null;
+      // Topple onto its side (accelerating like a falling body), lie there kicking, then roll back and push up.
+      if (!F.tT) { F.tT = 0.45 * BODY.ts; F.tL = lerp(0.8, 1.6, clamp(F.sev - 1, 0, 1)) * Math.sqrt(BODY.mk); F.tR = 1.15 * BODY.ts * Math.pow(BODY.mk, 0.4); }
+      const t = F.t, t1 = F.tT, t2 = t1 + F.tL, t3 = t2 + F.tR;
+      const topple = t < t1 ? (t / t1) ** 2 : 1, rise = t < t2 ? 0 : smooth(0, 1, (t - t2) / F.tR);
+      const bounce = t > t1 && t < t1 + 0.35 ? Math.sin(Math.PI * (t - t1) / 0.35) * 0.12 / BODY.mk : 0; // a light body bounces more
+      const lie = topple * (1 - rise);
+      F.lie = lie; fe = lie;
+      fallRoll = -F.side * (1.35 * lie - bounce * (1 - rise));
+      fallDrop = 0.86 * lie - 0.05 * bounce + 0.06 * Math.sin(Math.PI * rise) * (rise < 0.5 ? 1 : -0.5); // a push-up dip as it rises
+      fallShift = F.side * 0.72 * lie;
+      fallPitch = (F.kind === 'trip' ? 0.28 : 0.08) * Math.sin(Math.PI * Math.min(1, t / t1)) * (1 - rise) + 0.12 * Math.sin(Math.PI * rise);
+      flail = (0.9 * smooth(0, t1 * 0.6, t) * (1 - smooth(t1 * 0.7, t1 * 1.2, t)) + 0.5 * Math.sin(Math.PI * rise)) * BODY.agile;
+      F.kick = smooth(t1, t1 + 0.15, t) * (1 - smooth(t2 + F.tR * 0.1, t2 + F.tR * 0.45, t)); // legs paddle while down and scrabble as it rises
+      if (t >= t1 && !F.thud) {
+        F.thud = true; sfx.thud(); rumble(240, 0.6, Math.min(1, 0.7 * BODY.mk)); cam.jolt = Math.max(cam.jolt, 0.07 * BODY.mk);
+        const sx = Math.cos(D.yaw), sz = -Math.sin(D.yaw);
+        for (let k = 0; k < 18; k++) { const u = (k / 17 - 0.5) * 3.4, px = D.pos.x + fwd.x * u + sx * F.side * 0.75, pz = D.pos.z + fwd.z * u + sz * F.side * 0.75; dust.spawn(V(px, groundAt(px, pz) + 0.05, pz), V(sx * F.side * (0.4 + Math.random()), 0.3 + Math.random() * 0.5, sz * F.side * (0.4 + Math.random())), { life: 1 + Math.random() * 0.6, size: 1.5 + Math.random() * 1.5 }); }
+      }
+      if (t > t3) D.fall = null;
     } else if (F.level === 'slip') {
       // The foot skids out a little, the body dips and twitches, and it carries on.
       const e = smooth(0, 0.05, F.t) * (1 - smooth(0.1, F.dur, F.t)), L = dino.legs[F.leg];
-      D.stagE = e * 0.3; flail = 0.45 * e;
+      D.stagE = e * 0.3; flail = 0.45 * e * BODY.agile;
       fallDrop = 0.05 * e; fallPitch = 0.04 * e; fallRoll = 0.08 * F.side * e; fallShift = 0.05 * F.side * e;
       if (F.t < 0.16 && !L.swing) { const sk = 0.9 * dt; L.planted.x += (fwd.x * 0.5 + Math.cos(D.yaw) * L.sx * 0.5) * sk; L.planted.z += (fwd.z * 0.5 - Math.sin(D.yaw) * L.sx * 0.5) * sk; L.footPos.copy(L.planted); }
       if (F.t > F.dur) D.fall = null;
@@ -2156,7 +2246,7 @@ function simStep(dt) {
       // the head jerks up, arms and tail flail to catch the balance, and the legs scramble with quick steps.
       const e = smooth(0, 0.1, F.t) * (1 - smooth(F.dur * 0.35, F.dur, F.t)), sv = F.sev;
       D.stagE = e;
-      flail = e * sv * 1.25;
+      flail = e * sv * 1.25 * BODY.agile;
       fallDrop = 0.16 * e * Math.min(sv, 1.2);
       fallPitch = (F.kind === 'trip' ? 0.3 : 0.14) * e * sv * (1 - 0.6 * smooth(F.dur * 0.25, F.dur * 0.55, F.t));
       fallRoll = (F.kind === 'trip' ? 0.12 : 0.24) * F.side * e * sv;
@@ -2264,12 +2354,12 @@ function simStep(dt) {
   B.spine2.rotation.set(0, -0.02 * Math.sin(ph) * mf, 0);
   B.chest.rotation.set(0.008 * Math.sin(D.time * 1.6) - rest * 0.04, 0, 0);
   const look = (1 - mf) * 0.14 * Math.sin(D.time * 0.37) * Math.sin(D.time * 0.23 + 1) * (D.act === 'none' ? 1 : 0);
-  const fl = flail * Math.sin(D.time * 17), fl2 = flail * Math.sin(D.time * 12.5 + 1);
+  const fl = flail * Math.sin(D.time * 17 / BODY.ts), fl2 = flail * Math.sin(D.time * 12.5 / BODY.ts + 1);
   // Head counterbalances body roll on uneven footing (toward the high side).
   const nYaw = D.yawRate * 0.05 + D.hyaw + D.roll * 0.8 + fl * 0.3;
   // Walk: relaxed S-curve neck, head high. Sprint: neck straight out and low, head in line with it.
-  B.neck1.rotation.set(lerp(-0.14, 0.32, run) * (1 - hd) + rest * 0.45 + hd * 0.62 + dip * 0.35 - D.hu * 0.22 - D.tilt * 0.04 + lunge * 0.1 - roarE * 0.14 + fallPitch * 0.8 + fl2 * 0.12 + tuck * 0.06 + absorb * 1.1 + jc * 0.6, nYaw * 0.25, 0);
-  B.neck2.rotation.set(lerp(0.04, 0.17, run) * (1 - hd) + hd * 0.3 + dip * 0.2 - D.hu * 0.14 - D.tilt * 0.12 + lunge * 0.08 - roarE * 0.22 + fl * 0.1, nYaw * 0.35 + look, 0);
+  B.neck1.rotation.set(lerp(-0.14, 0.32, run) * (1 - hd) + rest * 0.45 + hd * 0.62 + dip * 0.35 - D.hu * 0.22 - D.tilt * 0.04 + lunge * 0.1 - roarE * 0.14 + fallPitch * 0.8 + fl2 * 0.12 + tuck * 0.06 + absorb * 1.1 + jc * 0.6 - (D.fall && D.fall.down ? 0.35 * D.fall.lie : 0), nYaw * 0.25, D.fall && D.fall.down ? 0.55 * D.fall.side * D.fall.lie : 0); // lying: the head tries to stay up
+  B.neck2.rotation.set(lerp(0.04, 0.17, run) * (1 - hd) + hd * 0.3 + dip * 0.2 - D.hu * 0.14 - D.tilt * 0.12 + lunge * 0.08 - roarE * 0.22 + fl * 0.1, nYaw * 0.35 + look, D.fall && D.fall.down ? 0.4 * D.fall.side * D.fall.lie : 0);
   B.neck3.rotation.set(lerp(0.24, 0.05, run) * (1 - hd) + hd * 0.02 - D.hu * 0.06 - D.tilt * 0.22 + lunge * 0.04 - roarE * 0.12, nYaw * 0.25 + look * 0.6, 0);
   B.head.rotation.set(lerp(-0.08, -0.56, run) * (1 - hd) - rest * 0.28 + slope * 0.35 + hd * 0.1 - D.hu * 0.22 - D.tilt * 0.45 - roarE * 0.2 + lunge * 0.05 - bob * 1.5 - nose * 0.05 - D.pitchF * 0.6 - fallPitch * (D.fall && !D.fall.down ? 1.1 : 0.4) - fl2 * 0.14, nYaw * 0.15 + shake, shake * 0.4 + fl * 0.12);
   B.jaw.rotation.set(jawOpen, 0, 0);
@@ -2283,7 +2373,7 @@ function simStep(dt) {
   if (sgn && sgn !== D.tailTurnSign) D.tailTurnYaw = D.yaw;
   D.tailTurnSign = sgn;
   const th = sgn ? Math.min(hold, Math.abs(wrapAngle(D.yaw - D.tailTurnYaw))) : hold;
-  const cmd = -Math.sign(D.yawRate) * th - D.roll * 0.8 + flail * 0.8 * Math.sin(D.time * 11) - fallRoll * 1.5;
+  const cmd = -Math.sign(D.yawRate) * th - D.roll * 0.8 + flail * 0.8 * Math.sin(D.time * 11) * (D.fall && D.fall.down ? 0.3 : 1) - (D.fall && D.fall.down ? D.fall.side * 0.35 * D.fall.lie : fallRoll * 1.5); // lying, the tail drops to the ground
   const w = 2 * Math.PI * 3;
   D.tailYawV += (w * w * (cmd - D.tailYaw) - 2 * w * D.tailYawV) * dt;
   D.tailYaw += D.tailYawV * dt;
@@ -2304,6 +2394,13 @@ function simStep(dt) {
   for (const L of dino.legs) {
     const H = L.thigh.getWorldPosition(V());
     const F = L.footPos.clone();
+    if (D.fall && D.fall.down && D.fall.lie > 0.01) {
+      // On its side the feet leave the ground: targets sit below the hip in the body's own frame, paddling and kicking.
+      const FD = D.fall, li = dino.legs.indexOf(L), w = Math.sin(D.time * 9 / BODY.ts + li * 2.6), up = FD.side * L.sx > 0 ? 1 : 0; // the upper leg kicks wider
+      const kick = FD.kick * (0.6 + 0.4 * up) * BODY.agile;
+      const tgt = B.pelvis.localToWorld(V(L.sx * (0.2 + 0.12 * up * FD.kick), -0.82 + 0.16 * kick * Math.cos(D.time * 9 / BODY.ts + li * 2.6), 0.18 + 0.32 * kick * w));
+      F.lerp(tgt, smooth(0, 0.6, FD.lie));
+    }
     const swing = (L.liftS || 0) > 0;
     // Heel lifts through stance toward toe-off; more if the hip would otherwise be out of reach (E3).
     let lift = swing ? -Math.sin(Math.PI * L.liftS) * 0.45 : 0.45 * smooth(0.35, 1, L.stanceU || 0) * smooth(0.8, 4, D.speed);
@@ -2410,11 +2507,6 @@ const course = { state: 'ready', t0: 0, time: 0, best: null, el: null };
 if (MAP === 'course') {
   document.getElementById('coursePanel').hidden = false;
   try { const b = parseFloat(localStorage.getItem('dlist.course.best')); if (b > 0) course.best = b; } catch (e) { /* storage blocked: no best time */ }
-  document.querySelector('.eyebrow').textContent = 'Dlist tech demo · obstacle course';
-  document.querySelector('.card h1').textContent = 'Obstacle course';
-  const ledes = document.querySelectorAll('.lede');
-  ledes[0].textContent = 'Run the marked track from gate to gate: rocks and pebbles, fallen logs, a stream, a mud pit, a boulder slalom and a log bridge over a pond. The clock starts at the first gate.';
-  ledes[1].textContent = 'Thin logs are stepped over; the big one has to be jumped with A. Take hazards too fast and it slips or stumbles; tired, it can trip. Switch maps from the Start menu.';
 }
 const fmtT = (t) => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`;
 function courseStep() {
@@ -2472,7 +2564,7 @@ function preySpot(minFromPlayer) {
   const r = rng(Math.floor(D.time * 1000) + 7);
   for (let i = 0; i < 200; i++) {
     const a = r() * Math.PI * 2, d = 3 + r() * 12, x = HUNT.x + Math.cos(a) * d, z = HUNT.z + Math.sin(a) * d;
-    if (Math.hypot(x, z) > WORLD_R - 6 || surfaceAt(x, z).kind !== 'ground' || Math.hypot(x - D.pos.x, z - D.pos.z) < minFromPlayer) continue;
+    if (Math.hypot(x, z) > WORLD_R - 6 || preyBlocked(x, z) || Math.hypot(x - D.pos.x, z - D.pos.z) < minFromPlayer) continue;
     if (obstacles.some((o) => o !== prey.obstacle && o.x != null && Math.hypot(x - o.x, z - o.z) < o.r + 1)) continue;
     return [x, z];
   }
@@ -2484,7 +2576,8 @@ function spawnPrey() {
   prey.g.visible = true; prey.g.rotation.set(0, prey.yaw, 0);
   if (!prey.obstacle) { prey.obstacle = { x, z, r: 0.5 }; obstacles.push(prey.obstacle); }
 }
-const preyBlocked = (x, z) => Math.hypot(x, z) > WORLD_R - 4 || surfaceAt(x, z).kind !== 'ground' || obstacles.some((o) => o !== prey.obstacle && o.x != null && Math.hypot(x - o.x, z - o.z) < o.r + 0.7);
+// It keeps 3 m off the water too, so a kill never lands where it can only be reached by wading in too deep.
+const preyBlocked = (x, z) => Math.hypot(x, z) > WORLD_R - 4 || surfaceAt(x, z).kind !== 'ground' || WATERS.some((w) => Math.hypot(x - w.x, z - w.z) < w.r + 3) || obstacles.some((o) => o !== prey.obstacle && o.x != null && Math.hypot(x - o.x, z - o.z) < o.r + 0.7);
 function updatePrey(dt) {
   if (!prey || !prey.spawned) return;
   const dx = prey.x - D.pos.x, dz = prey.z - D.pos.z, dist = Math.hypot(dx, dz);
@@ -2566,7 +2659,7 @@ const TSTEPS = [
   { name: 'Drink', say: 'You’re thirsty. Walk down to the pond and hold {drink} at the water’s edge.', sub: () => `Thirst ${Math.round(tut.thirst * 100)}%`, at: () => pondEdge, pass: () => tut.thirst >= 0.999 },
   { name: 'Hunt', say: 'Hungry now. A young Exaeretodon is grazing past the pond. Hold {sprint} to run it down, then press {bite} when your snout is on it.', sub: () => prey.state === 'flee' ? 'It’s running. Keep sprinting; it tires before you do.' : 'Sneak up slowly or charge it.', at: () => (prey.alive && Math.hypot(prey.x - D.pos.x, prey.z - D.pos.z) > 8 ? [prey.x, prey.z] : null), enter: () => spawnPrey(), pass: () => prey.spawned && !prey.alive },
   { name: 'Eat', say: 'Got it. Stand over the kill and hold {drink} to eat.', sub: () => `Hunger ${Math.round(tut.hunger * 100)}%`, at: () => [prey.x, prey.z], pass: () => tut.hunger >= 0.999 },
-  { name: 'Rest', say: () => (tut.restOk || D.stamina < 0.9 ? 'The chase wore you out. Hold {rest} to lie down, and stay down until your stamina is full.' : 'Resting restores stamina. Sprint with {sprint} until it drops, then hold {rest} to lie down.'), sub: () => `Stamina ${Math.round(D.stamina * 100)}%`, pass: () => tut.restOk && D.resting && D.stamina >= 0.995 },
+  { name: 'Rest', say: () => (tut.restOk || tut.tired ? 'The chase wore you out. Hold {rest} to lie down, and stay down until your stamina is full.' : 'Resting restores stamina. Sprint with {sprint} until it drops, then hold {rest} to lie down.'), sub: () => `Stamina ${Math.round(D.stamina * 100)}%`, pass: () => (tut.restOk || tut.tired) && D.resting && D.stamina >= 0.995 },
   { name: 'Done', say: 'That’s your first day. You can walk, roar, drink, hunt and rest.', sub: () => `Open the menu with {menu} to restart, or pick Map to head out to the valley.` },
 ];
 const TOKENS = { move: 'Move', camera: 'Camera', sprint: 'Sprint', jump: 'Jump', drink: 'Drink / sniff', bite: 'Bite', roar: 'Roar', rest: 'Rest', menu: 'Menu' };
@@ -2586,6 +2679,7 @@ function tutStep(dt) {
 }
 function enterStep(i) {
   tut.step = Math.min(i, TSTEPS.length - 1); tut.passT = -1; tut.roars = D.roars || 0; tut.restOk = false;
+  tut.tired = D.stamina < 0.98; // decided once on entry, so the instruction can't flip while stamina recovers standing still
   const s = TSTEPS[tut.step]; if (s.enter) s.enter();
 }
 function updateTut() {
@@ -2614,11 +2708,6 @@ if (TUT) {
   for (const id of ['thirstRow', 'hungerRow']) document.getElementById(id).hidden = false;
   for (const id of ['wetRow', 'mudRow']) document.getElementById(id).hidden = true;
   document.querySelector('.meta').textContent = 'Hatchling · minutes old · Ischigualasto, about 231 million years ago';
-  document.querySelector('.eyebrow').textContent = 'Dlist tech demo · tutorial';
-  document.querySelector('.card h1').textContent = 'First day';
-  const ledes = document.querySelectorAll('.lede');
-  ledes[0].textContent = 'You start as a Herrerasaurus egg in a nest of ferns and twigs. Tear your way out, then learn the basics one at a time: walking, roaring, drinking, hunting and resting.';
-  ledes[1].textContent = 'Instructions appear at the top of the screen, and a column of light shows where to go. Everything you learn here works the same way out in the valley.';
   document.querySelector('canvas').setAttribute('aria-label', '3D view: a Herrerasaurus egg in a nest, in a forest of giant ferns');
 }
 
