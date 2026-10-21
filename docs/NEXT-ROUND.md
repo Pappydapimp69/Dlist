@@ -336,3 +336,10 @@ Nothing from this list is left open.
   Test runs: a standing jump and running jumps from 4.0–4.4 m out landed on the 0.9 m block, and from 4.8 m
   out fell short. Ledge to tall block worked, and walking off the tall block dropped it with a hard landing.
   The obstacle course still finishes (38.7 s), and trips are still sprint-only.
+- **Touch controls for phones and tablets:** a tap on a touch screen switches to touch mode (a controller or
+  keyboard switches back). The left side is a floating thumbstick that appears under the thumb; pushing past
+  its ring sprints, and the ring glows. Dragging on the right side turns the camera (about 0.3° per pixel).
+  Xbox-coloured A (jump), B (hold to drink or sniff), X (bite) and Y (roar) buttons sit bottom right, with
+  camera-behind and menu buttons above them. The splash says "Tap a map to enter", the menu is tapped, and
+  the HUD gets compact in touch mode. Tested with emulated touch on an 844 × 390 landscape phone: walking,
+  sprinting, a two-finger stick plus camera drag, a jump and the menu all worked.
