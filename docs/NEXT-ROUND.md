@@ -70,3 +70,17 @@ Changes queued from playtest feedback. Nothing here is built yet.
      of the body, mainly the back, neck and upper tail, while keeping scales on the
      feet, snout and belly. Colors remain invented. Fuzz must interact with the
      wet and mud system: it should clump and darken when wet, and mat with mud.
+
+6. **Jumping, with a controller layout change: A = jump, B = drink / sniff (hold).**
+   - Modest jumps only. Herrerasaurus had long, strong legs, but at a few hundred kg,
+     jump ability relative to size falls off.
+   - Starting numbers for an adult: a standing hop of about 0.4 m clearance, and a
+     running leap of up to about 1 m clearance covering 3–4 m.
+   - Scale by size and weight: lighter species and younger growth stages jump
+     relatively higher (Eodromaeus springy, hatchlings bouncy).
+   - Costs stamina. Crouch wind-up, then airborne pose (legs tucked, tail as
+     counterbalance), then a landing absorb.
+   - Landing ties into the other systems: a bad landing on a rock runs the
+     stumble check (item 4), landing in mud splashes, landing in water soaks.
+   - Update the on-screen controls, the intro text and the menu hint for the
+     new layout. The menu's "A to select" stays A.
