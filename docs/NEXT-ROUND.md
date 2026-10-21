@@ -10,3 +10,12 @@ Changes queued from playtest feedback. Nothing here is built yet.
      tip). Reverse that falloff.
    - Add a short lag on sharp turns, so the tail swings out briefly before it
      follows the curve of the body.
+
+2. **Walk-to-sprint posture change, made clearly visible.**
+   - At a sprint, level the trunk and lean it forward. Straighten and extend the
+     neck, lower the head, and hold the tail straight out, so head, back and tail
+     line up roughly horizontally and balance over the hips.
+   - Bend the legs a bit more with longer strides at speed.
+   - At a walk, keep a relaxed S-curved neck, a higher head and a slight tail droop.
+   - The demo only hints at this now (a small pelvis pitch and tail lift). Make it
+     much stronger. Tune the numbers from the Brain movement training results.
