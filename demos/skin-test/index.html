@@ -173,6 +173,7 @@
 <section class="readout" aria-live="off">
   <div class="row" id="thirstRow" hidden><span class="lab">Thirst</span><span class="bar"><i id="thirstBar"></i></span><span class="val" id="thirstVal"></span></div>
   <div class="row" id="hungerRow" hidden><span class="lab">Hunger</span><span class="bar mud"><i id="hungerBar"></i></span><span class="val" id="hungerVal"></span></div>
+  <div class="row" id="growRow" hidden><span class="lab">Growth</span><span class="bar stam"><i id="growBar"></i></span><span class="val" id="growVal"></span></div>
   <div class="row" id="wetRow"><span class="lab">Water</span><span class="bar"><i id="wetBar"></i></span><span class="val" id="wetVal">Dry</span></div>
   <div class="row" id="mudRow"><span class="lab">Mud</span><span class="bar mud"><i id="mudBar"></i></span><span class="val" id="mudVal">None</span></div>
   <div class="row"><span class="lab">Stamina</span><span class="bar stam"><i id="stamBar"></i></span><span class="val" id="stamVal">Fresh</span></div>
@@ -281,6 +282,8 @@ const TRAIL = [[0, 34], [6, 16], [-2, -4], [-20, -22]]; // nest, first marker, p
 // Stage 2 (docs/TUTORIAL.md §8): a fallen log to jump, then an authored scent trail upwind to a sleeping prey in a thicket.
 const LOG2 = { x: 8, z: -30, len: 16, rad: 0.45 };
 const BED = [-8, -42];
+// Where the Saurosuchus is heard from: east, past the hills, beyond the map edge. Stage 4 brings it in from here (TD20).
+const PRED_FROM = { x: 90, z: -15 };
 const SCENT_PATH = [[8, -32.5], [5, -35], [3, -38.5], [-0.5, -39.5], [-3.5, -42], [-6.5, -42.5]];
 function pathD(path, x, z) {
   let best = Infinity;
@@ -644,6 +647,16 @@ function addWind(mat, strength, key) {
   };
   mat.customProgramCacheKey = () => 'wind-' + key;
 }
+// Tutorial growth shrinks the plants rather than growing the rig (TD19): every scatter keeps its list so it can be re-posed at a new scale.
+const SHRINKERS = [];
+function setWorldScale(f) {
+  const m = M4(), q = new THREE.Quaternion(), sc = V();
+  for (const { im, list } of SHRINKERS) {
+    list.forEach((it, i) => { q.setFromEuler(new THREE.Euler(it.tx || 0, it.ry || 0, it.tz || 0)); sc.set(it.s * f, (it.sy || it.s) * f, it.s * f); m.compose(V(it.x, it.y, it.z), q, sc); im.setMatrixAt(i, m); });
+    im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere();
+  }
+  for (const o of obstacles) if (o.grow != null) o.r = o.grow * f + 0.1;
+}
 function scatter(geo, mat, list, { shadow = true } = {}) {
   const im = new THREE.InstancedMesh(geo, mat, list.length);
   const m = M4(), q = new THREE.Quaternion(), s = V();
@@ -694,7 +707,7 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
       (tr() < 0.55 ? la : lb).push({ x, y: heightAt(x, z) - 0.03, z, s: lerp(0.9, 1.4, tr()) * lerp(2.6, 3.6, tr()), ry: tr() * 6.28 }); n++;
     }
   }
-  scatter(fernA, fernMat, la); scatter(fernB, fernMat, lb);
+  SHRINKERS.push({ im: scatter(fernA, fernMat, la), list: la }, { im: scatter(fernB, fernMat, lb), list: lb });
 
   // Horsetails along the pond shore and the mud pit edge.
   const stemC = new THREE.Color('#56692f'), nodeC = new THREE.Color('#2e3a1b'), coneC = new THREE.Color('#4f4a2c');
@@ -719,7 +732,7 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
     if (Math.hypot(x - SPAWN.x, z - SPAWN.z) < 5) continue;
     hl.push({ x, y: h - 0.05, z, s: lerp(0.75, 1.3, R()) * (TUT ? 2.6 : 1), ry: R() * 6.28 });
   }
-  scatter(horsetailGeo, hMat, hl);
+  SHRINKERS.push({ im: scatter(horsetailGeo, hMat, hl), list: hl });
 
   // Conifers on the outer ring.
   const trunkC = new THREE.Color('#47332a');
@@ -741,9 +754,9 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
     if (cl.some((o) => Math.hypot(o.x - x, o.z - z) < 5 * Math.sqrt(WS))) continue;
     const s = lerp(0.8, 1.35, R()) * (TUT ? 2.4 : 1);
     cl.push({ x, y: heightAt(x, z) - 0.2, z, s, ry: R() * 6.28 });
-    obstacles.push({ x, z, r: 0.42 * s + 0.1 });
+    obstacles.push({ x, z, r: 0.42 * s + 0.1, grow: 0.42 * s });
   }
-  scatter(coniferGeo, conMat, cl);
+  SHRINKERS.push({ im: scatter(coniferGeo, conMat, cl), list: cl });
 
   // Dicroidium: the signature seed fern of the Triassic southern continents.
   const dParts = []; const dr = rng(15);
@@ -769,12 +782,12 @@ function ringPoint(rMin, rMax) { const a = R() * Math.PI * 2, r = Math.sqrt(lerp
     if (dl.some((o) => Math.hypot(o.x - x, o.z - z) < 4 * Math.sqrt(WS))) continue;
     const s = lerp(0.85, 1.3, R()) * (TUT ? 2.8 : 1);
     dl.push({ x, y: heightAt(x, z) - 0.1, z, s, ry: R() * 6.28 });
-    obstacles.push({ x, z, r: 0.2 * s + 0.1 });
+    obstacles.push({ x, z, r: 0.2 * s + 0.1, grow: 0.2 * s });
   }
-  scatter(trunkGeo, conMat, dl);
+  SHRINKERS.push({ im: scatter(trunkGeo, conMat, dl), list: dl });
   const crownMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, side: THREE.DoubleSide, envMapIntensity: 0.5 });
   addWind(crownMat, 0.012, 'crown');
-  scatter(crown, crownMat, dl);
+  SHRINKERS.push({ im: scatter(crown, crownMat, dl), list: dl });
 
   // Rocks: red sandstone and grey mudstone.
   const rockGeo = (() => { const g = new THREE.IcosahedronGeometry(1, 1); const p = g.attributes.position;
@@ -1583,12 +1596,13 @@ const sfx = {
   step(intensity, kind) {
     if (kind === 'water') { sNoise({ type: 'bandpass', freq: 1100, to: 450, q: 1.1, dur: 0.3, gain: 0.28 * intensity }); sNoise({ type: 'highpass', freq: 2600, dur: 0.12, gain: 0.07 * intensity }); }
     else if (kind === 'mud') { sNoise({ type: 'lowpass', freq: 700, to: 180, dur: 0.24, gain: 0.32 * intensity }); sTone({ f0: 280, f1: 90, dur: 0.12, gain: 0.08 * intensity, type: 'triangle' }); }
-    else sNoise({ type: 'lowpass', freq: TUT ? 1100 : 260, dur: TUT ? 0.06 : 0.1, gain: (TUT ? 0.12 : 0.22) * intensity });
+    else { const b = TUT ? 1 - tut.size : 0; sNoise({ type: 'lowpass', freq: lerp(260, 1100, b), dur: lerp(0.1, 0.06, b), gain: lerp(0.22, 0.12, b) * intensity }); }
     if (!TUT) sTone({ f0: 72, f1: 36, dur: 0.17, gain: 0.32 * intensity }); // a hatchling is too light to thump
+    else if (tut.size > 0.5) sTone({ f0: 110, f1: 55, dur: 0.12, gain: 0.14 * intensity }); // a juvenile starts to
   },
   // Hatchling call. Formants from a ~8 cm vocal tract, F_n = (2n-1)c/4L, and f0 capped near 0.3 F1 (Brain: dlist E8).
   chirp(len = 1) {
-    if (!audioLive()) return; const ctx = audio.ctx; const t = ctx.currentTime; const L = 0.08, F1 = 343 / (4 * L), f0 = 0.3 * F1;
+    if (!audioLive()) return; const ctx = audio.ctx; const t = ctx.currentTime; const L = lerp(0.08, 0.14, TUT ? tut.size : 0), F1 = 343 / (4 * L), f0 = 0.3 * F1; // the tract lengthens as it grows
     const notes = len > 1 ? [[0, 0.22], [0.3, 0.34]] : [[0, 0.18]];
     for (const [d, dur] of notes) {
       const t0 = t + d, out = ctx.createGain();
@@ -1603,6 +1617,23 @@ const sfx = {
     }
   },
   squeak(k = 1) { sTone({ f0: 1500 * k, f1: 900 * k, dur: 0.12, gain: 0.12, type: 'triangle' }); sTone({ f0: 1700 * k, f1: 1100 * k, dur: 0.1, gain: 0.08, type: 'triangle', delay: 0.14 }); },
+  // Distant Saurosuchus (TD20, TD21). No call is known: a crocodilian-style closed-mouth bellow is the bracket guess.
+  // f0 sits on the throat resonance (~70 Hz, Brain dlist E16) with a slow swell; 150-400 Hz growl texture so phone and laptop
+  // speakers carry it; a gentle half-order-style roll-off for the hills between (dlist E21); equal-power pan (dlist E26).
+  bellow(pan = 0, level = 1) {
+    if (!audioLive()) return; const ctx = audio.ctx, t = ctx.currentTime, dur = 2.8;
+    const out = ctx.createGain(); out.gain.setValueAtTime(0.0001, t); out.gain.exponentialRampToValueAtTime(0.5 * level, t + 0.6); out.gain.setValueAtTime(0.5 * level, t + 1.9); out.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    const p = ctx.createStereoPanner(); p.pan.value = clamp(pan, -1, 1);
+    const hills = [[300, -6], [1200, -6]].map(([f, g]) => { const b = ctx.createBiquadFilter(); b.type = 'highshelf'; b.frequency.value = f; b.gain.value = g; return b; });
+    const swell = ctx.createGain(); swell.gain.value = 0.7; const am = ctx.createOscillator(); am.frequency.value = 9; const amg = ctx.createGain(); amg.gain.value = 0.3; am.connect(amg).connect(swell.gain);
+    const f0 = ctx.createOscillator(); f0.type = 'sine'; f0.frequency.setValueAtTime(64, t); f0.frequency.linearRampToValueAtTime(72, t + 1.2); f0.frequency.linearRampToValueAtTime(60, t + dur);
+    const h = ctx.createOscillator(); h.type = 'sawtooth'; h.frequency.setValueAtTime(128, t); h.frequency.linearRampToValueAtTime(144, t + 1.2); h.frequency.linearRampToValueAtTime(120, t + dur);
+    const hb = ctx.createBiquadFilter(); hb.type = 'bandpass'; hb.frequency.value = 240; hb.Q.value = 1.1; const hg = ctx.createGain(); hg.gain.value = 0.35;
+    const n = ctx.createBufferSource(); n.buffer = audio.noise; const nb = ctx.createBiquadFilter(); nb.type = 'bandpass'; nb.frequency.value = 260; nb.Q.value = 1.4; const ng = ctx.createGain(); ng.gain.value = 0.5;
+    f0.connect(swell); h.connect(hb).connect(hg).connect(swell); n.connect(nb).connect(ng).connect(swell);
+    let node = swell; for (const b of hills) node = node.connect(b); node.connect(out).connect(p).connect(audio.master);
+    for (const o of [f0, h, n, am]) { o.start(t); o.stop(t + dur + 0.1); }
+  },
   tear() { sNoise({ type: 'bandpass', freq: 1500, to: 600, q: 1.2, dur: 0.18, gain: 0.3 }); sNoise({ type: 'highpass', freq: 3000, dur: 0.06, gain: 0.08, delay: 0.05 }); },
   snap() { sNoise({ type: 'highpass', freq: 1700, dur: 0.05, gain: 0.45 }); sTone({ f0: 190, f1: 60, dur: 0.09, gain: 0.3 }); },
   lap() { sNoise({ type: 'bandpass', freq: 1300, q: 2, dur: 0.07, gain: 0.1 }); },
@@ -2457,6 +2488,7 @@ function simStep(dt) {
   const snout = dino.B.head.localToWorld(tmp.v.set(0, -0.09, 0.55));
   let hdT = 0, huT = 0, tiltT = 0, hyawT = 0, dipTo = null, scoop = 0, nose = 0, gulp = -1;
   const relW = wrapAngle(D.waterYaw - D.yaw);
+  if (D.act === 'none' && (D.lookT || 0) > 0) { D.lookT -= dt; hyawT = clamp(wrapAngle(D.lookYaw - D.yaw), -1.25, 1.25); huT = 0.45; } // a sound it heard
   if (D.act === 'alert') { hyawT = clamp(relW, -1.25, 1.25); huT = 0.35; }
   else if (D.act === 'turn') { hyawT = clamp(relW * 0.8, -1.2, 1.2); huT = 0.15; }
   else if (D.act === 'shuffle') hdT = 0.35;
@@ -2710,7 +2742,7 @@ function updateCourse() {
 
 /* ============================== tutorial ============================== */
 // A passive observer over the real game: each step watches ordinary events, pinned to its own entity (docs/TUTORIAL.md TD4).
-const tut = { step: 0, thirst: 0.3, hunger: 0.2, gulps: 0, bites: 0, roars: 0, entered: 0, passT: -1, restOk: false, text: '', dev: '' };
+const tut = { size: 0, growth: 0, bellowT: 6, heardT: -1, step: 0, thirst: 0.3, hunger: 0.2, gulps: 0, bites: 0, roars: 0, entered: 0, passT: -1, restOk: false, text: '', dev: '' };
 
 // ---- prey: a young Exaeretodon (plant-eating cynodont). It doesn't exist until the Hunt step starts (TD8). ----
 const prey = (() => {
@@ -2746,10 +2778,10 @@ function preySpot(minFromPlayer) {
   }
   return [HUNT.x, HUNT.z];
 }
-function spawnPrey() {
+function spawnPrey(id = 1) {
   const [x, z] = preySpot(16);
   Object.assign(prey, { alive: true, spawned: true, x, z, yaw: Math.atan2(D.pos.x - x, D.pos.z - z) + Math.PI, speed: 0, state: 'graze', fatigue: 0, calmT: 0, stuckT: 0, lastX: x, lastZ: z });
-  prey.g.visible = true; prey.g.rotation.set(0, prey.yaw, 0);
+  prey.id = id; prey.g.visible = true; prey.g.rotation.set(0, prey.yaw, 0); prey.g.scale.set(1, 1, 1);
   if (!prey.obstacle) { prey.obstacle = { x, z, r: 0.5 }; obstacles.push(prey.obstacle); }
 }
 // It keeps 3 m off the water too, so a kill never lands where it can only be reached by wading in too deep.
@@ -2872,7 +2904,7 @@ const TSTEPS = [
   { name: 'Walk', say: 'Push {move} to walk and turn the camera with {camera}. Step over the nest rim and head for the light.', at: () => TRAIL[1], pass: (s) => Math.hypot(D.pos.x - s.at()[0], D.pos.z - s.at()[1]) < 3 },
   { name: 'Roar', say: 'Press {roar} to roar. From a hatchling it comes out as a squeak, but it tells the others where you are.', pass: () => D.roars > tut.roars },
   { name: 'Drink', say: 'You’re thirsty. Walk down to the pond and hold {drink} at the water’s edge.', sub: () => `Thirst ${Math.round(tut.thirst * 100)}%`, at: () => pondEdge, pass: () => tut.thirst >= 0.999 },
-  { name: 'Hunt', say: 'Hungry now. A young Exaeretodon is grazing past the pond. Hold {sprint} to run it down, then press {bite} when your snout is on it.', sub: () => prey.state === 'flee' ? 'It’s running. Keep sprinting; it tires before you do.' : 'Sneak up slowly or charge it.', at: () => (prey.alive && Math.hypot(prey.x - D.pos.x, prey.z - D.pos.z) > 8 ? [prey.x, prey.z] : null), enter: () => spawnPrey(), pass: () => prey.spawned && !prey.alive },
+  { name: 'Hunt', say: 'Hungry now. A young Exaeretodon is grazing past the pond. Hold {sprint} to run it down, then press {bite} when your snout is on it.', sub: () => prey.state === 'flee' ? 'It’s running. Keep sprinting; it tires before you do.' : 'Sneak up slowly or charge it.', at: () => (prey.alive && Math.hypot(prey.x - D.pos.x, prey.z - D.pos.z) > 8 ? [prey.x, prey.z] : null), enter: () => spawnPrey(1), pass: () => prey.spawned && !prey.alive },
   { name: 'Eat', say: 'Got it. Stand over the kill and hold {drink} to eat.', sub: () => `Hunger ${Math.round(tut.hunger * 100)}%`, at: () => [prey.x, prey.z], pass: () => tut.hunger >= 0.999 },
   { name: 'Rest', say: () => (tut.restOk || tut.tired ? 'The chase wore you out. Hold {rest} to lie down, and stay down until your stamina is full.' : 'Resting restores stamina. Sprint with {sprint} until it drops, then hold {rest} to lie down.'), sub: () => `Stamina ${Math.round(D.stamina * 100)}%`, pass: () => (tut.restOk || tut.tired) && D.resting && D.stamina >= 0.995 },
   { name: 'Jump', say: 'A fallen log blocks the way. Run at it and press {jump} to leap over.', at: () => [LOG2.x, LOG2.z + 2.5], enter: () => { tut.logSide = Math.sign(D.pos.z - LOG2.z) || 1; },
@@ -2884,7 +2916,11 @@ const TSTEPS = [
     enter: () => { scent.on = true; },
     at: () => (Math.hypot(D.pos.x - SCENT_PATH[0][0], D.pos.z - SCENT_PATH[0][1]) > 6 && pathD(SCENT_PATH, D.pos.x, D.pos.z) > 4 ? SCENT_PATH[0] : null), pass: () => Math.hypot(D.pos.x - BED[0], D.pos.z - BED[1]) < 10 },
   { name: 'Sneak', say: 'It’s asleep. Walk up slowly, because sprinting, jumping or roaring will wake it. Press {bite} when your snout is on it.', sub: () => (prey.woke ? 'It woke up! Run it down.' : 'Don’t linger right over it, either.'), pass: () => prey.id === 2 && !prey.alive },
-  { name: 'Done', say: 'That’s your first day. You can walk, roar, drink, hunt, rest, jump, sniff and track.', sub: () => `Open the menu with {menu} to restart, or pick Map to head out to the valley.` },
+  { name: 'Grow', say: 'You grow while you’re fed and watered. Keep Hunger and Thirst above half: drink at the pond, eat your kill.',
+    sub: () => (tut.heardT >= 0 && D.time - tut.heardT < 7 ? 'That deep boom came from the east, past the hills. Something big lives out there.' : growStall() || `Growing, ${Math.round(tut.growth * 100)}%`),
+    enter: () => { document.getElementById('growRow').hidden = false; }, pass: () => tut.growth >= 1 },
+  { name: 'Juvenile', say: 'You’re a juvenile now. The world looks a little smaller.', enter: () => { tut.shrinkT = 0; tut.growth = 1; }, pass: () => tut.shrinkT > 3.2 },
+  { name: 'Done', say: 'That’s your first day. You can walk, roar, drink, hunt, rest, jump, sniff, track and grow. Mind the thing that booms in the east.', sub: () => `Open the menu with {menu} to restart, or pick Map to head out to the valley.` },
 ];
 const TOKENS = { move: 'Move', camera: 'Camera', sprint: 'Sprint', jump: 'Jump', drink: 'Drink / sniff', bite: 'Bite', roar: 'Roar', rest: 'Rest', menu: 'Menu' };
 function keyName(tok) { const row = KEYS[input.device].find(([a]) => a === TOKENS[tok]); return row ? row[1] : tok; }
@@ -2899,9 +2935,35 @@ function tutStep(dt) {
   const s = TSTEPS[tut.step];
   if (s.name === 'Rest' && D.resting && D.restFrom < 0.97) tut.restOk = true; // any visible dip counts: the text only says "until it drops"
   if (s.name === 'Smell' && D.act === 'air') tut.airT += dt;
+  if (s.name === 'Grow' && tut.passT < 0) {
+    // Growing burns food and water (TD17); it only advances while both are above half.
+    tut.thirst = Math.max(0, tut.thirst - 0.008 * dt); tut.hunger = Math.max(0, tut.hunger - 0.006 * dt); // about one drink and one meal
+    if (tut.thirst > 0.5 && tut.hunger > 0.5) tut.growth = Math.min(1, tut.growth + dt / 90);
+    // Out of meat: a new grazer on the hunting ground.
+    if (!prey.spawned || (!prey.alive && prey.meat <= 0)) spawnPrey(3);
+  }
+  if (s.name === 'Juvenile') {
+    tut.shrinkT += dt; const k = smooth(0, 3, tut.shrinkT);
+    tut.size = k; setWorldScale(lerp(1, 0.72, k)); dino.B.head.scale.setScalar(lerp(1.3, 1.12, k));
+  }
+  // The predator is heard before it's met (TD20): bellows from PRED_FROM through Grow and after.
+  if (tut.step >= TSTEPS.findIndex((t) => t.name === 'Grow')) {
+    tut.bellowT -= dt;
+    if (tut.bellowT <= 0) {
+      tut.bellowT = 30 + Math.random() * 10; tut.heardT = D.time;
+      const ax = PRED_FROM.x - camera.position.x, az = PRED_FROM.z - camera.position.z, L = Math.hypot(ax, az) || 1;
+      sfx.bellow((ax * Math.cos(cam.yaw) - az * Math.sin(cam.yaw)) / L, 0.8); rumble(1600, 0.35, 0.05);
+      D.lookYaw = Math.atan2(PRED_FROM.x - D.pos.x, PRED_FROM.z - D.pos.z); D.lookT = 2.6;
+    }
+  }
   updateScent(dt);
   if (tut.passT >= 0) { tut.passT += dt; if (tut.passT > 1.2) enterStep(tut.step + 1); return; }
   if (s.pass && s.pass(s)) { tut.passT = 0; sfx.chirp(1); }
+}
+// Name the cause actually holding growth back (TD18).
+function growStall() {
+  const th = tut.thirst <= 0.5, hu = tut.hunger <= 0.5;
+  return th && hu ? 'Growth stalled: you’re hungry and thirsty.' : th ? 'Growth stalled: you’re thirsty. Go and drink.' : hu ? 'Growth stalled: you’re hungry. Eat.' : '';
 }
 function enterStep(i) {
   tut.step = Math.min(i, TSTEPS.length - 1); tut.passT = -1; tut.roars = D.roars || 0; tut.restOk = false;
@@ -2926,6 +2988,8 @@ function updateTut() {
   }
   document.getElementById('thirstBar').style.width = (tut.thirst * 100).toFixed(0) + '%';
   document.getElementById('thirstVal').textContent = tut.thirst >= 0.999 ? 'Quenched' : tut.thirst < 0.5 ? `Thirsty, ${Math.round(tut.thirst * 100)}%` : `${Math.round(tut.thirst * 100)}%`;
+  document.getElementById('growBar').style.width = (tut.growth * 100).toFixed(0) + '%';
+  document.getElementById('growVal').textContent = tut.size >= 1 ? 'Juvenile' : tut.growth >= 1 ? 'Grown' : growStall() ? `Stalled, ${Math.round(tut.growth * 100)}%` : `${Math.round(tut.growth * 100)}%`;
   document.getElementById('hungerBar').style.width = (tut.hunger * 100).toFixed(0) + '%';
   document.getElementById('hungerVal').textContent = tut.hunger >= 0.999 ? 'Full' : tut.hunger < 0.5 ? `Hungry, ${Math.round(tut.hunger * 100)}%` : `${Math.round(tut.hunger * 100)}%`;
 }
@@ -2961,7 +3025,7 @@ function frame(now) {
 }
 // Test and debugging hook: lets an automated check drive the demo without a real controller.
 window.__demo = {
-  D, cam, input, egg, tut, prey, TSTEPS, enterStep, scentInfo: () => ({ on: scent.on, glow: scent.mat.opacity, marks: scent.marks.length }), heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, WATERS, MUDS, MAP, COURSE, COURSE_LEN, pathInfo, course, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
+  D, cam, input, egg, tut, prey, TSTEPS, enterStep, SHRINKERS, scentInfo: () => ({ on: scent.on, glow: scent.mat.opacity, marks: scent.marks.length }), heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, WATERS, MUDS, MAP, COURSE, COURSE_LEN, pathInfo, course, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
   start: () => startDemo('pad'),
   step(n = 60) { for (let i = 0; i < n; i++) { pollInput(STEP); simStep(STEP); flakes.update(STEP); drips.update(STEP); splash.update(STEP); splat.update(STEP); dust.update(STEP); shells.update(STEP); updateRipples(STEP); updateCamera(STEP); } updatePrints(); },
   teleport(x, z, yaw = D.yaw) { D.pos.set(x, 0, z); D.yaw = yaw; clearMotion(); plantFeetAtNeutral(); cam.yaw = yaw + Math.PI; },
