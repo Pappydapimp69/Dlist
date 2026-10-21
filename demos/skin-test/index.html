@@ -1306,6 +1306,49 @@ const splat = new Particles(new THREE.SphereGeometry(0.02, 6, 4), new THREE.Mesh
 const dust = new Particles(new THREE.SphereGeometry(0.03, 6, 4), new THREE.MeshStandardMaterial({ color: new THREE.Color('#8f7457'), roughness: 1, transparent: true, opacity: 0.55, depthWrite: false }), 120,
   { drag: 3.2, grav: 0.12, onLand: () => false });
 
+/* ============================== tutorial egg ============================== */
+// A leathery, soft-shelled egg (early dinosaur eggs were likely soft: Norell et al. 2020). The hatchling tears out of it.
+const EGG_PRESSES = 4;
+const egg = (() => {
+  if (!TUT) return null;
+  const g = new THREE.SphereGeometry(1, 40, 24), p = g.attributes.position, col = [];
+  for (let i = 0; i < p.count; i++) { const k = 0.82 + 0.18 * vnoise(p.getX(i) * 6 + 2, p.getZ(i) * 6 + p.getY(i) * 4, 41) - 0.12 * (hashI(i, 7, 3) > 0.93 ? 1 : 0); col.push(0.93 * k, 0.8 * k, 0.6 * k); }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, envMapIntensity: 0.3 });
+  const whole = new THREE.Mesh(g, mat); whole.castShadow = whole.receiveShadow = true;
+  const cupGeo = new THREE.SphereGeometry(1, 40, 12, 0, Math.PI * 2, Math.PI * 0.6, Math.PI * 0.4); cupGeo.setAttribute('color', new THREE.Float32BufferAttribute(col.slice(0, cupGeo.attributes.position.count * 3), 3));
+  const cup = new THREE.Mesh(cupGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide })); cup.castShadow = cup.receiveShadow = true; cup.visible = false;
+  const S = V(2.05, 1.7, 3.15), y = heightAt(NEST.x, NEST.z) + S.y * 0.86;
+  for (const m of [whole, cup]) { m.scale.copy(S); m.position.set(NEST.x, y, NEST.z); m.rotation.y = SPAWN.yaw; scene.add(m); }
+  // The torn cup is left behind it, tipped over on the nest floor.
+  cup.scale.multiplyScalar(0.6); cup.position.x -= Math.sin(SPAWN.yaw) * 5; cup.position.z -= Math.cos(SPAWN.yaw) * 5; cup.position.y = heightAt(cup.position.x, cup.position.z) + S.y * 0.6 * 0.55; cup.rotation.set(-0.9, SPAWN.yaw, 0.3, 'YXZ');
+  return { whole, cup, left: EGG_PRESSES, wob: 0, y, S };
+})();
+const shellMat = new THREE.MeshStandardMaterial({ color: new THREE.Color('#b9a37f'), roughness: 0.9, side: THREE.DoubleSide });
+const shellGeo = new THREE.ShapeGeometry(flakeShape); shellGeo.scale(0.5, 0.42, 1);
+const shells = new Particles(shellGeo, shellMat, 80, { drag: 1.2, grav: 1, flatOnLand: true, stay: true, shadow: true, onLand: (it, s) => { if (s.kind !== 'ground') return false; it.life = 1e9; return true; } });
+function tearEgg() {
+  if (!egg || egg.left <= 0) return;
+  egg.left--; egg.wob = 1; sfx.tear(); sfx.chirp(1); rumble(120, 0.3, 0.2 + 0.1 * (EGG_PRESSES - egg.left));
+  const n = egg.left ? 3 : 18;
+  for (let k = 0; k < n; k++) {
+    const a = Math.random() * Math.PI * 2, up = Math.random();
+    const p = V(NEST.x + Math.cos(a) * egg.S.x * 0.9, egg.y + (up - 0.2) * egg.S.y, NEST.z + Math.sin(a) * egg.S.z * 0.8);
+    shells.spawn(p, V(Math.cos(a) * (1.5 + Math.random() * 2), 2 + Math.random() * 3, Math.sin(a) * (1.5 + Math.random() * 2)), { life: 1e9, size: 0.6 + Math.random() * 0.9 });
+  }
+  if (!egg.left) { egg.whole.visible = false; egg.cup.visible = true; dino.rig.visible = true; rumble(300, 0.4, 0.5); }
+}
+function updateEgg(dt) {
+  if (!egg || !egg.whole.visible) return;
+  egg.wob = Math.max(0, egg.wob - dt * 1.6);
+  const idle = 0.03 * Math.sin(D.time * 2.1) * Math.max(0, Math.sin(D.time * 0.7)); // it shifts now and then on its own
+  egg.whole.rotation.z = idle + egg.wob * 0.16 * Math.sin(D.time * 26);
+  const sq = 1 + egg.wob * 0.06 * Math.sin(D.time * 30);
+  egg.whole.scale.set(egg.S.x * sq, egg.S.y / sq, egg.S.z * sq);
+}
+const inEgg = () => !!(egg && egg.left > 0);
+if (TUT) { dino.rig.visible = false; dino.B.head.scale.setScalar(1.3); } // big head: the cheapest baby cue (docs/TUTORIAL.md TD2)
+
 const ripples = [];
 const ringGeo = new THREE.RingGeometry(0.88, 1, 48); ringGeo.rotateX(-Math.PI / 2);
 for (let k = 0; k < 40; k++) {
@@ -1397,9 +1440,26 @@ const sfx = {
   step(intensity, kind) {
     if (kind === 'water') { sNoise({ type: 'bandpass', freq: 1100, to: 450, q: 1.1, dur: 0.3, gain: 0.28 * intensity }); sNoise({ type: 'highpass', freq: 2600, dur: 0.12, gain: 0.07 * intensity }); }
     else if (kind === 'mud') { sNoise({ type: 'lowpass', freq: 700, to: 180, dur: 0.24, gain: 0.32 * intensity }); sTone({ f0: 280, f1: 90, dur: 0.12, gain: 0.08 * intensity, type: 'triangle' }); }
-    else sNoise({ type: 'lowpass', freq: 260, dur: 0.1, gain: 0.22 * intensity });
-    sTone({ f0: 72, f1: 36, dur: 0.17, gain: 0.32 * intensity });
+    else sNoise({ type: 'lowpass', freq: TUT ? 1100 : 260, dur: TUT ? 0.06 : 0.1, gain: (TUT ? 0.12 : 0.22) * intensity });
+    if (!TUT) sTone({ f0: 72, f1: 36, dur: 0.17, gain: 0.32 * intensity }); // a hatchling is too light to thump
   },
+  // Hatchling call. Formants from a ~8 cm vocal tract, F_n = (2n-1)c/4L, and f0 capped near 0.3 F1 (Brain: dlist E8).
+  chirp(len = 1) {
+    if (!audioLive()) return; const ctx = audio.ctx; const t = ctx.currentTime; const L = 0.08, F1 = 343 / (4 * L), f0 = 0.3 * F1;
+    const notes = len > 1 ? [[0, 0.22], [0.3, 0.34]] : [[0, 0.18]];
+    for (const [d, dur] of notes) {
+      const t0 = t + d, out = ctx.createGain();
+      out.gain.setValueAtTime(0.0001, t0); out.gain.exponentialRampToValueAtTime(0.32, t0 + 0.03); out.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      const o = ctx.createOscillator(); o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f0 * 0.85, t0); o.frequency.linearRampToValueAtTime(f0 * 1.2, t0 + dur * 0.35); o.frequency.linearRampToValueAtTime(f0 * 0.75, t0 + dur);
+      for (const [f, q, g] of [[F1, 4, 1], [3 * F1, 6, 0.5]]) {
+        const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q;
+        const gg = ctx.createGain(); gg.gain.value = g; o.connect(bp).connect(gg).connect(out);
+      }
+      out.connect(audio.master); o.start(t0); o.stop(t0 + dur + 0.05);
+    }
+  },
+  tear() { sNoise({ type: 'bandpass', freq: 1500, to: 600, q: 1.2, dur: 0.18, gain: 0.3 }); sNoise({ type: 'highpass', freq: 3000, dur: 0.06, gain: 0.08, delay: 0.05 }); },
   snap() { sNoise({ type: 'highpass', freq: 1700, dur: 0.05, gain: 0.45 }); sTone({ f0: 190, f1: 60, dur: 0.09, gain: 0.3 }); },
   lap() { sNoise({ type: 'bandpass', freq: 1300, q: 2, dur: 0.07, gain: 0.1 }); },
   gulp() { sTone({ f0: 150, f1: 70, dur: 0.14, gain: 0.16, type: 'triangle' }); },
@@ -1407,6 +1467,7 @@ const sfx = {
   scuff() { sNoise({ type: 'lowpass', freq: 900, to: 200, dur: 0.22, gain: 0.3 }); },
   thud() { sTone({ f0: 60, f1: 28, dur: 0.35, gain: 0.5 }); sNoise({ type: 'lowpass', freq: 400, dur: 0.25, gain: 0.35 }); },
   roar() {
+    if (TUT) return sfx.chirp(2);
     if (!audioLive()) return; const ctx = audio.ctx; const t = ctx.currentTime; const dur = 1.7;
     const out = ctx.createGain(); out.gain.setValueAtTime(0.0001, t); out.gain.exponentialRampToValueAtTime(0.55, t + 0.18); out.gain.setValueAtTime(0.55, t + 1.15); out.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     const shaper = ctx.createWaveShaper(); const curve = new Float32Array(256); for (let i = 0; i < 256; i++) { const x = i / 128 - 1; curve[i] = Math.tanh(x * 2.6); } shaper.curve = curve;
@@ -1631,7 +1692,7 @@ function solveKnee(H, A, a, b, pole) {
 function onFootfall(L, intensity) {
   const s = surfaceAt(L.footPos.x, L.footPos.z);
   sfx.step(intensity, s.kind);
-  rumble(55, 0.12 + 0.18 * intensity, 0.05 + 0.2 * intensity * (D.speed > 4.5 ? 1 : 0.3));
+  if (!TUT) rumble(55, 0.12 + 0.18 * intensity, 0.05 + 0.2 * intensity * (D.speed > 4.5 ? 1 : 0.3));
   if (s.kind === 'water') {
     spawnRipple(L.footPos.x, L.footPos.z, 0.7 + D.speed * 0.15);
     const n = 6 + Math.round(D.speed * 3);
@@ -1860,17 +1921,19 @@ function simStep(dt) {
   const camFwd = V(-Math.sin(cam.yaw), 0, -Math.cos(cam.yaw));
   const camRight = V(Math.cos(cam.yaw), 0, -Math.sin(cam.yaw));
   const active = started && !paused;
-  const mF = active ? input.moveF : 0, mR = active ? input.moveR : 0;
+  const egged = inEgg();
+  const mF = active && !egged ? input.moveF : 0, mR = active && !egged ? input.moveR : 0;
   const mag = Math.min(1, Math.hypot(mF, mR));
   const downed = !!(D.fall && D.fall.down);
-  if (active && !downed && (input.bite || input.biteKey) && D.biteT < 0 && D.roarT < 0) { D.biteT = 0; rumble(90, 0.4, 0.5); }
-  if (active && !downed && (input.roar || input.roarKey) && D.roarT < 0 && D.biteT < 0) { D.roarT = 0; sfx.roar(); rumble(1300, 0.35, 0.25); }
+  if (active && !downed && !egged && (input.bite || input.biteKey) && D.biteT < 0 && D.roarT < 0) { D.biteT = 0; rumble(90, 0.4, 0.5); }
+  if (active && !downed && !egged && (input.roar || input.roarKey) && D.roarT < 0 && D.biteT < 0) { D.roarT = 0; sfx.roar(); rumble(TUT ? 400 : 1300, 0.35, 0.25); D.roars = (D.roars || 0) + 1; }
   if (input.recenter || input.recenterKey) cam.recenter = true;
   const jumpPress = active && (input.jump || input.jumpKey);
   input.biteKey = input.roarKey = input.recenterKey = input.jumpKey = false;
   input.bite = input.roar = input.recenter = input.jump = false;
-  updateAct(dt, active && input.drink);
-  if (jumpPress && !D.jump && !D.fall && D.act === 'none') startJump();
+  updateAct(dt, active && !egged && input.drink);
+  if (egged) { if (jumpPress) tearEgg(); updateEgg(dt); }
+  else if (jumpPress && !D.jump && !D.fall && D.act === 'none') startJump();
   let air = !!(D.jump && D.jump.ph === 'air');
 
   let target = 0, desiredYaw = D.yaw, steer = false, turnCap = 9;
@@ -2231,12 +2294,13 @@ function simStep(dt) {
 }
 
 /* ============================== camera ============================== */
-const cam = { yaw: SPAWN.yaw + Math.PI, pitch: 0.26, dist: 6.6, target: V(SPAWN.x, 1.4, SPAWN.z), idle: 0, recenter: false, fov: 55, lock: null, jolt: 0 };
+const cam = { yaw: SPAWN.yaw + Math.PI, pitch: TUT ? 0.4 : 0.26, dist: TUT ? 11 : 6.6, target: V(SPAWN.x, 1.4, SPAWN.z), idle: 0, recenter: false, fov: 55, lock: null, jolt: 0 };
 function updateCamera(dt) {
   const active = started && !paused;
   const lx = active ? input.lookX : 0, ly = active ? input.lookY : 0;
   const inv = settings.invertY ? -1 : 1;
   cam.yaw -= lx * 2.5 * dt;
+  if (TUT) cam.dist = damp(cam.dist, inEgg() ? 11 : 6.6, 1.2, dt); // pulled back to frame the egg, closes in once it hatches
   cam.pitch = clamp(cam.pitch + ly * inv * 1.6 * dt, -0.12, 1.05);
   if (Math.abs(lx) + Math.abs(ly) > 0.05) { cam.idle = 0; cam.recenter = false; } else cam.idle += dt;
   const behind = D.yaw + Math.PI;
@@ -2339,7 +2403,7 @@ function frame(now) {
     acc += dt; let n = 0;
     while (acc >= STEP && n < 6) { simStep(STEP); acc -= STEP; n++; }
     if (n === 6) acc = 0;
-    flakes.update(dt); drips.update(dt); splash.update(dt); splat.update(dt); dust.update(dt); updateRipples(dt); updatePrints();
+    flakes.update(dt); drips.update(dt); splash.update(dt); splat.update(dt); dust.update(dt); shells.update(dt); updateRipples(dt); updatePrints();
   }
   updateCamera(dt);
   updateHud(dt);
@@ -2348,9 +2412,9 @@ function frame(now) {
 }
 // Test and debugging hook: lets an automated check drive the demo without a real controller.
 window.__demo = {
-  D, cam, input, heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, WATERS, MUDS, MAP, COURSE, COURSE_LEN, pathInfo, course, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
+  D, cam, input, egg, heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, WATERS, MUDS, MAP, COURSE, COURSE_LEN, pathInfo, course, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
   start: () => startDemo('pad'),
-  step(n = 60) { for (let i = 0; i < n; i++) { pollInput(STEP); simStep(STEP); flakes.update(STEP); drips.update(STEP); splash.update(STEP); splat.update(STEP); dust.update(STEP); updateRipples(STEP); updateCamera(STEP); } updatePrints(); },
+  step(n = 60) { for (let i = 0; i < n; i++) { pollInput(STEP); simStep(STEP); flakes.update(STEP); drips.update(STEP); splash.update(STEP); splat.update(STEP); dust.update(STEP); shells.update(STEP); updateRipples(STEP); updateCamera(STEP); } updatePrints(); },
   teleport(x, z, yaw = D.yaw) { D.pos.set(x, 0, z); D.yaw = yaw; clearMotion(); plantFeetAtNeutral(); cam.yaw = yaw + Math.PI; },
   counts: () => ({ flakes: flakes.items.length, drips: drips.items.length, prints: prints.length }),
 };
