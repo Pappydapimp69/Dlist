@@ -1864,7 +1864,7 @@ function soundChip() {
 const audioLive = () => !!(audio.layer && audio.ctx.state === 'running');
 
 /* ============================== input ============================== */
-const settings = { rumble: true, invertY: false, readout: true };
+const settings = { rumble: true, rumbleWhere: matchMedia('(pointer: coarse)').matches ? 'both' : 'controller', invertY: false, readout: true };
 const input = { moveF: 0, moveR: 0, lookX: 0, lookY: 0, sprint: 0, drink: false, rest: false, jump: false, bite: false, roar: false, recenter: false, device: 'pad' };
 let padPrev = []; let padId = null; let started = false; let paused = false; let menuIdx = 0; let swallow = false;
 let swallowMask = null; // buttons held when the game started or the menu closed: each one is ignored until it is released
@@ -1882,11 +1882,37 @@ function radial(x, y, inner = 0.16, outer = 0.96) {
 }
 // Controller rumble, and on a touch screen the phone's own vibration (Android; iOS browsers have none).
 // A phone motor has one strength, so the pulse length carries it: about 8 ms for a light step, up to 40 ms for a blow.
+// Haptics. Mobile browsers often have no working controller rumble, or report it done without the motor moving,
+// so on a phone with a controller the phone buzzes too by default (it's usually clipped to the pad).
+// Where: 'controller' | 'phone' | 'both'; the menu cycles it and shows what is actually available.
+const haptics = { padOk: null, legacy: false, phone: !!navigator.vibrate };
+function phoneBuzz(dur, k, min) { if (!haptics.phone || k <= min) return; try { navigator.vibrate(Math.round(clamp(dur * 0.35 * k, 6, 60))); } catch (e) { haptics.phone = false; } }
 function rumble(dur, weak, strong) {
   if (!settings.rumble) return;
-  if (input.device === 'touch') { const k = Math.max(weak, strong); if (navigator.vibrate && k > 0.08) navigator.vibrate(Math.round(clamp(dur * 0.35 * k, 6, 40))); return; }
-  const p = activePad(); const a = p && p.vibrationActuator;
-  if (a && a.playEffect) a.playEffect('dual-rumble', { startDelay: 0, duration: dur, weakMagnitude: weak, strongMagnitude: strong }).catch(() => {});
+  const k = Math.max(weak, strong);
+  if (input.device === 'touch') { phoneBuzz(dur, k, 0.08); return; }
+  const where = settings.rumbleWhere, p = activePad();
+  if (where !== 'phone' && p) {
+    const a = p.vibrationActuator, h = p.hapticActuators && p.hapticActuators[0];
+    if (a && a.playEffect && haptics.padOk !== false) {
+      // Use an effect the pad says it has; 'dual-rumble' when it doesn't say.
+      const fx = Array.isArray(a.effects) && a.effects.length && !a.effects.includes('dual-rumble') ? a.effects[0] : 'dual-rumble';
+      try {
+        a.playEffect(fx, { startDelay: 0, duration: dur, weakMagnitude: weak, strongMagnitude: strong, leftTrigger: 0, rightTrigger: 0 })
+          .then((r) => { if (r === 'complete' || r === 'preempted') haptics.padOk = true; else if (r === 'invalid-parameter' || r === 'not-supported') haptics.padOk = false; })
+          .catch(() => { haptics.padOk = false; });
+      } catch (e) { haptics.padOk = false; }
+    } else if (h && h.pulse) { haptics.legacy = true; try { h.pulse(k, dur); } catch (e) { /* none */ } } // older API (Firefox)
+  }
+  // The phone: when chosen, as the 'both' default on a phone, or as the fallback once the pad has refused.
+  // Light footstep taps are skipped on the phone's single motor so it doesn't buzz constantly.
+  if (where === 'phone' || where === 'both' || (p && haptics.padOk === false && !haptics.legacy)) phoneBuzz(dur, k, 0.2);
+}
+function rumbleLabel() {
+  if (!settings.rumble) return 'Off';
+  const pad = haptics.padOk === false && !haptics.legacy ? 'controller has none here' : haptics.padOk ? 'controller works' : 'controller untested';
+  const where = { controller: 'Controller', phone: 'Phone', both: 'Controller + phone' }[settings.rumbleWhere];
+  return `${where} (${settings.rumbleWhere === 'phone' ? (haptics.phone ? 'phone works' : 'phone has none') : pad})`;
 }
 const edges = { a: false, b: false, x: false, y: false, start: false, rs: false, ls: false, up: false, down: false };
 let stickMenuHold = 0;
@@ -2136,7 +2162,10 @@ function closeWheel(fire) { if (fire && wheel.pick != null) input.callStyle = WH
 /* ============================== pause menu ============================== */
 const MENU = [
   { label: 'Resume', state: () => '', act: () => closeMenu() },
-  { label: 'Rumble', state: () => (settings.rumble ? 'On' : 'Off'), act: () => { settings.rumble = !settings.rumble; if (settings.rumble) rumble(120, 0.3, 0.2); } },
+  // Off, then each place it can buzz (phone options only where there's a phone motor); a test buzz on each choice.
+  { label: 'Rumble', state: rumbleLabel, act: () => {
+    const opts = ['off', 'controller', ...(haptics.phone ? ['phone', 'both'] : [])], cur = settings.rumble ? settings.rumbleWhere : 'off', next = opts[(opts.indexOf(cur) + 1) % opts.length];
+    settings.rumble = next !== 'off'; if (settings.rumble) { settings.rumbleWhere = next; rumble(160, 0.5, 0.6); } } },
   { label: 'Invert camera up and down', state: () => (settings.invertY ? 'On' : 'Off'), act: () => { settings.invertY = !settings.invertY; } },
   { label: 'Skin readout', state: () => (settings.readout ? 'Shown' : 'Hidden'), act: () => { settings.readout = !settings.readout; document.querySelector('.readout').hidden = !settings.readout; } },
   { label: 'Sound output', state: () => ({ headphones: 'Headphones', stereo: 'Speakers', unknown: 'Phone or unsure', mono: 'One speaker' }[audio.device]), act: () => { const o = ['headphones', 'stereo', 'unknown', 'mono']; audio.device = o[(o.indexOf(audio.device) + 1) % o.length]; if (audio.engine) audio.engine.setDevice(audio.device); } },
@@ -3564,7 +3593,7 @@ function frame(now) {
 // Test and debugging hook: lets an automated check drive the demo without a real controller.
 window.__demo = {
   SIM, AI, audio, resetSimForReplay, loadEngine, createAudioLayer, updateAudio, audioWorld, camera,
-  D, cam, input, egg, tut, prey, TSTEPS, enterStep, SHRINKERS, scent, scentNear, layCarcassScent, pred, inCover, predHead, scentInfo: () => ({ on: scent.on, glow: scent.mat.opacity, marks: scent.marks.length }), heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, WATERS, MUDS, MAP, COURSE, COURSE_LEN, pathInfo, course, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
+  D, cam, input, settings, egg, tut, prey, TSTEPS, enterStep, SHRINKERS, scent, scentNear, layCarcassScent, pred, inCover, predHead, scentInfo: () => ({ on: scent.on, glow: scent.mat.opacity, marks: scent.marks.length }), heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, WATERS, MUDS, MAP, COURSE, COURSE_LEN, pathInfo, course, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
   start: () => startDemo('pad'),
   step(n = 60) { for (let i = 0; i < n; i++) { pollInput(STEP); simStep(STEP); flakes.update(STEP); drips.update(STEP); splash.update(STEP); splat.update(STEP); blood.update(STEP); dust.update(STEP); shells.update(STEP); updateRipples(STEP); updateCamera(STEP); } updatePrints(); },
   teleport(x, z, yaw = D.yaw) { D.pos.set(x, 0, z); D.yaw = yaw; clearMotion(); plantFeetAtNeutral(); cam.yaw = yaw + Math.PI; },
