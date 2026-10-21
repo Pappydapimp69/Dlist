@@ -225,3 +225,21 @@ Nothing from this list is left open.
      with small scanning turns. Ground sniff happens only on a scent trail. Wet or muddy feet
      leave fading three-toed tracks (wet 30 s, mud 90 s), and the tracks are the trail. No
      tongue flicking. Releasing B cancels at any stage.
+
+## Playtest round 1 fixes (owner feedback)
+- **Stumble before trip:** at 50% stamina or above, a failed rock check only staggers. Below half, the
+  down threshold eases from unreachable at 50% to a score of 1.0 at 25% and lower. Measured on a sprint
+  over step-up rocks: stamina 1.0, 0.6 and 0.4 gave staggers only; 0.2 went down on 5 of 8 approaches.
+- **Subtle rock slowdown:** the per-step cost applies only on or off a rock (never plain terrain), at about
+  4% for a 0.3 m step-up and half that down, capped at 10%. The stagger speed cut is softened to ×0.94–0.8.
+- **Hills:** the old step cost was also firing on every uphill terrain step, which was the real cause of the
+  slowdown. There is now a grade model (work against gravity scales with rise per metre): target speed ×
+  1/(1 + k·grade), with k from 1.2 at a walk to 2.5 at a sprint, floored at 0.6. Gentle downhill helps up to 3%;
+  steep downhill brakes. Measured steady speeds: sprint 5.25 m/s at 10%, 4.76 at 20%, 4.38 at 30%;
+  walk 1.35 / 1.22 / 1.09 m/s at 10 / 20 / 30% (flat 1.53).
+- **Jump:** a readable wind-up of 0.22–0.3 s from the press to take-off, with a deeper crouch, the tail
+  dropping and the head dipping. Legs stay extended through push-off, tuck at the top, and reach forward
+  before touchdown. Descent runs at 1.4× gravity, so peaks are unchanged (hop 0.40 m) but airtime is
+  shorter (hop 0.53 s). The landing is heavier: a 0.3 m absorb over 0.55 s, a neck whip, a tail dip, a
+  dust puff, a stronger rumble, a camera jolt (reduced-motion aware), and 0.25 s of sluggish turning and
+  acceleration after a big landing.

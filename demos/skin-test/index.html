@@ -113,7 +113,7 @@
     <p class="eyebrow">Dlist tech demo · skin test</p>
     <h1>Herrerasaurus</h1>
     <p class="lede">Wade into the pond to get wet. Wet skin and fuzz dry in 8 seconds. Walk through the mud pit to get muddy. The mud dries into a crust after 8 seconds, then flakes off once you've walked for 30 seconds. The pond washes mud off.</p>
-    <p class="lede">Low rocks are footholds; tall ones are walls. Take them too fast and it will stumble or trip. Press A to jump. Hold B near the water to drink, or away from it to sniff the air, or the ground where its own wet or muddy tracks are.</p>
+    <p class="lede">Low rocks are footholds; tall ones are walls. Take them too fast and it stumbles. Once it's tired, below half stamina, it can trip and go down. Press A to jump. Hold B near the water to drink, or away from it to sniff the air, or the ground where its own wet or muddy tracks are.</p>
     <p class="cta" id="introCta">Press any button on your Xbox controller to start</p>
     <button type="button" id="kbStart">No controller? Start with keyboard and mouse</button>
   </div>
@@ -1164,6 +1164,9 @@ const splash = new Particles(dropGeo, dropMat, 500, { drag: 0.6, stretch: true, 
 const splat = new Particles(new THREE.SphereGeometry(0.02, 6, 4), new THREE.MeshStandardMaterial({ color: new THREE.Color('#2e2015'), roughness: 0.35 }), 300,
   { drag: 0.6, squash: true, stay: true, onLand: (it, s) => { if (s.kind !== 'ground') return false; it.life = it.age + 5; return true; } });
 
+const dust = new Particles(new THREE.SphereGeometry(0.03, 6, 4), new THREE.MeshStandardMaterial({ color: new THREE.Color('#8f7457'), roughness: 1, transparent: true, opacity: 0.55, depthWrite: false }), 120,
+  { drag: 3.2, grav: 0.12, onLand: () => false });
+
 const ripples = [];
 const ringGeo = new THREE.RingGeometry(0.88, 1, 48); ringGeo.rotateX(-Math.PI / 2);
 for (let k = 0; k < 40; k++) {
@@ -1515,14 +1518,16 @@ function stability(L, li, g, impact = 0) {
   const stumble = (0.9 * slope + 0.5 * gSlope + 0.8 * edge + 0.9 * grip) * (0.3 + v / 6) * mom + 0.35 * impact * (0.5 + slope + edge);
   const vary = (rng((Math.imul(rid + 1, 2654435761) ^ Math.imul(li + 1, 40503) ^ 0x5bd1e995) >>> 0)() - 0.5) * 0.16;
   const kind = trip >= stumble ? 'trip' : 'stumble', score = Math.max(trip, stumble) + vary;
-  D.check = { rock: rid, leg: li, trip, stumble, glance, slope, edge, grip, vary, score, kind, v, outcome: score >= 1 ? 'down' : score >= 0.5 ? 'stagger' : 'ok' };
+  // Fresh legs only ever stagger. Below half stamina a bad step can put it down, easing in as it tires.
+  const downAt = D.stamina >= 0.5 ? Infinity : lerp(1.0, 3.0, smooth(0.25, 0.5, D.stamina));
+  D.check = { rock: rid, leg: li, trip, stumble, glance, slope, edge, grip, vary, score, kind, v, downAt, outcome: score >= downAt ? 'down' : score >= 0.5 ? 'stagger' : 'ok' };
   D.checks++;
-  if (score >= 0.5 && !D.fall) startFall(kind, score, li);
+  if (score >= 0.5 && !D.fall) startFall(kind, score, li, score >= downAt);
 }
-function startFall(kind, score, li) {
-  const down = score >= 1, k = clamp((score - 0.5) * 2, 0, 1);
+function startFall(kind, score, li, down) {
+  const k = clamp((score - 0.5) * 2, 0, 1);
   D.fall = { kind, down, t: 0, dur: down ? lerp(1, 2, clamp(score - 1, 0, 1)) : lerp(0.45, 0.9, k), side: dino.legs[li].sx, sev: clamp(score, 0.5, 1.5), thud: false };
-  D.speed *= down ? 0.45 : lerp(0.8, 0.55, k);
+  D.speed *= down ? 0.45 : lerp(0.94, 0.8, k);
   D.jump = null; if (D.act !== 'none') endAct();
   sfx.scuff(); rumble(down ? 260 : 130, 0.45, down ? 0.6 : 0.35);
 }
@@ -1532,9 +1537,10 @@ function footDown(L, li) {
   L.planted.set(L.footPos.x, g.y + 0.035, L.footPos.z); L.footPos.copy(L.planted);
   const dh = L.planted.y - L.liftPos.y;
   // Each step up or down costs speed, scaled by step height against leg length.
-  if (Math.abs(dh) > TIER.pebble * 0.5) D.speed *= 1 - Math.min(0.45, (dh > 0 ? 0.75 : 0.4) * Math.abs(dh) / CREATURE.hip);
   onFootfall(L, clamp(0.35 + D.speed / 6, 0.35, 1.2));
   const big = (id) => id >= 0 && ROCKS[id].tier >= 1;
+  // Stepping on or off a rock costs a little speed; plain terrain height is handled by the grade model instead.
+  if ((big(g.rock) || big(L.liftRock)) && Math.abs(dh) > TIER.pebble * 0.5) D.speed *= 1 - Math.min(0.1, (dh > 0 ? 0.16 : 0.08) * Math.abs(dh) / CREATURE.hip);
   if (big(g.rock) || big(L.liftRock) || (big(L.pathRock) && L.rise > TIER.pebble)) stability(L, li, g);
 }
 
@@ -1546,7 +1552,7 @@ function startJump() {
   D.stamina = Math.max(0, D.stamina - cost * k);
   // Standing hop ~0.4 m, running leap up to ~1 m; a full sprint has less stance time to push up, so it flattens out.
   const clear = lerp(0.4, 1.0, run) * lerp(1, 0.75, smooth(4.5, 7.4, v)) * JUMP_K * lerp(0.55, 1, (k - 0.4) / 0.6);
-  D.jump = { ph: 'crouch', t: 0, dur: lerp(0.24, 0.14, run), clear, vy: 0, y: 0, y0: 0, gU: 0, tuck: 0, peak: 0, x0: D.pos.x, z0: D.pos.z };
+  D.jump = { ph: 'crouch', t: 0, dur: lerp(0.3, 0.22, run), clear, vy: 0, y: 0, y0: 0, gU: 0, tuck: 0, peak: 0, x0: D.pos.x, z0: D.pos.z };
 }
 function jumpGround(j) {
   let g = -1e9;
@@ -1563,9 +1569,9 @@ function updateJump(dt) {
     for (const L of dino.legs) { L.swing = false; L.liftPos.copy(L.planted); L.liftRock = -1; L.pathRock = -1; L.rise = 0; }
     return;
   }
-  j.vy -= 9.81 * dt; j.y += j.vy * dt; j.peak = Math.max(j.peak, j.y - j.y0);
+  j.vy -= 9.81 * (j.vy < 0 ? 1.4 : 1) * dt; j.y += j.vy * dt; j.peak = Math.max(j.peak, j.y - j.y0); // heavier on the way down
   const g = jumpGround(j);
-  j.tuck = smooth(0, 0.16, j.t) * smooth(0.03, 0.4, j.y - g);
+  j.tuck = smooth(0.07, 0.24, j.t) * smooth(0.05, 0.45, j.y - g); // legs stay extended through push-off, reach down before touchdown
   if (j.vy < 0 && j.y <= g) jumpLand(j);
 }
 function jumpLand(j) {
@@ -1578,7 +1584,9 @@ function jumpLand(j) {
     return g;
   });
   dino.legs.forEach((L) => onFootfall(L, 1.15));
-  rumble(140, 0.4, 0.4 + 0.4 * imp);
+  const s0 = surfaceAt(D.pos.x, D.pos.z);
+  rumble(220, 0.55, 0.55 + 0.45 * imp); cam.jolt = Math.max(cam.jolt, 0.05 + 0.1 * imp);
+  if (s0.kind === 'ground') for (let k = 0; k < 10 + Math.round(14 * imp); k++) { const a = Math.random() * 6.28; dust.spawn(V(D.pos.x + Math.cos(a) * 0.4, s0.y + 0.03, D.pos.z + Math.sin(a) * 0.4), V(Math.cos(a) * (0.8 + Math.random()), 0.25 + Math.random() * 0.4, Math.sin(a) * (0.8 + Math.random())), { life: 0.9 + Math.random() * 0.5, size: 1 + Math.random() * 1.5 }); }
   const s = surfaceAt(D.pos.x, D.pos.z);
   if (s.kind === 'water') {
     // Landing in the pond soaks well above the waterline.
@@ -1718,9 +1726,20 @@ function simStep(dt) {
   if (D.roarT >= 0) target = Math.min(target, 0.5);
   if (D.fall) { if (D.fall.down) { target = 0; steer = false; } else { target *= 0.5; turnCap = 1; } }
   if (air) turnCap = 0.6;
+  const recover = D.landT >= 0 && D.landK > 0.6 && D.landT < 0.25;
+  if (recover) turnCap = Math.min(turnCap, 0.8);
   D.waterDepth = waterDepthAt(D.pos.x, D.pos.z);
   D.mudDepth = mudDepthAt(D.pos.x, D.pos.z);
   target *= (1 - clamp(D.waterDepth / 1.2, 0, 1) * 0.55) * (1 - clamp(D.mudDepth / 0.85, 0, 1) * 0.5);
+  {
+    // Hills: climbing costs work against gravity (weight x height gained), so the slowdown scales with grade.
+    // Gentle downhill helps a little; steep downhill has to be braked.
+    const hx = Math.sin(D.yaw), hz = Math.cos(D.yaw);
+    const grade = (heightAt(D.pos.x + hx * 0.75, D.pos.z + hz * 0.75) - heightAt(D.pos.x - hx * 0.75, D.pos.z - hz * 0.75)) / 1.5;
+    const k = lerp(1.2, 2.5, smooth(1.5, 7.4, target));
+    D.grade = grade;
+    target *= grade >= 0 ? Math.max(0.6, 1 / (1 + k * grade)) : clamp(1 + 0.25 * Math.min(-grade, 0.12) - 1.5 * Math.max(0, -grade - 0.15), 0.65, 1.04);
+  }
 
   const dy = wrapAngle(desiredYaw - D.yaw);
   const maxTurn = Math.min(turnCap, lerp(2.7, 1.35, clamp(D.speed / 7.4, 0, 1)));
@@ -1730,7 +1749,7 @@ function simStep(dt) {
   if (Math.abs(dy) > 1.7 && D.act === 'none') target *= 0.35;
   if (!air) {
     // Acceleration is capped by what the feet can carry (about 2.1 m/s^2 up to 5 m/s, 1.2 near 7 m/s).
-    const prev = D.speed, up = lerp(2.1, 1.2, smooth(5, 7, D.speed));
+    const prev = D.speed, up = lerp(2.1, 1.2, smooth(5, 7, D.speed)) * (recover ? 0.35 : 1);
     D.speed = D.speed < target ? Math.min(target, D.speed + up * dt) : Math.max(target, D.speed - (downed ? 9 : 4) * dt);
     D.accel = damp(D.accel, (D.speed - prev) / dt, 6, dt);
   } else D.accel = damp(D.accel, 0, 6, dt);
@@ -1810,7 +1829,7 @@ function simStep(dt) {
   } else if (air) {
     const j = D.jump;
     for (const L of dino.legs) {
-      const lx = L.neutral.x * 0.95, lz = L.neutral.z + 0.1 * j.tuck - 0.05;
+      const lx = L.neutral.x * 0.95, lz = L.neutral.z + 0.1 * j.tuck - 0.05 + (j.vy < 0 ? 0.16 * (1 - j.tuck) : -0.12 * (1 - smooth(0, 0.1, j.t)));
       L.footPos.set(D.pos.x + lx * Math.cos(D.yaw) + lz * Math.sin(D.yaw), j.y + 0.035 + 0.36 * j.tuck * JUMP_K, D.pos.z - lx * Math.sin(D.yaw) + lz * Math.cos(D.yaw));
       L.groundY = groundAt(L.footPos.x, L.footPos.z); L.liftS = 0; L.stanceU = 0;
     }
@@ -1906,8 +1925,8 @@ function simStep(dt) {
   const pitchT = air || Math.abs(fdz) < 0.25 ? 0 : clamp(-Math.atan2((L0.groundY - L1.groundY) * Math.sign(fdz), Math.abs(fdz)) * 0.5, -0.2, 0.2);
   D.roll = damp(D.roll, rollT, 6, dt); D.pitchF = damp(D.pitchF, pitchT, 6, dt);
   let jc = 0, tuck = 0, absorb = 0;
-  if (D.jump) { if (D.jump.ph === 'crouch') jc = 0.14 * JUMP_K * smooth(0, D.jump.dur, D.jump.t); else tuck = D.jump.tuck; }
-  if (D.landT >= 0) { const t = (D.landT += dt); absorb = D.landK * 0.17 * (t < 0.07 ? smooth(0, 0.07, t) : 1 - smooth(0.07, 0.4, t)); if (t > 0.4) D.landT = -1; }
+  if (D.jump) { if (D.jump.ph === 'crouch') jc = 0.2 * JUMP_K * smooth(0, D.jump.dur * 0.85, D.jump.t); else tuck = D.jump.tuck; }
+  if (D.landT >= 0) { const t = (D.landT += dt); absorb = D.landK * 0.3 * (t < 0.08 ? smooth(0, 0.08, t) : 1 - smooth(0.12, 0.55, t)); if (t > 0.55) D.landT = -1; }
   const footLow = Math.min(L0.groundY, L1.groundY), footAvg = (L0.groundY + L1.groundY) / 2;
   if (air) D.bodyY = D.jump.y - rootG;
   else D.bodyY = damp(D.bodyY, clamp(lerp(footAvg, footLow, 0.4) - rootG, -0.35, 0.55) * 0.85, 10, dt);
@@ -1926,7 +1945,7 @@ function simStep(dt) {
   // Head counterbalances body roll on uneven footing (toward the high side).
   const nYaw = D.yawRate * 0.05 + D.hyaw + D.roll * 0.8 + fl * 0.3;
   // Walk: relaxed S-curve neck, head high. Sprint: neck straight out and low, head in line with it.
-  B.neck1.rotation.set(lerp(-0.14, 0.32, run) * (1 - hd) + hd * 0.62 + dip * 0.35 - D.hu * 0.22 - D.tilt * 0.04 + lunge * 0.1 - roarE * 0.14 + fallPitch * 0.8 + fl2 * 0.12 + tuck * 0.06, nYaw * 0.25, 0);
+  B.neck1.rotation.set(lerp(-0.14, 0.32, run) * (1 - hd) + hd * 0.62 + dip * 0.35 - D.hu * 0.22 - D.tilt * 0.04 + lunge * 0.1 - roarE * 0.14 + fallPitch * 0.8 + fl2 * 0.12 + tuck * 0.06 + absorb * 1.1 + jc * 0.6, nYaw * 0.25, 0);
   B.neck2.rotation.set(lerp(0.04, 0.17, run) * (1 - hd) + hd * 0.3 + dip * 0.2 - D.hu * 0.14 - D.tilt * 0.12 + lunge * 0.08 - roarE * 0.22 + fl * 0.1, nYaw * 0.35 + look, 0);
   B.neck3.rotation.set(lerp(0.24, 0.05, run) * (1 - hd) + hd * 0.02 - D.hu * 0.06 - D.tilt * 0.22 + lunge * 0.04 - roarE * 0.12, nYaw * 0.25 + look * 0.6, 0);
   B.head.rotation.set(lerp(-0.08, -0.56, run) * (1 - hd) + slope * 0.35 + hd * 0.1 - D.hu * 0.22 - D.tilt * 0.45 - roarE * 0.2 + lunge * 0.05 - bob * 1.5 - nose * 0.05 - D.pitchF * 0.6 - fallPitch * 0.4 - fl2 * 0.1, nYaw * 0.15 + shake, shake * 0.4 + fl * 0.12);
@@ -1947,7 +1966,7 @@ function simStep(dt) {
   D.tailYaw += D.tailYawV * dt;
   const wag = 0.07 * Math.sin(ph + 1.3) * mf * (1 - 0.5 * run) + 0.04 * Math.sin(D.time * 0.8) * (1 - mf);
   // Walk: slight droop. Sprint: held straight out. Airborne: lifted as a counterweight.
-  const tailPitch = lerp(-0.02, 0.03, run) - roarE * 0.015 + bob * 0.6 + jc * 0.3 + tuck * 0.035 - fe * 0.06;
+  const tailPitch = lerp(-0.02, 0.03, run) - roarE * 0.015 + bob * 0.6 - jc * 0.25 + tuck * 0.035 - fe * 0.06 + absorb * 0.22;
   dino.tails.forEach((t, k) => t.rotation.set(tailPitch * (1 + k * 0.1) + (k === 0 ? slope * 0.5 - D.pitchF * 0.5 - hd * 0.12 : 0), TAIL_W[k] * (D.tailYaw + wag), 0));
   for (const s of ['L', 'R']) {
     const sgnA = s === 'L' ? 1 : -1;
@@ -1999,7 +2018,7 @@ function simStep(dt) {
 }
 
 /* ============================== camera ============================== */
-const cam = { yaw: SPAWN.yaw + Math.PI, pitch: 0.26, dist: 6.6, target: V(SPAWN.x, 1.4, SPAWN.z), idle: 0, recenter: false, fov: 55, lock: null };
+const cam = { yaw: SPAWN.yaw + Math.PI, pitch: 0.26, dist: 6.6, target: V(SPAWN.x, 1.4, SPAWN.z), idle: 0, recenter: false, fov: 55, lock: null, jolt: 0 };
 function updateCamera(dt) {
   const active = started && !paused;
   const lx = active ? input.lookX : 0, ly = active ? input.lookY : 0;
@@ -2022,7 +2041,8 @@ function updateCamera(dt) {
   camera.position.copy(p);
   const rs = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 1;
   const shakeAmt = D.roarT >= 0 ? 0.025 * smooth(0.1, 0.4, D.roarT) * (1 - smooth(1.3, 1.9, D.roarT)) * rs : 0;
-  camera.position.x += (Math.random() - 0.5) * shakeAmt; camera.position.y += (Math.random() - 0.5) * shakeAmt;
+  camera.position.x += (Math.random() - 0.5) * shakeAmt; camera.position.y += (Math.random() - 0.5) * shakeAmt - cam.jolt * rs;
+  cam.jolt = damp(cam.jolt, 0, 9, dt);
   camera.lookAt(cam.target.x, cam.target.y + 0.2, cam.target.z);
   cam.fov = damp(cam.fov, 55 + 7 * smooth(4.5, 7.4, D.speed), 3, dt);
   if (Math.abs(camera.fov - cam.fov) > 0.01) { camera.fov = cam.fov; camera.updateProjectionMatrix(); }
@@ -2071,7 +2091,7 @@ function frame(now) {
     acc += dt; let n = 0;
     while (acc >= STEP && n < 6) { simStep(STEP); acc -= STEP; n++; }
     if (n === 6) acc = 0;
-    flakes.update(dt); drips.update(dt); splash.update(dt); splat.update(dt); updateRipples(dt); updatePrints();
+    flakes.update(dt); drips.update(dt); splash.update(dt); splat.update(dt); dust.update(dt); updateRipples(dt); updatePrints();
   }
   updateCamera(dt);
   updateHud(dt);
@@ -2081,7 +2101,7 @@ function frame(now) {
 window.__demo = {
   D, cam, input, heightAt, surfaceAt, groundAt, groundInfo, POND, MUD, ROCKS, obstacles, TIER, CREATURE, WIND_FROM, dino, prints, renderer, get frames() { return frames; }, override: null, hold: false,
   start: () => startDemo('pad'),
-  step(n = 60) { for (let i = 0; i < n; i++) { pollInput(STEP); simStep(STEP); flakes.update(STEP); drips.update(STEP); splash.update(STEP); splat.update(STEP); updateRipples(STEP); updateCamera(STEP); } updatePrints(); },
+  step(n = 60) { for (let i = 0; i < n; i++) { pollInput(STEP); simStep(STEP); flakes.update(STEP); drips.update(STEP); splash.update(STEP); splat.update(STEP); dust.update(STEP); updateRipples(STEP); updateCamera(STEP); } updatePrints(); },
   teleport(x, z, yaw = D.yaw) { D.pos.set(x, 0, z); D.yaw = yaw; clearMotion(); plantFeetAtNeutral(); cam.yaw = yaw + Math.PI; },
   counts: () => ({ flakes: flakes.items.length, drips: drips.items.length, prints: prints.length }),
 };
