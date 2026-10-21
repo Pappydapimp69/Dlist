@@ -74,7 +74,7 @@ with a Cognitive Update.
 | T3 | Step engine + walk + call | Step panel with device-correct key names, marker ring, walk and call lessons pass |
 | T4 | Drink | Thirst bar; drinking fills it; lesson passes |
 | T5 | Hunt + eat | Prey that grazes, flees and tires; bite hit detection; carcass; eat on B outranks drink; Hunger bar |
-| T6 | Rest | New Rest verb on every map (LB / Z): lies down, faster stamina recovery; lesson passes; completion card |
+| T6 | Rest | New Rest verb on every map (left trigger / Z): lies down, faster stamina recovery; lesson passes; completion card |
 | T7 | Verify | Automated walkthrough of every step through the real input path, screenshots checked by eye, valley and course unchanged |
 
 ## 6. Build log
@@ -86,7 +86,7 @@ with a Cognitive Update.
 | T3 | Done. Key names resolve from the controls table; the marker is a world-space light shaft (no screen projection, per Brain's waypoint-marker lesson). |
 | T4 | Done. Only a swallow whose scoop reached water counts (+20% thirst). |
 | T5 | Done. **Found in testing:** 3 m ferns hid the 0.9 m prey completely, so the hunting ground became a fern-free clearing and the marker stays on the prey until you're within 8 m. Bite connects when the snout is within ~1 m of the prey's body axis. Eat outranks drink on B. |
-| T6 | Done. Rest works on every map (LB / Z). In the tutorial, low stamina caps the sprint (7.4 down to 4.2 m/s) so resting matters. |
+| T6 | Done. Rest works on every map (left trigger / Z). In the tutorial, low stamina caps the sprint (7.4 down to 4.2 m/s) so resting matters. |
 | T7 | Done. A headless bot plays the whole tutorial through the real input path; 3 of 3 runs reach Done (prey AI is random). Valley and course checked unchanged. Screenshots checked by eye at 1280x720 and 390x844. |
 
 ## 7. Risks

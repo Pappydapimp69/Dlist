@@ -212,7 +212,7 @@
         <span class="mdesc">A timed track from gate to gate: rocks and pebbles, fallen logs, a stream, a mud pit, a boulder slalom and a log bridge over a pond. The big log has to be jumped.</span>
       </button>
     </div>
-    <p class="lede small">A jumps (onto rocks too) · hold B to drink near water or sniff away from it · X bites · Y roars · right trigger sprints · hold LB to lie down and rest. Too fast over rocks and logs and it slips or stumbles; sprinting on tired legs, it can trip.</p>
+    <p class="lede small">A jumps (onto rocks too) · hold B to drink near water or sniff away from it · X bites · Y roars · right trigger sprints · hold the left trigger to lie down and rest. Too fast over rocks and logs and it slips or stumbles; sprinting on tired legs, it can trip.</p>
     <p class="cta" id="introCta">D-pad or left stick to choose · A to enter</p>
     <button type="button" id="kbStart">No controller? Enter with keyboard and mouse</button>
   </div>
@@ -1656,7 +1656,7 @@ function pollInput(dt) {
       input.moveF = -ly; input.moveR = lx; input.lookX = rx; input.lookY = ry;
       input.sprint = p.buttons[7] ? p.buttons[7].value : 0;
       input.drink = btn(1);
-      input.rest = btn(4);
+      input.rest = (p.buttons[6] ? p.buttons[6].value : 0) > 0.5; // left trigger, read as analog like the sprint trigger
     }
     if (paused) {
       if (Math.abs(ly) > 0.6) { stickMenuHold -= dt; if (stickMenuHold <= 0) { if (ly < 0) edges.up = true; else edges.down = true; stickMenuHold = 0.25; } } else stickMenuHold = 0;
@@ -1775,7 +1775,7 @@ let lastTouch = matchMedia('(pointer: coarse)').matches;
 }
 
 const KEYS = {
-  pad: [['Move', 'Left stick'], ['Camera', 'Right stick'], ['Sprint', 'Right trigger (hold)'], ['Jump', 'A'], ['Drink / sniff', 'B (hold)'], ['Bite', 'X'], ['Roar', 'Y'], ['Rest', 'LB (hold)'], ['Camera behind', 'Click right stick'], ['Menu', 'Start']],
+  pad: [['Move', 'Left stick'], ['Camera', 'Right stick'], ['Sprint', 'Right trigger (hold)'], ['Jump', 'A'], ['Drink / sniff', 'B (hold)'], ['Bite', 'X'], ['Roar', 'Y'], ['Rest', 'Left trigger (hold)'], ['Camera behind', 'Click right stick'], ['Menu', 'Start']],
   touch: [['Move', 'Left thumb (push to the edge to sprint)'], ['Camera', 'Drag on the right'], ['Jump', 'A'], ['Drink / sniff', 'B (hold)'], ['Bite', 'X'], ['Roar', 'Y'], ['Camera behind', '\u21BA'], ['Menu', '\u2630']],
   keys: [['Move', 'W A S D'], ['Camera', 'Drag mouse or Q / E'], ['Sprint', 'Shift (hold)'], ['Jump', 'Space'], ['Drink / sniff', 'G (hold)'], ['Bite', 'F'], ['Roar', 'R'], ['Rest', 'Z (hold)'], ['Camera behind', 'C'], ['Menu', 'Esc']],
 };
