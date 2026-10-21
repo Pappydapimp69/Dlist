@@ -441,3 +441,11 @@ Nothing from this list is left open.
   speed. Wounds close slowly (0.8%/s, 3%/s lying down), and below 30% it limps. There's no death in the demo;
   Upstarts owns that rule.
 - **Tutorial:** the Hunt step now says "One bite won't drop it: keep biting."
+- **Footstep haptics back everywhere:**
+  - The tutorial's hatchling build had switched footstep rumble off, then brought it back at about 0.1, below
+    what a controller motor registers. Every footfall now taps at least 0.16 on the light motor, with weight and
+    sprinting adding the heavy motor (tutorial taps are 65 to 85% of an adult's).
+  - Touch screens now get the phone's own vibration. A phone motor has one strength, so pulse length carries it:
+    about 6 to 8 ms for a step, up to 40 ms for a blow. This works on Android; iOS browsers have no vibration.
+  - Checked with an emulated controller and phone: one tap per step at a walk and at a sprint, in the valley and
+    the tutorial.

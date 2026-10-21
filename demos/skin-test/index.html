@@ -1880,8 +1880,12 @@ function radial(x, y, inner = 0.16, outer = 0.96) {
   const m = Math.hypot(x, y); if (m < inner) return [0, 0];
   const k = Math.min(1, (m - inner) / (outer - inner)) / m; return [x * k, y * k];
 }
+// Controller rumble, and on a touch screen the phone's own vibration (Android; iOS browsers have none).
+// A phone motor has one strength, so the pulse length carries it: about 8 ms for a light step, up to 40 ms for a blow.
 function rumble(dur, weak, strong) {
-  if (!settings.rumble) return; const p = activePad(); const a = p && p.vibrationActuator;
+  if (!settings.rumble) return;
+  if (input.device === 'touch') { const k = Math.max(weak, strong); if (navigator.vibrate && k > 0.08) navigator.vibrate(Math.round(clamp(dur * 0.35 * k, 6, 40))); return; }
+  const p = activePad(); const a = p && p.vibrationActuator;
   if (a && a.playEffect) a.playEffect('dual-rumble', { startDelay: 0, duration: dur, weakMagnitude: weak, strongMagnitude: strong }).catch(() => {});
 }
 const edges = { a: false, b: false, x: false, y: false, start: false, rs: false, ls: false, up: false, down: false };
@@ -2212,8 +2216,10 @@ function solveKnee(H, A, a, b, pole) {
 function onFootfall(L, intensity) {
   const s = surfaceAt(L.footPos.x, L.footPos.z);
   footstep(L.footPos, intensity);
-  if (!TUT) rumble(55, 0.12 + 0.18 * intensity, 0.05 + 0.2 * intensity * (D.speed > 4.5 ? 1 : 0.3));
-  else { const g = lerp(0.45, 0.75, tut.size); rumble(45, (0.12 + 0.18 * intensity) * g, 0.2 * intensity * g * (D.speed > 4.5 ? 1 : 0.3)); } // light taps, firmer as it grows
+  // A tap on every footfall. Controller motors barely register below about 0.15, so even a hatchling's light step
+  // stays above that; weight and speed add the deep motor and length.
+  const g = TUT ? lerp(0.65, 0.85, tut.size) : 1, run = D.speed > 4.5 ? 1 : 0.35;
+  rumble(TUT ? 45 : 60, Math.max(0.16, (0.14 + 0.2 * intensity) * g), (0.04 + 0.24 * intensity) * g * run);
   if (s.kind === 'water') {
     spawnRipple(L.footPos.x, L.footPos.z, 0.7 + D.speed * 0.15);
     const n = 6 + Math.round(D.speed * 3);
