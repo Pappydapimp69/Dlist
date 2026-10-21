@@ -1837,7 +1837,7 @@ function audioWorld() {
 function initAudio() {
   if (audio.ctx) { if (audio.ctx.state !== 'running') audio.ctx.resume().catch(() => {}); return; }
   const C = window.AudioContext || window.webkitAudioContext; if (!C) return;
-  try { audio.ctx = new C({ latencyHint: 'interactive' }); } catch (e) { return; }
+  try { audio.ctx = new C({ latencyHint: matchMedia('(pointer: coarse)').matches ? 'balanced' : 'interactive' }); } catch (e) { return; }
   audio.ctx.onstatechange = soundChip; audio.ctx.resume().catch(() => {});
   audio.loading = loadEngine(audio.ctx).then((r) => { audio.engine = r.engine; audio.layer = r.layer; }).catch((e) => { audio.failed = e; console.warn('sound engine', e); }).finally(soundChip);
   soundChip();

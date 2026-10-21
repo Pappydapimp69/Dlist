@@ -12,3 +12,10 @@ on GitHub Pages and in the published artifact. When the game proper starts (M0) 
 (2026-10-21): aspiration scaled to the glottal pulse and gated by the open phase, per-period jitter and shimmer,
 and a glottal phase per call. Upstream it into `pappydapimp69/sound-engine` before the next re-copy of `src/`,
 or the re-copy will drop it.
+
+## Local change: idle sources sleep
+
+`worklet/processors.js` (2026-10-21, owner: audio is static on mobile): a source sleeps once its generator has been
+silent for longer than its delay line holds, outputting zeros until its next trigger, and the reverb sleeps once its
+input and tail are silent. Every source used to run its full DSP every sample, idle or not, which overran the audio
+thread on phones. Output is unchanged (checked on an offline render). Upstream this into `pappydapimp69/sound-engine`.
