@@ -8,4 +8,5 @@ mkdir -p "$out"
   cat demos/skin-test/index.html
   printf '\n</body></html>\n'
 } > "$out/index.html"
+cp -r demos/skin-test/vendor "$out/vendor"
 touch "$out/.nojekyll"

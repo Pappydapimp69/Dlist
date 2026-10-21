@@ -185,7 +185,7 @@ grazer spawns on the hunting ground.
 |---|---|
 | G1 | Done. **Found in testing:** the first drain rates (1.6%/s, 1.2%/s, 60 s) took a bot ~12 round trips; rebalanced to one drink and one meal. |
 | G2 | Done. Plants and tree colliders scale to 72%, head 1.12x, call and footsteps deepen. |
-| G3 | Done. Bellows every 30–40 s from `PRED_FROM`; head turns to them; panel line for 7 s after each. |
+| G3 | Done. Bellows every 30–40 s from `PRED_FROM`; head turns to them; panel line for 7 s after each. After merging the new sim-driven sound engine, the bellow is that engine's *Saurosuchus* voice (closed mouth, `large` creature), silent until Grow; footstep mass grows 0.5 to 8 kg; the juvenile gets a 14 cm-tract voice. |
 | G4 | Done. Bot: Jump through Done including Grow and Juvenile. Screenshots before and after the shrink. |
 
 ## 10. Risks

@@ -343,3 +343,46 @@ Nothing from this list is left open.
   camera-behind and menu buttons above them. The splash says "Tap a map to enter", the menu is tapped, and
   the HUD gets compact in touch mode. Tested with emulated touch on an 844 × 390 landscape phone: walking,
   sprinting, a two-finger stick plus camera drag, a jump and the menu all worked.
+- **Procedural sound engine integrated:** `pappydapimp69/sound-engine` `src/` is vendored at
+  `demos/skin-test/vendor/sound-engine/` (zero dependencies, AudioWorklet DSP). The AudioContext is made and
+  resumed inside the first user gesture (Safari and iOS insist), then passed to `SoundEngine.create({ context,
+  zone: 'openPlain', device })`. Device defaults to headphones on desktop and "unknown" on touch screens, and the
+  pause menu has a "Sound output" setting.
+  - **Sim events:** the sim emits sound events (kind, who, position, level in dB at 1 m). Footsteps come from
+    foot planting (`feet.step({ mass, speed, surface, claws })`), with the surface read from the ground:
+    packed dirt, sandstone rocks, wooden logs, mud, water. The roar is the player's `voice.call({ mode: 'open' })`.
+    Bite is a jaw modal strike, laps are bubble splashes, gulps are short closed-mouth calls, sniffs are
+    unvoiced breath through a short nasal tube, and scuffs, scrambles and thuds are footstep impacts.
+    `engine.update()` runs once per rendered frame. The Web Audio one-shots are gone; the wind bed stays as a
+    plain filtered-noise loop.
+  - **AI you can hear:** a rival Herrerasaurus (open calls) and a Saurosuchus (closed-mouth booms) roam
+    beyond the trees on the sim's own seeded RNG. The rival answers your roar, and the Saurosuchus goes quiet
+    for 25 s after hearing you (8 s for footsteps). Hearing is computed from the sim events (level minus
+    spherical spreading and a little air loss, heard above 38 dB), never from what the engine played. A HUD
+    chip says what the dino heard, the direction and the distance, and it works with the sound off.
+  - **Determinism (sound-engine/E7):** audio variation comes from its own seeded RNG. A replay of the same
+    inputs gave the same sim fingerprint, position and AI state with no audio, live audio, 4 voices and muted.
+  - **Coordinates:** world x -> engine x, world z -> engine y, height -> engine z, listener at the camera with
+    yaw = atan2(forward.x, forward.z). Three.js seen from above is mirrored against the engine plane, so that
+    mapping reverses every pan; the left and right channels are swapped once at the output. Measured after
+    the fix: a call at screen right comes out 4.1 dB louder on the right, and at screen left 3.9 dB louder on
+    the left.
+  - **Old vs new render (same 59.5 s recorded scene, same events):** overall level matched (-27.7 vs
+    -26.5 dBFS RMS). Dirt steps went from a 330 Hz centroid thump to 1440 Hz with grit, and step levels vary
+    naturally (2.8 dB spread). The roar was mixed to about 10 dB over a step. The two creature calls are new;
+    the old build had no AI.
+  - **Tutorial map on the engine too (merged from the tutorial work):** the hatchling's chirp is an open call
+    from an 8 cm tract (two notes when it roars), its footsteps use a 0.5 kg hatchling mass, egg and meat tearing
+    is a debris crunch at the mouth, and the Exaeretodon's alarm squeak is a two-note call from a 5 cm tract at
+    the prey's position. Sound positions in the tutorial are divided by its 4x world scale. The prey's wandering
+    now draws from the sim RNG instead of Math.random, so tutorial replays match too. The distant rival and
+    Saurosuchus stay out of the tutorial.
+  - **Sleeping prey hears events (merged from tutorial stage 2):** the sleeper's "noisy" check now reads the
+    sim's sound events: the loudest player sound at its bed, wake at 30 dB. A physical footstep can't separate
+    a hatchling's walk from its sprint (only about 7 dB apart), so events carry stealth-style noise ratings:
+    sprint footfalls +10 dB, jump landings +14 dB. Measured: a walk never wakes it, a sprint does within about
+    3.5 m, a standing jump within 3 m, and a roar always does. A full walk straight up to it and a bite caught
+    it asleep. The tutorial's step-passed chirp is marked as UI, so the world doesn't hear it.
+- **Touch sprint made visible:** sprint on touch was already "push the stick past its ring", but nothing showed
+  the edge. A dashed ochre ring now always marks the sprint boundary (about 1.25× the stick's travel) with a
+  "Sprint" label under it, and it turns solid while sprinting. Emulated phone check: sprint reached 7.1 m/s.
