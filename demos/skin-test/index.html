@@ -229,6 +229,9 @@ const SPAWN = MAP === 'course' ? { x: -42, z: 29, yaw: Math.PI / 2 } : { x: 0, z
 const CREATURE = { hip: 1.15, leg: 1.18, mass: 350, reach: 2.8, snout: 1.8 }; // reach: water it notices; snout: how far ahead the lowered snout dips
 const TIER = { pebble: 0.08 * CREATURE.hip, step: 0.55 * CREATURE.hip }; // step-ups to about knee height; above that, a wall
 const JUMP_K = Math.pow(CREATURE.mass / 350, -1 / 6) * CREATURE.hip / 1.15;
+// Falls, stumbles and slips scale with the animal: a bigger body topples and recovers more slowly (time ~ sqrt(size)),
+// a heavier one lands harder and flails less (more inertia), a lighter one is quicker and twitchier.
+const BODY = { ts: Math.sqrt(CREATURE.hip / 1.15) * Math.pow(CREATURE.mass / 350, 0.1), mk: Math.cbrt(CREATURE.mass / 350), agile: Math.pow(350 / CREATURE.mass, 0.15) };
 const WIND_FROM = Math.atan2(-0.8, -0.55); // heading the wind blows from
 const WIND_DIR = V(0.8, 0, 0.55).normalize(); // downwind
 
@@ -1711,11 +1714,11 @@ function stability(L, li, g, impact = 0) {
 function startFall(kind, score, li, down) {
   const k = clamp((score - 0.5) * 2, 0, 1), level = down ? 'trip' : score < 0.9 ? 'slip' : 'stumble';
   const dur = level === 'trip' ? lerp(1, 2, clamp(score - 1, 0, 1)) : level === 'slip' ? lerp(0.32, 0.45, k) : lerp(0.65, 1.15, k);
-  D.fall = { kind, level, down, t: 0, dur, side: dino.legs[li].sx, leg: li, sev: clamp(score, 0.5, 1.5), thud: false };
+  D.fall = { kind, level, down, t: 0, dur: dur * BODY.ts, side: dino.legs[li].sx, leg: li, sev: clamp(score, 0.5, 1.5), thud: false, lie: 0, kick: 0 };
   D.speed *= level === 'trip' ? 0.45 : level === 'slip' ? 0.97 : lerp(0.94, 0.8, k);
   D.jump = null; if (D.act !== 'none' && level !== 'slip') endAct();
   sfx.scuff(); if (level === 'stumble') sfx.scuff();
-  rumble(level === 'trip' ? 260 : level === 'slip' ? 90 : 180, level === 'slip' ? 0.3 : 0.5, level === 'trip' ? 0.6 : level === 'slip' ? 0.15 : 0.5);
+  rumble(level === 'trip' ? 260 : level === 'slip' ? 90 : 180, level === 'slip' ? 0.3 : 0.5, Math.min(1, (level === 'trip' ? 0.6 : level === 'slip' ? 0.15 : 0.5) * BODY.mk));
   if (level !== 'slip') cam.jolt = Math.max(cam.jolt, down ? 0.06 : 0.04 + 0.05 * k);
 }
 function footDown(L, li) {
@@ -2062,15 +2065,29 @@ function simStep(dt) {
   if (D.fall) {
     const F = D.fall; F.t += dt;
     if (F.down) {
-      fe = smooth(0, 0.35, F.t) * (1 - smooth(0.35 + F.dur, 1.1 + F.dur, F.t));
-      if (F.t > 0.3 && !F.thud) { F.thud = true; sfx.thud(); rumble(200, 0.6, 0.9); }
-      fallDrop = 0.64 * fe; fallPitch = (F.kind === 'trip' ? 0.24 : 0.08) * fe; fallRoll = (F.kind === 'trip' ? 0.06 : 0.3) * F.side * fe;
-      flail = 0.6 * smooth(0, 0.2, F.t) * (1 - smooth(0.2, 0.5, F.t));
-      if (F.t > 1.1 + F.dur) D.fall = null;
+      // Topple onto its side (accelerating like a falling body), lie there kicking, then roll back and push up.
+      if (!F.tT) { F.tT = 0.45 * BODY.ts; F.tL = lerp(0.8, 1.6, clamp(F.sev - 1, 0, 1)) * Math.sqrt(BODY.mk); F.tR = 1.15 * BODY.ts * Math.pow(BODY.mk, 0.4); }
+      const t = F.t, t1 = F.tT, t2 = t1 + F.tL, t3 = t2 + F.tR;
+      const topple = t < t1 ? (t / t1) ** 2 : 1, rise = t < t2 ? 0 : smooth(0, 1, (t - t2) / F.tR);
+      const bounce = t > t1 && t < t1 + 0.35 ? Math.sin(Math.PI * (t - t1) / 0.35) * 0.12 / BODY.mk : 0; // a light body bounces more
+      const lie = topple * (1 - rise);
+      F.lie = lie; fe = lie;
+      fallRoll = -F.side * (1.35 * lie - bounce * (1 - rise));
+      fallDrop = 0.86 * lie - 0.05 * bounce + 0.06 * Math.sin(Math.PI * rise) * (rise < 0.5 ? 1 : -0.5); // a push-up dip as it rises
+      fallShift = F.side * 0.72 * lie;
+      fallPitch = (F.kind === 'trip' ? 0.28 : 0.08) * Math.sin(Math.PI * Math.min(1, t / t1)) * (1 - rise) + 0.12 * Math.sin(Math.PI * rise);
+      flail = (0.9 * smooth(0, t1 * 0.6, t) * (1 - smooth(t1 * 0.7, t1 * 1.2, t)) + 0.5 * Math.sin(Math.PI * rise)) * BODY.agile;
+      F.kick = smooth(t1, t1 + 0.15, t) * (1 - smooth(t2 + F.tR * 0.1, t2 + F.tR * 0.45, t)); // legs paddle while down and scrabble as it rises
+      if (t >= t1 && !F.thud) {
+        F.thud = true; sfx.thud(); rumble(240, 0.6, Math.min(1, 0.7 * BODY.mk)); cam.jolt = Math.max(cam.jolt, 0.07 * BODY.mk);
+        const sx = Math.cos(D.yaw), sz = -Math.sin(D.yaw);
+        for (let k = 0; k < 18; k++) { const u = (k / 17 - 0.5) * 3.4, px = D.pos.x + fwd.x * u + sx * F.side * 0.75, pz = D.pos.z + fwd.z * u + sz * F.side * 0.75; dust.spawn(V(px, groundAt(px, pz) + 0.05, pz), V(sx * F.side * (0.4 + Math.random()), 0.3 + Math.random() * 0.5, sz * F.side * (0.4 + Math.random())), { life: 1 + Math.random() * 0.6, size: 1.5 + Math.random() * 1.5 }); }
+      }
+      if (t > t3) D.fall = null;
     } else if (F.level === 'slip') {
       // The foot skids out a little, the body dips and twitches, and it carries on.
       const e = smooth(0, 0.05, F.t) * (1 - smooth(0.1, F.dur, F.t)), L = dino.legs[F.leg];
-      D.stagE = e * 0.3; flail = 0.45 * e;
+      D.stagE = e * 0.3; flail = 0.45 * e * BODY.agile;
       fallDrop = 0.05 * e; fallPitch = 0.04 * e; fallRoll = 0.08 * F.side * e; fallShift = 0.05 * F.side * e;
       if (F.t < 0.16 && !L.swing) { const sk = 0.9 * dt; L.planted.x += (fwd.x * 0.5 + Math.cos(D.yaw) * L.sx * 0.5) * sk; L.planted.z += (fwd.z * 0.5 - Math.sin(D.yaw) * L.sx * 0.5) * sk; L.footPos.copy(L.planted); }
       if (F.t > F.dur) D.fall = null;
@@ -2079,7 +2096,7 @@ function simStep(dt) {
       // the head jerks up, arms and tail flail to catch the balance, and the legs scramble with quick steps.
       const e = smooth(0, 0.1, F.t) * (1 - smooth(F.dur * 0.35, F.dur, F.t)), sv = F.sev;
       D.stagE = e;
-      flail = e * sv * 1.25;
+      flail = e * sv * 1.25 * BODY.agile;
       fallDrop = 0.16 * e * Math.min(sv, 1.2);
       fallPitch = (F.kind === 'trip' ? 0.3 : 0.14) * e * sv * (1 - 0.6 * smooth(F.dur * 0.25, F.dur * 0.55, F.t));
       fallRoll = (F.kind === 'trip' ? 0.12 : 0.24) * F.side * e * sv;
@@ -2177,12 +2194,12 @@ function simStep(dt) {
   B.spine2.rotation.set(0, -0.02 * Math.sin(ph) * mf, 0);
   B.chest.rotation.set(0.008 * Math.sin(D.time * 1.6), 0, 0);
   const look = (1 - mf) * 0.14 * Math.sin(D.time * 0.37) * Math.sin(D.time * 0.23 + 1) * (D.act === 'none' ? 1 : 0);
-  const fl = flail * Math.sin(D.time * 17), fl2 = flail * Math.sin(D.time * 12.5 + 1);
+  const fl = flail * Math.sin(D.time * 17 / BODY.ts), fl2 = flail * Math.sin(D.time * 12.5 / BODY.ts + 1);
   // Head counterbalances body roll on uneven footing (toward the high side).
   const nYaw = D.yawRate * 0.05 + D.hyaw + D.roll * 0.8 + fl * 0.3;
   // Walk: relaxed S-curve neck, head high. Sprint: neck straight out and low, head in line with it.
-  B.neck1.rotation.set(lerp(-0.14, 0.32, run) * (1 - hd) + hd * 0.62 + dip * 0.35 - D.hu * 0.22 - D.tilt * 0.04 + lunge * 0.1 - roarE * 0.14 + fallPitch * 0.8 + fl2 * 0.12 + tuck * 0.06 + absorb * 1.1 + jc * 0.6, nYaw * 0.25, 0);
-  B.neck2.rotation.set(lerp(0.04, 0.17, run) * (1 - hd) + hd * 0.3 + dip * 0.2 - D.hu * 0.14 - D.tilt * 0.12 + lunge * 0.08 - roarE * 0.22 + fl * 0.1, nYaw * 0.35 + look, 0);
+  B.neck1.rotation.set(lerp(-0.14, 0.32, run) * (1 - hd) + hd * 0.62 + dip * 0.35 - D.hu * 0.22 - D.tilt * 0.04 + lunge * 0.1 - roarE * 0.14 + fallPitch * 0.8 + fl2 * 0.12 + tuck * 0.06 + absorb * 1.1 + jc * 0.6 - (D.fall && D.fall.down ? 0.35 * D.fall.lie : 0), nYaw * 0.25, D.fall && D.fall.down ? 0.55 * D.fall.side * D.fall.lie : 0); // lying: the head tries to stay up
+  B.neck2.rotation.set(lerp(0.04, 0.17, run) * (1 - hd) + hd * 0.3 + dip * 0.2 - D.hu * 0.14 - D.tilt * 0.12 + lunge * 0.08 - roarE * 0.22 + fl * 0.1, nYaw * 0.35 + look, D.fall && D.fall.down ? 0.4 * D.fall.side * D.fall.lie : 0);
   B.neck3.rotation.set(lerp(0.24, 0.05, run) * (1 - hd) + hd * 0.02 - D.hu * 0.06 - D.tilt * 0.22 + lunge * 0.04 - roarE * 0.12, nYaw * 0.25 + look * 0.6, 0);
   B.head.rotation.set(lerp(-0.08, -0.56, run) * (1 - hd) + slope * 0.35 + hd * 0.1 - D.hu * 0.22 - D.tilt * 0.45 - roarE * 0.2 + lunge * 0.05 - bob * 1.5 - nose * 0.05 - D.pitchF * 0.6 - fallPitch * (D.fall && !D.fall.down ? 1.1 : 0.4) - fl2 * 0.14, nYaw * 0.15 + shake, shake * 0.4 + fl * 0.12);
   B.jaw.rotation.set(jawOpen, 0, 0);
@@ -2196,7 +2213,7 @@ function simStep(dt) {
   if (sgn && sgn !== D.tailTurnSign) D.tailTurnYaw = D.yaw;
   D.tailTurnSign = sgn;
   const th = sgn ? Math.min(hold, Math.abs(wrapAngle(D.yaw - D.tailTurnYaw))) : hold;
-  const cmd = -Math.sign(D.yawRate) * th - D.roll * 0.8 + flail * 0.8 * Math.sin(D.time * 11) - fallRoll * 1.5;
+  const cmd = -Math.sign(D.yawRate) * th - D.roll * 0.8 + flail * 0.8 * Math.sin(D.time * 11) * (D.fall && D.fall.down ? 0.3 : 1) - (D.fall && D.fall.down ? D.fall.side * 0.35 * D.fall.lie : fallRoll * 1.5); // lying, the tail drops to the ground
   const w = 2 * Math.PI * 3;
   D.tailYawV += (w * w * (cmd - D.tailYaw) - 2 * w * D.tailYawV) * dt;
   D.tailYaw += D.tailYawV * dt;
@@ -2217,6 +2234,13 @@ function simStep(dt) {
   for (const L of dino.legs) {
     const H = L.thigh.getWorldPosition(V());
     const F = L.footPos.clone();
+    if (D.fall && D.fall.down && D.fall.lie > 0.01) {
+      // On its side the feet leave the ground: targets sit below the hip in the body's own frame, paddling and kicking.
+      const FD = D.fall, li = dino.legs.indexOf(L), w = Math.sin(D.time * 9 / BODY.ts + li * 2.6), up = FD.side * L.sx > 0 ? 1 : 0; // the upper leg kicks wider
+      const kick = FD.kick * (0.6 + 0.4 * up) * BODY.agile;
+      const tgt = B.pelvis.localToWorld(V(L.sx * (0.2 + 0.12 * up * FD.kick), -0.82 + 0.16 * kick * Math.cos(D.time * 9 / BODY.ts + li * 2.6), 0.18 + 0.32 * kick * w));
+      F.lerp(tgt, smooth(0, 0.6, FD.lie));
+    }
     const swing = (L.liftS || 0) > 0;
     // Heel lifts through stance toward toe-off; more if the hip would otherwise be out of reach (E3).
     let lift = swing ? -Math.sin(Math.PI * L.liftS) * 0.45 : 0.45 * smooth(0.35, 1, L.stanceU || 0) * smooth(0.8, 4, D.speed);
